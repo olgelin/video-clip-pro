@@ -46,7 +46,8 @@ class Upscale(SkillBase):
                  "-show_entries", "stream=width,height", "-of", "csv=p=0", str(src)],
                 capture_output=True, text=True, timeout=30,
             )
-            w, h = (int(x) for x in result.stdout.strip().split(","))
+            nums = [int(x) for x in result.stdout.replace(",", " ").split()]
+            w, h = nums[0], nums[1]
             return "2160:3840" if h > w else "3840:2160"
         except Exception:
             return "3840:2160"  # 探测失败，默认横屏
