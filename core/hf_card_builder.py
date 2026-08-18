@@ -200,9 +200,7 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
             cw, ch = (620, 280) if orientation != "portrait" else (560, 300)
         elif card_layout == "quote-card":
             cw, ch = (600, 220) if orientation != "portrait" else (540, 240)
-        elif beat in ("HOOK", "RESOLUTION", "CLOSE"): cw, ch = (1000, 280) if orientation != "portrait" else (960, 320)
-        elif beat in ("CONFLICT", "STRUGGLE", "PROBLEM", "TURN"): cw, ch = (500, 280) if orientation != "portrait" else (460, 300)
-        else: cw, ch = (520, 200) if orientation != "portrait" else (500, 220)
+        else: cw, ch = (560, 260) if orientation != "portrait" else (500, 250)
         exit_offset = max(0.5, dur - 1.0); is_highlight = (idx == len(ranges) - 1)
         # V6: LLM直出HTML优先
         llm_html = seg.get("_llm_html", "")
@@ -235,9 +233,21 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
         (comp_dir / (beat_id + ".html")).write_text(full_html, encoding="utf-8")
         if layout_mode == "pip":
             card_style = f"position:absolute;inset:0;width:{fw}px;height:{fh}px;z-index:10;"
-        elif beat in ("HOOK", "RESOLUTION", "CLOSE"): card_style = f"position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:{cw}px;height:{ch}px;z-index:10;" if orientation != "portrait" else f"position:absolute;left:50%;bottom:30px;transform:translateX(-50%);width:{cw}px;height:{ch}px;z-index:10;"
-        elif beat in ("CONFLICT", "STRUGGLE", "PROBLEM", "TURN"): card_style = f"position:absolute;right:40px;top:50%;transform:translateY(-50%);width:{cw}px;height:{ch}px;z-index:10;"
-        else: card_style = f"position:absolute;left:30px;top:50%;transform:translateY(-50%);width:{cw}px;height:{ch}px;z-index:10;" if orientation != "portrait" else f"position:absolute;left:30px;bottom:40px;width:{cw}px;height:{ch}px;z-index:10;"
+        else:
+            # 位置轮换：左→中→右循环（按 idx），避免卡片锁死底部
+            if orientation == "portrait":
+                _pos_styles = [
+                    "left:30px;bottom:40px",
+                    "left:50%;bottom:30px;transform:translateX(-50%)",
+                    "right:30px;top:50%;transform:translateY(-50%)",
+                ]
+            else:
+                _pos_styles = [
+                    "left:30px;top:50%;transform:translateY(-50%)",
+                    "left:50%;top:50%;transform:translate(-50%,-50%)",
+                    "right:30px;top:50%;transform:translateY(-50%)",
+                ]
+            card_style = f"position:absolute;{_pos_styles[idx % 3]};width:{cw}px;height:{ch}px;z-index:10;"
         beat_files.append((beat_id, offset, dur, card_style, cw, ch))
     host_lines = []
     for bid, pos, dur_clean, style, cw, ch in beat_files:
