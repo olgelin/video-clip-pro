@@ -1,0 +1,732 @@
+import json, os, time, subprocess, shutil, re
+from pathlib import Path
+from core.card_constants import *
+from core.card_decor import *
+from core.card_layouts import *
+
+def _build_gsap_animation(beat_id, beat, exit_offset, is_highlight=False):
+    """Minimal card animation: entrance + micro + exit. Sequenced element reveals handled inline."""
+    preset = ANIMATION_PRESETS.get(beat, DEFAULT_ANIM)
+    ent = preset["entrance"]; ext = preset["exit"]; mic = preset["micro"]
+    lines = ['<script>window.__timelines=window.__timelines||{};(function(){']
+    lines.append('var tl=gsap.timeline({paused:true});')
+    lines.append(f'var card=document.querySelector("[data-composition-id={beat_id}]");')
+    lines.append('if(!card){window.__timelines["'+beat_id+'"]=gsap.timeline({paused:true});return;}')
+    etype, edur, eease = ent["type"], ent["duration"], ent["ease"]
+    if is_highlight: edur *= 1.3
+    if etype == "scaleBounce": lines.append(f'gsap.set(card,{{opacity:0,scale:0.3}});'); lines.append(f'tl.to(card,{{opacity:1,scale:1,duration:{edur},ease:"{eease}"}},0);')
+    elif etype == "fadeSlideUp": lines.append(f'gsap.set(card,{{opacity:0,y:40,scale:0.95}});'); lines.append(f'tl.to(card,{{opacity:1,y:0,scale:1,duration:{edur},ease:"{eease}"}},0);')
+    elif etype == "fadeSlideDown": lines.append(f'gsap.set(card,{{opacity:0,y:-30,scale:0.95}});'); lines.append(f'tl.to(card,{{opacity:1,y:0,scale:1,duration:{edur},ease:"{eease}"}},0);')
+    elif etype == "fadeSlideRight": lines.append(f'gsap.set(card,{{opacity:0,x:60,scale:0.94}});'); lines.append(f'tl.to(card,{{opacity:1,x:0,scale:1,duration:{edur},ease:"{eease}"}},0);')
+    elif etype == "fadeSlideLeft": lines.append(f'gsap.set(card,{{opacity:0,x:-60,scale:0.94}});'); lines.append(f'tl.to(card,{{opacity:1,x:0,scale:1,duration:{edur},ease:"{eease}"}},0);')
+    elif etype == "scaleFade": lines.append(f'gsap.set(card,{{opacity:0,scale:0.7}});'); lines.append(f'tl.to(card,{{opacity:1,scale:1,duration:{edur},ease:"{eease}"}},0);')
+    elif etype == "dropBounce": lines.append(f'gsap.set(card,{{opacity:0,y:-80,scale:0.9}});'); lines.append(f'tl.to(card,{{opacity:1,y:0,scale:1,duration:{edur},ease:"{eease}"}},0);')
+    else: lines.append(f'gsap.set(card,{{opacity:0,y:25}});'); lines.append(f'tl.to(card,{{opacity:1,y:0,duration:{edur},ease:"{eease}"}},0);')
+    # Element reveals handled by CSS animation-delay (see CARD_DECOR_CSS .card-header, .card-headline, etc.)
+    # Highlight pulse
+    if is_highlight: lines.append(f'tl.to(card,{{scale:1.03,duration:0.3,ease:"power1.inOut"}},"+=0.4");'); lines.append(f'tl.to(card,{{scale:1,duration:0.3,ease:"power1.inOut"}});'); exit_offset = max(exit_offset - 0.5, 0.3)
+    # V12: element sequential reveals (standard IDs, auto-skip if missing)
+    ELEM_DELAYS = [
+        ("#value", "0.12", "{scale:0,opacity:0}", "{scale:1,opacity:1,duration:0.35,ease:'back.out(2)'}"),
+        (".badge-item", "0.15", "{scale:0,opacity:0}", "{scale:1,opacity:1,duration:0.25,stagger:0.1,ease:'back.out(1.5)'}"),
+        ("#bar-fill", "0.2", "{width:'0%'}", "{width:'85%',duration:0.6,ease:'power2.inOut'}"),
+        (".fact-tag", "0.1", "{opacity:0}", "{opacity:1,duration:0.3,ease:'power1.out'}"),
+        ("#quote-mark", "0.12", "{scale:0.5,opacity:0}", "{scale:1,opacity:1,duration:0.25,ease:'back.out(1.2)'}"),
+        (".pulse-dot", "0.08", "{scale:0,opacity:0}", "{scale:1,opacity:1,duration:0.3,ease:'elastic.out(1,0.5)'}"),
+        (".check-item", "0.15", "{scale:0,opacity:0}", "{scale:1,opacity:1,duration:0.25,stagger:0.1,ease:'back.out(1.5)'}"),
+        (".step-dot", "0.15", "{scale:0,opacity:0}", "{scale:1,opacity:1,duration:0.25,stagger:0.12,ease:'back.out(1.5)'}"),
+    ]
+    for sel, delay, from_v, to_v in ELEM_DELAYS:
+        lines.append(f'(function(){{var e=card.querySelector("{sel}");if(e)tl.fromTo(e,{from_v},{to_v},"+={delay}");}})();')
+    # Exit
+    etype2, edur2, eease2 = ext["type"], ext["duration"], ext["ease"]; exit_label = f'+={exit_offset}'
+    if etype2 == "fadeSlideUp": lines.append(f'tl.to(card,{{y:-30,opacity:0,duration:{edur2},ease:"{eease2}"}},"{exit_label}");')
+    elif etype2 == "fadeSlideDown": lines.append(f'tl.to(card,{{y:30,opacity:0,duration:{edur2},ease:"{eease2}"}},"{exit_label}");')
+    elif etype2 == "scaleOut": lines.append(f'tl.to(card,{{scale:0.8,opacity:0,duration:{edur2},ease:"{eease2}"}},"{exit_label}");')
+    elif etype2 == "shakeOut": lines.append(f'tl.to(card,{{x:8,duration:0.06,ease:"none"}},"{exit_label}");'); lines.append(f'tl.to(card,{{x:-8,duration:0.06,ease:"none"}});'); lines.append(f'tl.to(card,{{x:0,opacity:0,duration:{edur2},ease:"{eease2}"}});')
+    elif etype2 == "fadeOut": lines.append(f'tl.to(card,{{opacity:0,duration:{edur2},ease:"{eease2}"}},"{exit_label}");')
+    else: lines.append(f'tl.to(card,{{opacity:0,y:-20,duration:{edur2},ease:"{eease2}"}},"{exit_label}");')
+    # Micro
+    mic_type = mic["type"]
+    if mic_type == "float": lines.append(f'card.style.animation="floatAnim {mic.get("period",3)}s ease-in-out infinite";')
+    elif mic_type == "pulse": lines.append(f'card.style.animation="pulseAnim {mic.get("period",2.5)}s ease-in-out infinite";')
+    elif mic_type == "glowPulse": lines.append(f'card.style.animation="glowPulseAnim {mic.get("period",2)}s ease-in-out infinite";')
+    elif mic_type == "breathe": lines.append(f'card.style.animation="breatheAnim {mic.get("period",3)}s ease-in-out infinite";')
+    # Sweep
+    if is_highlight or beat in ("HOOK","CONFLICT","RESOLUTION","TURN"): lines.append('var sweep=document.createElement("div");sweep.style.cssText="position:absolute;top:0;left:0;width:30%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.06),transparent);transform:skewX(-20deg);z-index:4;pointer-events:none;animation:lightSweep 3s ease-in-out infinite;";'); lines.append('card.querySelector("div").appendChild(sweep);')
+    lines.append(f'window.__timelines["{beat_id}"]=tl;}})();</script>')
+    return ''.join(lines)
+
+def _sanitize(s):
+    if not s: return ""
+    return s.replace("&","&amp;").replace('"',"&quot;").replace("<","&lt;").replace(">","&gt;")
+
+def _detect_orientation(video_path):
+    try:
+        r = subprocess.run(["ffprobe","-v","error","-select_streams","v:0","-show_entries","stream=width,height","-of","csv=p=0",str(video_path)], capture_output=True, text=True, timeout=30)
+        parts = r.stdout.strip().split(",")
+        if len(parts) >= 2: return "portrait" if int(parts[1]) > int(parts[0]) else "landscape"
+    except: pass
+    return "portrait"
+
+def _find_npx():
+    for c in ["npx.cmd","npx","npx.bat"]:
+        p = shutil.which(c)
+        if p: return p
+    ap = os.environ.get("APPDATA","")
+    if ap:
+        p = Path(ap) / "npm" / "npx.cmd"
+        if p.exists(): return str(p)
+    return None
+
+def _extract_beat_parts(beat_html):
+    """🔴 0.7.109 sub-composition timeline seek 失效 → 内联单一 timeline。
+    提取 beat HTML 的 (html_fragment, motion_js)：
+    html_fragment = div 内容（去掉 three.min.js/gsap.min.js 库 + GSAP script）
+    motion_js = tl.from/to 语句（去掉 window.__timelines 注册）
+    """
+    import re
+    m = re.search(r'<body>(.*)</body>', beat_html, re.DOTALL)
+    body = m.group(1) if m else beat_html
+    # 去掉 three.min.js 库（含 "Three.js Authors" 标记）
+    body = re.sub(r'<script>\s*/\*\*.*?Three\.js Authors.*?</script>', '', body, flags=re.DOTALL)
+    # 去掉 gsap.min.js 库（含 "GSAP" 注释标记）
+    body = re.sub(r'<script>\s*/\*!.*?GSAP.*?_inheritsLoose.*?</script>', '', body, flags=re.DOTALL)
+    # 提取 GSAP 动画 script（结尾 })(); 和 </script> 之间允许换行）
+    m = re.search(r'<script>window\.__timelines=window\.__timelines\|\|\{\};\(function\(\)\{(.*?)\}\)\(\);\s*</script>', body, re.DOTALL)
+    motion_js = m.group(1) if m else ""
+    if m:
+        body = body.replace(m.group(0), '')
+    # 去掉 motion_js 里的 var tl 定义和 __timelines 注册
+    motion_js = re.sub(r'var\s+tl\s*=\s*gsap\.timeline\(\{paused:true\}\);?', '', motion_js)
+    motion_js = re.sub(r'window\.__timelines\[[^\]]+\]=tl;?', '', motion_js)
+    return body, motion_js.strip()
+
+def _dedup_canvas_ids(frag, idx):
+    """内联后多个 beat 的 canvas id 会冲突（bg3d/glx/...），加 beat 后缀去重"""
+    import re
+    canvas_ids = set(re.findall(r'<canvas id="([^"]+)"', frag))
+    for cid in canvas_ids:
+        new_cid = cid + "-" + str(idx)
+        frag = frag.replace('id="' + cid + '"', 'id="' + new_cid + '"')
+        frag = frag.replace('getElementById("' + cid + '")', 'getElementById("' + new_cid + '")')
+        frag = frag.replace("getElementById('" + cid + "')", "getElementById('" + new_cid + "')")
+    return frag
+
+def _offset_motion(motion, pos):
+    """把 motion 里每个 tl.from/to/fromTo 的绝对时间参数偏移 pos（平铺到主 timeline）。
+    用括号栈正确匹配（处理 ease 值 back.out(1.4) 的嵌套括号）。"""
+    import re
+    result = []
+    i = 0
+    while True:
+        m = re.search(r'tl\.(from|to|fromTo)\(', motion[i:])
+        if not m:
+            result.append(motion[i:]); break
+        start = i + m.start()
+        depth = 0
+        j = i + m.end() - 1  # 指向 (
+        while j < len(motion):
+            ch = motion[j]
+            if ch == '(': depth += 1
+            elif ch == ')':
+                depth -= 1
+                if depth == 0: break
+            j += 1
+        stmt = motion[start:j + 1]
+        last_comma = -1; depth = 0
+        for k in range(len(stmt) - 2, -1, -1):
+            ch = stmt[k]
+            if ch == ')': depth += 1
+            elif ch == '(': depth -= 1
+            elif ch == ',' and depth == 0:
+                last_comma = k; break
+        if last_comma > 0:
+            tstr = stmt[last_comma + 1:-1].strip()
+            try:
+                t = float(tstr)
+                new_stmt = stmt[:last_comma + 1] + str(round(pos + t, 2)) + ')'
+                result.append(motion[i:start]); result.append(new_stmt); i = j + 1; continue
+            except ValueError:
+                pass
+        result.append(motion[i:start]); result.append(stmt); i = j + 1
+    return ''.join(result)
+
+def _wrap_scripts_scope(frag):
+    """把片段里的 <script> 用 IIFE 包裹，避免内联后变量名冲突（const c/r/s/cam 等）。"""
+    import re
+    return re.sub(r'<script>(.*?)</script>', lambda m: '<script>(function(){' + m.group(1) + '})();</script>', frag, flags=re.DOTALL)
+
+# Visual components
+
+def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mode="fullscreen"):
+    hf_dir = output_dir / "hyperframes"; comp_dir = hf_dir / "compositions"
+    hf_dir.mkdir(parents=True, exist_ok=True); comp_dir.mkdir(exist_ok=True)
+    src_v = str(output_dir / "final.mp4"); dst_v = str(hf_dir / "final.mp4")
+    if os.path.exists(src_v): shutil.copy2(src_v, dst_v); print("      Video copied")
+    orientation = _detect_orientation(video_path)
+    print("      Orientation:", orientation)
+    ranges = edl.get("ranges", [])
+    if not ranges: return None
+    seg_offsets = []; acc = 0.0
+    for seg in ranges: seg_offsets.append(acc); acc += seg["end"] - seg["start"]
+    total_dur = acc; fw, fh = (1080, 1920) if orientation == "portrait" else (1920, 1080)
+    captions = _build_captions(ranges, words, seg_offsets, orientation, fw)
+    beat_files = []
+    for idx, seg in enumerate(ranges):
+        offset = seg_offsets[idx]; beat_id = "beat-" + str(idx)
+        dur = round(seg["end"] - seg["start"], 2); beat = seg.get("beat", "INFO").upper()
+        quote = seg.get("quote", "")
+        card_headline = seg.get("card_headline", "") or seg.get("title", "")
+        card_subtext = seg.get("card_subtext", ""); card_metric = seg.get("card_metric")
+        card_emotion = seg.get("card_emotion", "neutral"); card_scene = seg.get("card_scene", "context")
+        card_vk = seg.get("card_vk", ""); card_data = seg.get("card_data", [])
+        card_icon = seg.get("card_icon", "")
+        card_layout = seg.get("card_layout", "title-only")
+        card_bullets = seg.get("card_bullets", [])
+        card_takeaway = seg.get("card_takeaway", "")
+        card_vstyle = seg.get("card_vstyle", "tech"); card_threejs_flag = seg.get("card_threejs", True)
+        safe_headline = _sanitize(card_headline); safe_subtext = _sanitize(card_subtext); sanitized_quote = _sanitize(quote)
+        tc = TAG_COLORS.get(beat, COLORS["cyan"]); beat_name = BEAT_LABELS.get(beat, beat)
+        icon = BEAT_ICONS.get(beat, "\u25c6")
+        # Smart fill: upgrade before sizing (layout may change → need right dimensions)
+        safe_headline, card_metric, card_data, card_layout, card_bullets = _smart_fill(
+            safe_headline, safe_subtext, card_metric, card_data, card_layout, card_bullets,
+            beat_name=beat_name, quote=sanitized_quote)
+        # Size based on upgraded layout
+        if card_layout in ("big-number", "comparison"):
+            cw, ch = (680, 280) if orientation != "portrait" else (600, 300)
+        elif card_layout == "bullets":
+            cw, ch = (620, 280) if orientation != "portrait" else (560, 300)
+        elif card_layout == "quote-card":
+            cw, ch = (600, 220) if orientation != "portrait" else (540, 240)
+        elif beat in ("HOOK", "RESOLUTION", "CLOSE"): cw, ch = (1000, 280) if orientation != "portrait" else (960, 320)
+        elif beat in ("CONFLICT", "STRUGGLE", "PROBLEM", "TURN"): cw, ch = (500, 280) if orientation != "portrait" else (460, 300)
+        else: cw, ch = (520, 200) if orientation != "portrait" else (500, 220)
+        exit_offset = max(0.5, dur - 1.0); is_highlight = (idx == len(ranges) - 1)
+        # V6: LLM直出HTML优先
+        llm_html = seg.get("_llm_html", "")
+        scene_html = seg.get("_scene_html", "")  # 🔴 P0: hf_build_pip 全屏完整场景（含背景+内容+GSAP）
+        card_threejs_flag = False
+        # ── PIP模式：全屏场景，不用卡片模板 ──
+        if layout_mode == "pip":
+            cw, ch = fw, fh  # 全视口
+            if scene_html and len(scene_html) > 100:
+                card_html = scene_html
+            elif llm_html and len(llm_html) > 100:
+                card_html = llm_html
+            else:
+                # PIP回退：生成默认全屏深色场景而非500px卡片
+                card_html = f'<div data-composition-id="{beat_id}" data-width="{fw}" data-height="{fh}" style="position:absolute;inset:0;z-index:10;overflow:hidden;background:linear-gradient(180deg,#0A0A1A,#1A0A2E,#0C1030);"><div class="scene-atmo" style="position:absolute;inset:0;z-index:1;background:radial-gradient(ellipse at 50% 40%,rgba(108,140,255,0.06),transparent 50%),radial-gradient(ellipse at 70% 70%,rgba(168,85,247,0.04),transparent 40%);"></div><div style="position:relative;z-index:2;display:flex;align-items:center;justify-content:center;height:100%;padding:60px 40px;"><div id="headline" style="font-size:72px;font-weight:900;color:#fff;text-align:center;max-width:80%;line-height:1.3;">{safe_headline}</div></div></div><script>(function(){{var tl=gsap.timeline({{paused:true}});tl.from(\'#headline\',{{scale:0,opacity:0,duration:0.5,ease:\\"back.out(2)\\"}});tl.play();}})();</script>'
+        elif llm_html and len(llm_html) > 100 and re.search(r'<div[^>]*data-composition-id\s*=', llm_html):
+            card_html = llm_html
+        else:
+            card_html = _build_card(beat_id, beat, tc, beat_name, icon, safe_headline, safe_subtext, card_metric, card_emotion, card_scene, card_vk, card_data, card_icon, cw, ch, _sanitize(quote), orientation, card_layout, card_bullets, card_takeaway, card_vstyle)
+        gsap_script = _build_gsap_animation(beat_id, beat, exit_offset, is_highlight)
+        threejs_bg = _threejs_card_bg(tc) if card_threejs_flag else ""
+        if scene_html and len(scene_html) > 100:
+            # 完整场景（已含背景+内容+GSAP+__timelines），包 DOCTYPE 写 beat-N.html
+            full_html = '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><style>' + FONT_CSS + '*{margin:0;padding:0;box-sizing:border-box}body{overflow:hidden;background:transparent}</style></head><body>' + scene_html + '</body></html>'
+        elif llm_html and len(llm_html) > 100:
+            gsap_exit = _build_gsap_animation(beat_id, beat, exit_offset, is_highlight)
+            full_html = '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><style>'+FONT_CSS+MICRO_CSS+CARD_DECOR_CSS+'*{margin:0;padding:0;box-sizing:border-box}body{overflow:hidden;background:transparent;font-family:CJK,Inter,"Segoe UI",sans-serif}</style></head><body>'+card_html+gsap_exit+'</body></html>'
+        else:
+            full_html = '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><style>'+FONT_CSS+MICRO_CSS+CARD_DECOR_CSS+'*{margin:0;padding:0;box-sizing:border-box}body{overflow:hidden;background:transparent;font-family:CJK,Inter,"Segoe UI",sans-serif}</style></head><body>'+threejs_bg+card_html+gsap_script+'</body></html>'
+        (comp_dir / (beat_id + ".html")).write_text(full_html, encoding="utf-8")
+        if layout_mode == "pip":
+            card_style = f"position:absolute;inset:0;width:{fw}px;height:{fh}px;z-index:10;"
+        elif beat in ("HOOK", "RESOLUTION", "CLOSE"): card_style = f"position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:{cw}px;height:{ch}px;z-index:10;" if orientation != "portrait" else f"position:absolute;left:50%;bottom:30px;transform:translateX(-50%);width:{cw}px;height:{ch}px;z-index:10;"
+        elif beat in ("CONFLICT", "STRUGGLE", "PROBLEM", "TURN"): card_style = f"position:absolute;right:40px;top:50%;transform:translateY(-50%);width:{cw}px;height:{ch}px;z-index:10;"
+        else: card_style = f"position:absolute;left:30px;top:50%;transform:translateY(-50%);width:{cw}px;height:{ch}px;z-index:10;" if orientation != "portrait" else f"position:absolute;left:30px;bottom:40px;width:{cw}px;height:{ch}px;z-index:10;"
+        beat_files.append((beat_id, offset, dur, card_style, cw, ch))
+    host_lines = []
+    for bid, pos, dur_clean, style, cw, ch in beat_files:
+        host_lines.append(f'<div id="{bid}" data-composition-id="{bid}" data-composition-src="compositions/{bid}.html" data-start="{round(pos,2)}" data-duration="{round(dur_clean,2)}" data-width="{cw}" data-height="{ch}" class="clip audio-pulse" style="{style}"></div>')
+    for cp in captions:
+        cid = "cap-" + str(cp["idx"])
+        host_lines.append(f'<div id="{cid}" class="clip caption-word" data-start="{cp["start"]}" data-duration="{cp["dur"]}" style="bottom:{cp.get("bottom",130)}px;left:{cp.get("left_pct",50)}%;transform:translateX(-50%);font-size:{cp.get("font_size",38)}px;text-align:center;">{cp["text"]}</div>')
+    host_block = "\n".join(host_lines); td_str = str(round(total_dur, 2))
+    main_style = f"body{{margin:0;background:{COLORS['bg_deep']}}}#root{{position:relative;width:{fw}px;height:{fh}px;overflow:hidden;background:{COLORS['bg_deep']}}}.bg-glow{{position:absolute;inset:0;z-index:2;pointer-events:none;background:radial-gradient(ellipse at 50% 40%,rgba(0,229,255,0.04),transparent 60%),radial-gradient(ellipse at 70% 70%,rgba(239,68,68,0.03),transparent 50%),radial-gradient(ellipse at 30% 60%,rgba(34,211,160,0.03),transparent 50%);}}#src-v{{animation:kenburns {td_str}s ease-in-out infinite alternate;}}@keyframes kenburns{{0%{{transform:scale(1)}}100%{{transform:scale(1.03)}}}}.unified-timeline{{position:absolute;bottom:4px;left:2%;right:2%;height:2px;background:rgba(255,255,255,0.06);border-radius:1px;overflow:hidden;z-index:30;}}.unified-timeline-fill{{height:100%;background:linear-gradient(90deg,{COLORS['cyan']},{COLORS['purple']},#22d3a0);border-radius:1px;width:0%;}}.caption-word{{position:absolute;color:#fff;font-weight:600;text-shadow:0 2px 12px rgba(0,0,0,0.9);white-space:nowrap;z-index:20;transition:text-shadow 0.15s}}.caption-word.active{{text-shadow:0 0 20px rgba(0,229,255,0.8),0 2px 12px rgba(0,0,0,0.9);color:#fff}}.audio-pulse{{filter:brightness(calc(1 + var(--audio-level,0) * 0.3))}}"
+
+    # ── PIP layout (person-in-window) ──
+    pip_motion = ""  # 🔴 窗口定时换位的 GSAP 动画语句
+    if layout_mode == "pip":
+        import random
+        # 🔴 窗口大小：竖屏 22%，横屏 12%（12% 在 1920 宽 = 230px，换位靠 rotation 动画已恢复，窗口小更精致）
+        pip_size = 22 if orientation == "portrait" else 12  # % of viewport width
+        # 🔴 竖屏 → 圆框（1:1 圆形），横屏 → 竖向长方形框（3:4，高>宽，带边框）
+        radius = "50%" if orientation == "portrait" else "16px"
+        # 🔴 位置定时换位：每 5 秒换位（8s 太久，窗口长时间不动显得"没换位"）
+        shift_interval = 5
+        n_shifts = max(1, int(total_dur // shift_interval))
+        # 🔴 循环使用位置（横屏 76s 有 9 次换位，不能只换 6 个位置就停——后半段窗口会一直不动）
+        shuffled = random.sample(PIP_POSITIONS, len(PIP_POSITIONS))
+        chosen = [shuffled[i % len(shuffled)] for i in range(n_shifts)]
+        pos_name, pos_css = chosen[0]
+        frame_name = random.choice(list(PIP_FRAMES.keys()))
+        frame_css = PIP_FRAMES[frame_name]
+        pip_motion_lines = []
+        for i in range(1, len(chosen)):
+            _name, _css = chosen[i]
+            # _css = "left:75%;bottom:14%" → 解析成 left="75%" bottom="14%"
+            _kv = {}
+            for _pair in _css.split(";"):
+                if ":" in _pair:
+                    _k, _v = _pair.split(":", 1)
+                    _kv[_k.strip()] = _v.strip()
+            _left = _kv.get("left", "3%")
+            _bottom = _kv.get("bottom", "14%")
+            _t = i * shift_interval
+            if i % 3 == 0:
+                # 🔴 偶尔消失式换位：双属性滑出视口（消失 1s）→ 滑入新位置（出现）
+                pip_motion_lines.append(f'tl.to("#pip-win",{{left:"-32%",bottom:"-12%",duration:0.5,ease:"power1.in"}},{_t});')
+                pip_motion_lines.append(f'tl.to("#pip-win",{{left:"{_left}",bottom:"{_bottom}",duration:0.6,ease:"power2.out"}},{_t + 1.4});')
+            else:
+                # 普通换位
+                pip_motion_lines.append(f'tl.to("#pip-win",{{left:"{_left}",bottom:"{_bottom}",duration:0.8,ease:"power2.inOut"}},{_t});')
+        pip_motion = "".join(pip_motion_lines)
+        pip_css_block = PIP_CSS.replace("%%TD%%", td_str)
+        main_style = f"body{{margin:0;background:{COLORS['bg_deep']}}}#root{{position:relative;width:{fw}px;height:{fh}px;overflow:hidden;background:{COLORS['bg_deep']}}}.bg-glow{{position:absolute;inset:0;z-index:4;pointer-events:none;background:radial-gradient(ellipse at 50% 40%,rgba(0,229,255,0.04),transparent 60%),radial-gradient(ellipse at 70% 70%,rgba(239,68,68,0.03),transparent 50%),radial-gradient(ellipse at 30% 60%,rgba(34,211,160,0.03),transparent 50%);}}.unified-timeline{{position:absolute;bottom:4px;left:2%;right:2%;height:2px;background:rgba(255,255,255,0.06);border-radius:1px;overflow:hidden;z-index:30;}}.unified-timeline-fill{{height:100%;background:linear-gradient(90deg,{COLORS['cyan']},{COLORS['purple']},#22d3a0);border-radius:1px;width:0%;}}.caption-word{{position:absolute;color:#fff;font-weight:600;text-shadow:0 2px 12px rgba(0,0,0,0.9);white-space:nowrap;z-index:20;transition:text-shadow 0.15s}}.caption-word.active{{text-shadow:0 0 20px rgba(0,229,255,0.8),0 2px 12px rgba(0,0,0,0.9);color:#fff}}.audio-pulse{{filter:brightness(calc(1 + var(--audio-level,0) * 0.3))}}"
+        # 🔴 窗口比例：竖屏 1:1（圆框），横屏 3:4（竖向长方形框，高>宽）
+        _aspect = "1" if orientation == "portrait" else "3/4"
+        pip_video_block = f'<div id="pip-bg"></div><video id="pip-bg-v" src="final.mp4" data-start="0" data-duration="{td_str}" data-track-index="0" muted playsinline></video><div id="pip-win" style="{pos_css};width:{pip_size}%;aspect-ratio:{_aspect};--pip-radius:{radius};">'
+        pip_video_block += f'<video id="pip-win-v" src="final.mp4" data-start="0" data-duration="{td_str}" data-track-index="1" muted playsinline></video>'
+        pip_video_block += f'<div id="pip-frame" style="{frame_css}"></div></div>'
+        print(f"      PIP mode: pos={pos_name} frame={frame_name}")
+    else:
+        pip_css_block = ""
+        pip_video_block = f'<video id="src-v" src="final.mp4" data-start="0" data-duration="{td_str}" data-track-index="0" muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;"></video>'
+
+    main_style += '"'
+    # Load GSAP + Three.js locally (CDN inaccessible in headless browser)
+    import pathlib
+    _assets = pathlib.Path(__file__).resolve().parent.parent / "skills" / "hf_build_pip" / "assets"
+    gsap_asset = _assets / "gsap.min.js"
+    if gsap_asset.exists():
+        gsap_js = gsap_asset.read_text(encoding="utf-8")
+        gsap_tag = f'<script>{gsap_js}</script>'
+        print("      GSAP embedded locally")
+    else:
+        gsap_tag = '<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>'
+        print("      GSAP from CDN (may fail in headless)")
+    index_html = '\n'.join(['<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"/>',f'<meta name="viewport" content="width={fw},height={fh}"/>','<title>Edited Video</title>',gsap_tag,f'<style>{FONT_CSS}{pip_css_block}{main_style}</style></head><body>',f'<div id="root" data-composition-id="main" data-start="0" data-width="{fw}" data-height="{fh}" data-duration="{td_str}">',pip_video_block,f'<audio id="src-a" src="final.mp4" data-start="0" data-duration="{td_str}" data-track-index="10"></audio>','<div class="bg-glow"></div>',host_block,'</div>','<div class="unified-timeline"><div class="unified-timeline-fill" id="main-timeline"></div></div>',f'<script>window.__timelines=window.__timelines||{{}};const tl=gsap.timeline({{paused:true}});tl.to("#main-timeline",{{width:"100%",duration:{td_str},ease:"linear"}},0);{pip_motion}window.__timelines["main"]=tl;</script>',THREEP_SCRIPT,AUDIO_SYNC_SCRIPT,'</body></html>'])
+    (hf_dir / "index.html").write_text(index_html, encoding="utf-8")
+    print("      HyperFrames project:", str(hf_dir / "index.html"))
+    print("      Beats:", len(beat_files), "sub-compositions,", len(captions), "caption words")
+    layouts_used = {}
+    for idx, seg in enumerate(ranges):
+        b = seg.get("beat", "INFO").upper()
+        lname = "hook" if b in ("HOOK",) else "conflict" if b in ("CONFLICT","STRUGGLE","PROBLEM","TURN") else "resolution" if b in ("RESOLUTION","CLOSE") else "default"
+        layouts_used[lname] = layouts_used.get(lname, 0) + 1
+    print("      Layouts:", ", ".join(f"{k}x{v}" for k, v in sorted(layouts_used.items())))
+    return hf_dir
+
+def _build_captions(ranges, words, seg_offsets, orientation="portrait", video_width=None):
+    captions = []
+    if video_width is None: video_width = 1080 if orientation == "portrait" else 1920
+    safe_width = video_width * 0.85
+    for seg_idx, seg in enumerate(ranges):
+        s, e = seg["start"], seg["end"]; offset = seg_offsets[seg_idx]
+        seg_words = [w for w in words if w["start"] >= s - 0.1 and w["end"] <= e + 0.1]
+        if not seg_words: continue
+        phrase_text = ""; ps = pe = None
+        for w in seg_words:
+            ft = w["start"] - s + offset; fe = w["end"] - s + offset
+            if ps is None: ps, pe, phrase_text = ft, fe, w["text"]
+            elif ft - pe < 0.3: pe = fe; phrase_text += w["text"]
+            else:
+                dur = round(pe - ps + 0.1, 2)
+                if dur >= 0.2: _make_caption(captions, ps, dur, phrase_text.strip(), safe_width, orientation)
+                ps, pe, phrase_text = ft, fe, w["text"]
+        if phrase_text:
+            dur = round(pe - ps + 0.1, 2)
+            if dur >= 0.2: _make_caption(captions, ps, dur, phrase_text.strip(), safe_width, orientation)
+    return captions[:200]
+
+def _make_caption(captions, start, dur, text, safe_width, orientation):
+    max_font = 48 if orientation == "portrait" else 42
+    bottom = 130 if orientation == "portrait" else 100
+
+    # V23: 长句拆多条字幕，每条 ≤14 字单行
+    if not text or not text.strip():
+        return
+    if len(text) <= 14:
+        captions.append({"idx": len(captions), "start": round(start - 0.05, 2),
+            "dur": max(0.4, dur), "text": text, "font_size": max_font, "bottom": bottom, "left_pct": 50})
+        return
+
+    # 在标点处拆，否则按字拆
+    parts = []
+    remaining = text
+    while remaining:
+        if len(remaining) <= 14:
+            parts.append(remaining)
+            break
+        # 在第 7-14 字之间找标点
+        cut = 14
+        for i in range(min(14, len(remaining))-1, 6, -1):
+            if remaining[i] in '，。、？！… ':
+                cut = i + 1
+                break
+        else:
+            # 没标点，在第 10-14 字间找空格
+            cut = min(14, len(remaining))
+        parts.append(remaining[:cut].strip())
+        remaining = remaining[cut:].lstrip('，。、？！… ')
+
+    sub_dur = max(0.4, dur / len(parts))
+    for pi, part in enumerate(parts):
+        if not part: continue
+        captions.append({"idx": len(captions), "start": round(start + sub_dur * pi - 0.05, 2),
+            "dur": round(sub_dur, 2), "text": part, "font_size": max_font, "bottom": bottom, "left_pct": 50})
+
+def render_hyperframes(hf_dir):
+    from core.gpu import detect_gpu
+    import re as _re
+    npx_path = _find_npx()
+    if not npx_path: return None
+    hf_dir = Path(hf_dir).resolve()  # 🔴 绝对路径，否则 --output 相对 cwd 会错位（渲染到 standalone_NN 子目录）
+    gpu = detect_gpu(); gpu_flag = "--gpu" if gpu["available"] else ""
+    print("\n[8/8] Rendering HyperFrames composition (standalone per-beat) ..." + (" (GPU)" if gpu["available"] else ""))
+    t0 = time.time()
+
+    # 🔴 fullscreen（卡片 sub-composition）与 pip（全屏场景 standalone）渲染方式不同
+    # fullscreen 的 beat-N.html 是 500x260 小卡片（叠加在背景视频上），standalone 会把卡片当全屏渲染→卡住
+    # 必须整体渲染 index.html（背景视频+卡片 sub-composition）
+    try:
+        _idx_html = (hf_dir / "index.html").read_text(encoding="utf-8")
+    except Exception:
+        _idx_html = ""
+    if "pip-win" not in _idx_html:
+        return _render_fullscreen(hf_dir, gpu_flag)
+
+    # 🔴 照抄 video-factory：每个 beat 单独 standalone 渲染成 segment，再 concat 拼接
+    comp_dir = hf_dir / "compositions"
+    beat_htmls = sorted(comp_dir.glob("beat-*.html"), key=lambda p: int(p.stem.split("-")[1]))
+    if not beat_htmls:
+        print("      无 beat HTML")
+        return None
+
+    # 解析每个 beat 的 duration
+    try:
+        index_html = (hf_dir / "index.html").read_text(encoding="utf-8")
+        dur_map = {}
+        for m in _re.finditer(r'data-composition-id="(beat-\d+)"[^>]*?data-duration="([\d.]+)"', index_html):
+            dur_map[m.group(1)] = float(m.group(2))
+    except Exception:
+        dur_map = {}
+
+    temp_dir = hf_dir / "_render_segments"
+    temp_dir.mkdir(exist_ok=True)
+    segment_files = []
+
+    for i, beat_html in enumerate(beat_htmls):
+        bid = beat_html.stem
+        duration = dur_map.get(bid, 5.0)
+        standalone_dir = temp_dir / f"standalone_{i:02d}"
+        standalone_dir.mkdir(exist_ok=True)
+        shutil.copy2(str(beat_html), str(standalone_dir / "index.html"))
+        # 🔴 beat-N.html 缺 data-duration → 注入正确时长（否则 HyperFrames 用默认 12.6s，渲染慢且时长错）
+        try:
+            _h = (standalone_dir / "index.html").read_text(encoding="utf-8")
+            _h = _h.replace(f'data-composition-id="{bid}"', f'data-composition-id="{bid}" data-duration="{duration}"', 1)
+            (standalone_dir / "index.html").write_text(_h, encoding="utf-8")
+        except Exception:
+            pass
+        clip_path = (temp_dir / f"segment_{i:02d}.mp4").resolve()
+        # 🔴 照抄 vf：shell=True + 直接 hyperframes 命令（.cmd 文件 shell=False 会静默失败）
+        cmd = f'hyperframes render . --output "{clip_path}" --quality high --workers 1 {gpu_flag}'
+        try:
+            result = subprocess.run(cmd, shell=True, cwd=str(standalone_dir), capture_output=True, encoding="utf-8", errors="replace", timeout=900)
+            if result.returncode == 0 and clip_path.exists():
+                segment_files.append(clip_path)
+                print(f"      [{i+1}/{len(beat_htmls)}] {bid} 渲染完成 ({duration:.1f}s)")
+            else:
+                print(f"      [{i+1}/{len(beat_htmls)}] {bid} 渲染失败 (rc={result.returncode})")
+        except subprocess.TimeoutExpired:
+            print(f"      [{i+1}/{len(beat_htmls)}] {bid} 渲染超时")
+        except Exception as e:
+            print(f"      [{i+1}/{len(beat_htmls)}] {bid} 渲染错误: {e}")
+
+    if not segment_files:
+        print("      无成功 segment")
+        return None
+
+    # concat 拼接
+    concat_list = temp_dir / "concat.txt"
+    with open(concat_list, "w", encoding="utf-8") as f:
+        for seg in segment_files:
+            f.write(f"file '{seg}'\n")
+    pol = hf_dir.parent / "final_polished.mp4"
+    concat_cmd = f'ffmpeg -y -f concat -safe 0 -i "{concat_list}" -c copy "{pol}"'
+    try:
+        subprocess.run(concat_cmd, shell=True, capture_output=True, timeout=120)
+        if pol.exists():
+            elapsed = time.time() - t0
+            mb = pol.stat().st_size / (1024 * 1024)
+            print(f"      Rendered: {pol} ({mb:.0f} MB, {elapsed:.0f}s)")
+            # 🔴 standalone 渲染只产出背景动画，PIP 小窗 + 字幕 + 音频需 ffmpeg 补上
+            try:
+                composed = _compose_pip(hf_dir, pol)
+                if composed and Path(composed).exists():
+                    return composed
+            except Exception as e:
+                print(f"      PIP 叠加错误: {e}")
+            return pol
+    except Exception as e:
+        print(f"      concat 错误: {e}")
+    print("      Using base final.mp4")
+    return None
+
+
+def _compose_pip(hf_dir, polished_path):
+    """standalone 渲染只产出背景动画 concat，PIP 小窗 + 字幕 + 音频需 ffmpeg 补上。
+    从 index.html 解析 PIP 换位序列 + 字幕，动态检测人物 crop，ffmpeg 叠加。
+    返回最终成品路径（叠加后）。非 PIP 模式只补音频。"""
+    import re as _re
+    import numpy as _np
+    import io as _io
+    from PIL import Image as _Img
+    hf_dir = Path(hf_dir).resolve()
+    out_dir = hf_dir.parent
+    final_mp4 = out_dir / "final.mp4"
+    if not final_mp4.exists():
+        print("      无 final.mp4，跳过叠加")
+        return polished_path
+    try:
+        index_html = (hf_dir / "index.html").read_text(encoding="utf-8")
+    except Exception:
+        index_html = ""
+
+    is_pip = 'pip-win' in index_html
+    if not is_pip:
+        # 非 PIP 模式：只补音频（背景动画 concat 无音轨）
+        try:
+            tmp = out_dir / "_with_audio.mp4"
+            cmd = f'ffmpeg -y -i "{polished_path}" -i "{final_mp4}" -map 0:v -map 1:a -c:v copy -c:a aac -b:a 192k -shortest "{tmp}"'
+            r = subprocess.run(cmd, shell=True, capture_output=True, timeout=300)
+            if r.returncode == 0 and tmp.exists():
+                tmp.replace(polished_path)
+                print("      音频已补")
+        except Exception as e:
+            print(f"      音频补齐失败: {e}")
+        return polished_path
+
+    # ── PIP 模式 ──
+    # 1. 解析换位序列（GSAP tl.to）
+    motions = []
+    for m in _re.finditer(r'tl\.to\("#pip-win",\{left:"(-?[\d.]+)%",bottom:"(-?[\d.]+)%",duration:([\d.]+)[^}]*\},([\d.]+)\)', index_html):
+        motions.append((float(m.group(4)), float(m.group(1)), float(m.group(2))))
+
+    # 2. 解析字幕
+    captions = []
+    for m in _re.finditer(r'<div id="cap-\d+" class="clip caption-word" data-start="(-?[\d.]+)" data-duration="([\d.]+)" style="bottom:(\d+)px;left:([\d.]+)%;[^"]*font-size:(\d+)px[^"]*">(.*?)</div>', index_html):
+        start = float(m.group(1)); dur = float(m.group(2))
+        if start >= 0 and dur > 0:
+            captions.append((start, dur, int(m.group(3)), float(m.group(4)), int(m.group(5)), m.group(6).strip()))
+
+    # 3. 窗口尺寸（横屏 12%×1920=230，3:4→307；竖屏 22%×1080=238，1:1→238）
+    try:
+        vid_w, vid_h = int(_re.search(r'data-width="(\d+)" data-height="(\d+)"', index_html).group(1)), int(_re.search(r'data-width="(\d+)" data-height="(\d+)"', index_html).group(2))
+    except Exception:
+        vid_w, vid_h = 1920, 1080
+    is_portrait = vid_h > vid_w
+    win_w = int(vid_w * (0.22 if is_portrait else 0.12))
+    win_h = win_w if is_portrait else int(win_w * 4 / 3)
+
+    def to_xy(left_pct, bottom_pct):
+        x = int(left_pct / 100 * vid_w)
+        y = int(vid_h - (bottom_pct / 100 * vid_h) - win_h)
+        return x, y
+
+    # 4. 动态检测人物 crop（多时间点采样，肤色最多帧为准；fallback 按视频实际尺寸，clamp 不越界）
+    def detect_person_crop(video, t=5):
+        best = None
+        # 多个时间点采样，取肤色最多（dense_cols 最长）的帧，避免人物尚未入镜
+        for tt in [t, 3, 8, 10, 15, 20]:
+            cmd = ['ffmpeg', '-ss', str(tt), '-i', str(video), '-frames:v', '1', '-f', 'image2pipe', '-vcodec', 'png', '-']
+            try:
+                img = _np.array(_Img.open(_io.BytesIO(subprocess.run(cmd, capture_output=True, timeout=30).stdout)).convert('RGB'), dtype=_np.float32)
+            except Exception:
+                continue
+            H, W, _ = img.shape
+            R, G, B = img[:, :, 0], img[:, :, 1], img[:, :, 2]
+            skin = (R > 100) & (R > G) & (G > B) & (R - B > 20) & (R - G > 12)
+            col = skin.sum(axis=0); row = skin.sum(axis=1)
+            dense_cols = _np.where(col > 40)[0]; dense_rows = _np.where(row > 25)[0]
+            if len(dense_cols) >= 30 and len(dense_rows) >= 30:
+                cx0, cx1 = dense_cols.min(), dense_cols.max()
+                cy0, cy1 = dense_rows.min(), dense_rows.max()
+                pw = min(max(cx1 - cx0 + 60, 200), 500)
+                # 🔴 竖屏窗口是圆形 1:1，crop 也 1:1；横屏 3:4（否则 scale 会拉伸变形）
+                ph = pw if is_portrait else int(pw * 4 / 3)
+                cx = (cx0 + cx1) // 2
+                y = max(0, cy0 - 40)
+                x = cx - pw // 2
+                # clamp 保证 crop 不越界（视频可能比窗口小，如微信视频 544x960）
+                pw = min(pw, W); ph = min(ph, H)
+                x = max(0, min(x, W - pw)); y = max(0, min(y, H - ph))
+                return pw, ph, x, y
+            # 记录肤色最多的帧作为备选（即使未达阈值）
+            if best is None or len(dense_cols) > best[0]:
+                best = (len(dense_cols), W, H)
+        # fallback：按视频实际尺寸中心 crop（不再硬编码 810,1080,555,0 横屏值）
+        if best is not None:
+            _, W, H = best
+        else:
+            W, H = 1080, 1920
+        if is_portrait:
+            pw = ph = min(W, H)
+        else:
+            pw = min(W, H * 3 // 4); ph = min(H, pw * 4 // 3)
+        x = (W - pw) // 2; y = (H - ph) // 2
+        return pw, ph, x, y
+
+    pw, ph, px, py = detect_person_crop(final_mp4)
+
+    # 5. 换位表达式（从 index.html 解析的实际换位序列，mod 循环）
+    init_left, init_bottom = 75.0, 58.0
+    try:
+        _ws = _re.search(r'id="pip-win" style="([^"]+)"', index_html)
+        if _ws:
+            _l = _re.search(r'left:(-?[\d.]+)%', _ws.group(1))
+            _b = _re.search(r'bottom:(-?[\d.]+)%', _ws.group(1))
+            if _l: init_left = float(_l.group(1))
+            if _b: init_bottom = float(_b.group(1))
+    except Exception:
+        pass
+    timeline = [(0.0, init_left, init_bottom)] + sorted(motions, key=lambda m: m[0])
+    # 找周期：回到初始位置的时间点
+    period = None
+    for t, l, b in timeline[1:]:
+        if t > 1 and abs(l - init_left) < 0.5 and abs(b - init_bottom) < 0.5:
+            period = t
+            break
+    if period is None:
+        period = max(timeline[-1][0] + 5.0, 30.0)
+
+    def _build_axis_expr(axis):
+        segs = []
+        for i, (t, l, b) in enumerate(timeline):
+            if t >= period:
+                break
+            x, y = to_xy(l, b)
+            val = x if axis == 'x' else y
+            t_end = timeline[i + 1][0] if i + 1 < len(timeline) else period
+            segs.append((t_end, val))
+        expr = str(segs[-1][1]) if segs else '0'
+        for t_end, val in reversed(segs[:-1]):
+            expr = f"if(lt(mod(t,{period}),{t_end}),{val},{expr})"
+        return expr
+    x_expr = _build_axis_expr('x')
+    y_expr = _build_axis_expr('y')
+
+    # 6. ASS 字幕
+    def _ass_time(sec):
+        h = int(sec // 3600); m = int((sec % 3600) // 60); s = sec % 60
+        return f"{h}:{m:02d}:{s:05.2f}"
+    ass_lines = ["[Script Info]", "ScriptType: v4.00+", f"PlayResX: {vid_w}", f"PlayResY: {vid_h}",
+                 "WrapStyle: 0", "ScaledBorderAndShadow: yes", "",
+                 "[V4+ Styles]",
+                 "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+                 "Style: Default,Microsoft YaHei,42,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,2,0,2,0,0,100,1",
+                 "", "[Events]",
+                 "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"]
+    for (start, dur, bottom, left_pct, font, text) in captions:
+        end = start + dur
+        x_pos = int(left_pct / 100 * vid_w)
+        y_pos = vid_h - bottom - font
+        text = text.replace("\\", "\\\\").replace("{", "\\{").replace("}", "\\}")
+        ass_lines.append(f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Default,,0,0,0,,{{\\pos({x_pos},{y_pos})\\an2\\bord2\\shad2}}{text}")
+    ass_path = out_dir / "_captions.ass"
+    ass_path.write_text("\n".join(ass_lines), encoding="utf-8")
+
+    # 7. ffmpeg 叠加（圆角 + 边框，对齐 V12 人物窗口边缘）
+    crop_expr = f"crop={pw}:{ph}:{px}:{py},scale={win_w}:{win_h}"
+
+    # 圆角 alpha 表达式（geq，四角透明）：横屏 16px 圆角，竖屏圆形（50%）
+    r_round = win_w // 2 if is_portrait else 16
+    w1 = win_w - 1 - r_round
+    h1 = win_h - 1 - r_round
+    def _round_alpha():
+        inner = '255'
+        inner = f'if(gt(X,{w1})*gt(Y,{h1}),if(gt(hypot(X-{w1},Y-{h1}),{r_round}),0,255),{inner})'
+        inner = f'if(lt(X,{r_round})*gt(Y,{h1}),if(gt(hypot({r_round}-X,Y-{h1}),{r_round}),0,255),{inner})'
+        inner = f'if(gt(X,{w1})*lt(Y,{r_round}),if(gt(hypot(X-{w1},{r_round}-Y),{r_round}),0,255),{inner})'
+        inner = f'if(lt(X,{r_round})*lt(Y,{r_round}),if(gt(hypot({r_round}-X,{r_round}-Y),{r_round}),0,255),{inner})'
+        return inner
+    round_alpha = _round_alpha()
+
+    # 圆角边框 PNG（白色淡边框，对齐 V12：border 1.5px rgba(255,255,255,0.1)）
+    frame_path = out_dir / "_pip_frame.png"
+    try:
+        from PIL import Image as _Img2, ImageDraw as _Draw2
+        _fp = _Img2.new('RGBA', (win_w, win_h), (0, 0, 0, 0))
+        _d = _Draw2.Draw(_fp)
+        _d.rounded_rectangle([0, 0, win_w - 1, win_h - 1], radius=r_round, outline=(255, 255, 255, 26), width=2)
+        _fp.save(str(frame_path))
+    except Exception:
+        frame_path = None
+
+    pip_chain = f"[1:v]{crop_expr},setpts=PTS-STARTPTS,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='{round_alpha}'[pipr]"
+    if frame_path:
+        overlay_expr = (f"{pip_chain};[0:v][pipr]overlay=x='{x_expr}':y='{y_expr}':format=auto[v1];"
+                        f"[v1][2:v]overlay=x='{x_expr}':y='{y_expr}':format=auto[vout]")
+        inputs = ["ffmpeg", "-y", "-i", "final_polished.mp4", "-i", "final.mp4", "-i", "_pip_frame.png"]
+    else:
+        overlay_expr = f"{pip_chain};[0:v][pipr]overlay=x='{x_expr}':y='{y_expr}':format=auto[vout]"
+        inputs = ["ffmpeg", "-y", "-i", "final_polished.mp4", "-i", "final.mp4"]
+
+    tmp_out = out_dir / "_composed.mp4"
+    cmd = inputs + [
+        "-filter_complex",
+        overlay_expr + ";" + "[vout]ass=_captions.ass[vfinal]",
+        "-map", "[vfinal]",
+        "-map", "1:a",
+        "-c:v", "libx264", "-crf", "18", "-preset", "medium",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-b:a", "192k",
+        "-shortest",
+        "_composed.mp4",
+    ]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=1200, cwd=str(out_dir))
+        if r.returncode == 0 and tmp_out.exists():
+            tmp_out.replace(polished_path)
+            print(f"      PIP 叠加完成: {polished_path}")
+        else:
+            print(f"      PIP 叠加失败 (rc={r.returncode})")
+            if r.stderr:
+                print(f"        {r.stderr[-300:]}")
+    except Exception as e:
+        print(f"      PIP 叠加错误: {e}")
+    return polished_path
+
+
+def _render_fullscreen(hf_dir, gpu_flag):
+    """fullscreen 模式：整体渲染 index.html（背景视频 + 卡片 sub-composition）。"""
+    t0 = time.time()
+    try:
+        cmd = f'hyperframes render --quality high {gpu_flag}'
+        proc = subprocess.Popen(cmd, shell=True, cwd=str(hf_dir), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = proc.communicate(timeout=900)
+        rd = hf_dir / "renders"
+        if rd.exists():
+            mp4s = sorted(rd.glob("*.mp4"), key=lambda q: q.stat().st_mtime, reverse=True)
+            if mp4s:
+                pol = hf_dir.parent / "final_polished.mp4"
+                shutil.copy2(str(mp4s[0]), str(pol))
+                mb = mp4s[0].stat().st_size / (1024 * 1024)
+                print(f"      Rendered: {pol} ({mb:.0f} MB, {time.time()-t0:.0f}s)")
+                return pol
+        err_text = stderr.decode("utf-8", errors="replace") if stderr else ""
+        if proc.returncode != 0:
+            print(f"      整体渲染失败 (rc={proc.returncode})")
+            if err_text:
+                for line in err_text.strip().split("\n")[-6:]:
+                    print(f"        {line}")
+    except subprocess.TimeoutExpired:
+        print("      整体渲染超时 (900s)")
+    except Exception as e:
+        print(f"      整体渲染错误: {e}")
+    return None

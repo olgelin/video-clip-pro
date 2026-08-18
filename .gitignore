@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+*.env
+
+# 输出产物（大文件，不提交）
+output/
+test_output/
+*.mp4
+*.wav
+*.mp3
+*.zip
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.webm
+
+# 备份文件（含 .bak_v19_yuv444 等带后缀的备份）
+*.bak
+*.bak_*
+
+# Temp
+*.tmp
+*.log
+.DS_Store
+Thumbs.db

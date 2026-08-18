@@ -1,0 +1,67 @@
+name: v23
+version: "3.0"
+description: 口播视频智能剪辑 V23 — 卡片式HyperFrames
+stages:
+  - name: transcribe
+    skill: transcribe
+    phase: 1
+    critical: true
+    retry: 1
+    timeout: 600
+    description: Whisper 语音转录
+
+  - name: understand
+    skill: understand
+    phase: 2
+    critical: true
+    retry: 2
+    timeout: 300
+    description: LLM 语义分析
+
+  - name: draft
+    skill: draft
+    phase: 3
+    critical: false
+    retry: 2
+    timeout: 300
+    description: LLM EDL 精修
+
+  - name: edit
+    skill: edit
+    phase: 4
+    critical: true
+    retry: 1
+    timeout: 300
+    description: ffmpeg 剪切+拼接
+
+  - name: hf_build
+    skill: hf_build
+    phase: 5
+    critical: false
+    retry: 1
+    timeout: 600
+    description: HyperFrames 卡片+字幕+渲染
+
+  - name: review
+    skill: review
+    phase: 6
+    critical: false
+    retry: 1
+    timeout: 300
+    description: LLM 质量审查
+
+  - name: upscale
+    skill: upscale
+    phase: 7
+    critical: false
+    retry: 0
+    timeout: 1200
+    description: 2x 高清修复
+
+  - name: bgm_mix
+    skill: bgm_mix
+    phase: 6.5
+    critical: false
+    retry: 0
+    timeout: 900
+    description: BGM混音
