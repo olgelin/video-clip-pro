@@ -1,5 +1,25 @@
 # Changelog — Video Clip Pro
 
+## V26 (2026-08-19) — fullscreen 卡片视觉升级（蓝色科技风）+ 三个 bug 修复
+
+### 卡片视觉升级（对齐 video-factory 设计水准）
+- **scene_system.md 重写**：加「创意加速器」（隐喻降维/一个异物/颜色撒谎/空比满）+ 配色菜单（蓝 #6c8cff / 青 #00d4ff 为主，紫/金点缀）+ 背景元素菜单（渐变/光晕/粒子/扫光/网格，选 2-3 种）+ few-shot 完整示例 + 数据元素 1-3 个硬要求
+- **统一蓝色科技风**：深色蓝紫渐变底 + 霓虹青蓝点缀，情绪差异用蓝色系深浅表达，不跳红/绿
+- **CARD_DIRECT_PROMPT 简化**：去掉旧「第一步判断/第二步选元素」结构（导致 LLM 卡在选元素、只输出信号条片段），改成直接参照 scene_system 规范
+
+### 三个 bug 修复
+1. **CSS 中文崩溃**：LLM 把中文写进 `<style>` 导致 HyperFrames `Unknown word` 编译失败 → `_css_has_chinese()` 检测并 fallback
+2. **竖屏变横屏**：upscale 写死 `scale=3840:2160` → `_detect_2x_scale()` 探测方向（含 ffprobe csv 结尾逗号解析修复）
+3. **卡片位置锁底部**：位置按 beat 分类，方言视频 20/22 段被标 hook 导致全居中底部 → 改 idx%3 轮换（左下/居中底部/右侧中）
+
+### 模型配置
+- `card_direct/card_html/card_enrich` 任务 max_tokens 4000→8000（卡片 HTML 需要更多输出）
+
+### 验证
+- 23/23 卡片直出成功（fail=0），竖屏 1080×1920/4K 2160×3840，位置左/中/右轮换，字幕不重叠
+
+---
+
 ## V25 (2026-08-18) — 全管道验收 + HyperFrames 0.7.109 适配
 
 ### 可播放性修复（核心）
