@@ -125,18 +125,7 @@ CARD_DIRECT_PROMPT = """你是口播视频卡片设计师。下面是一段口�
 ## 节奏类型
 {beat_type} / 情绪: {emotion} / 布局: {layout_hint}
 
-## 第一步：判断这段口播在做什么
-- 陈述事实/数据 → 用数据元素（大数字id="value" / 信号条class="signal-bar" / 进度条id="bar-fill"）
-- 表达情绪/概念 → 用视觉隐喻（脉冲灯class="pulse-dot" / 图标浮标class="icon-float" / 引用引号#quote-mark）
-- 教学/科普 → 用知识元素（冷知识角标class="fact-tag" / 定义卡id="term"+id="definition"）
-- 列举步骤/方案 → 用结构化元素（步骤圆点class="step-dot" / 勾选列表class="check-item" / badge链class="badge-item"）
-
-## 第二步：选 1-2 种元素
-根据判断结果，从对应类别中选 1-2 种最合适的。
-
-## 第三步：生成卡片HTML
-卡片 400-600px 宽，半透明毛玻璃 rgba(8,16,32,0.88)，1-3 秒，左侧 3px 彩色线。元素依次入场（GSAP timeline + +=延迟）。
-只输出 div + script，不要 DOCTYPE/html/head/body。
+严格按照下方 scene_system 的完整规范生成卡片 HTML——配色按情绪选色板、背景选 2-3 种元素、放 1-3 个数据元素、参照 few-shot 示例的风格。
 
 {scene_prompt}
 
