@@ -38,12 +38,26 @@ class Upscale(SkillBase):
 
         return context
 
+    def _detect_2x_scale(self, src: Path) -> str:
+        """探测输入视频分辨率，返回 2x 的 scale 目标（保持竖屏/横屏）。"""
+        try:
+            result = subprocess.run(
+                ["ffprobe", "-v", "error", "-select_streams", "v:0",
+                 "-show_entries", "stream=width,height", "-of", "csv=p=0", str(src)],
+                capture_output=True, text=True, timeout=30,
+            )
+            w, h = (int(x) for x in result.stdout.strip().split(","))
+            return "2160:3840" if h > w else "3840:2160"
+        except Exception:
+            return "3840:2160"  # 探测失败，默认横屏
+
     def _ffmpeg_lanczos(self, src: Path, dst: Path) -> bool:
-        """2x lanczos upscale → 4K, NVENC h264, copy audio."""
+        """2x lanczos upscale → 4K（保持宽高比），NVENC h264, copy audio."""
+        target = self._detect_2x_scale(src)
         cmd = [
             "ffmpeg", "-y",
             "-i", str(src),
-            "-vf", "scale=3840:2160:flags=lanczos",
+            "-vf", f"scale={target}:flags=lanczos",
             "-c:v", "h264_nvenc",
             "-preset", "p4",
             "-cq", "23",

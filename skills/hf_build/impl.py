@@ -16,6 +16,17 @@ def _load_prompt(name):
         return p.read_text(encoding="utf-8")
     return ""
 
+
+def _css_has_chinese(html: str) -> bool:
+    """检测 <style> 区域是否含中文（LLM 把中文写进 CSS 会导致 HyperFrames 编译失败）。"""
+    for m in re.finditer(r'<style[^>]*>(.*?)</style>', html, re.DOTALL | re.IGNORECASE):
+        css = m.group(1)
+        css = re.sub(r'/\*.*?\*/', '', css, flags=re.DOTALL)          # 去注释
+        css = re.sub(r'content\s*:\s*["\'][^"\']*["\']', '', css)      # 去 content 字符串
+        if re.search(r'[\u4e00-\u9fff]', css):
+            return True
+    return False
+
 ENRICH_PROMPT = """你是知识科普类短视频的**PPT视觉设计师**。你的任务是把口播文字转化成视觉卡片——像Keynote幻灯片一样有数据、有图表、有对比，不只是一行字。
 
 🔴 核心使命：每张卡片必须有至少一个"视觉锚点"——数字、对比、图标阵列、进度条、徽章链——让观众"看到信息"而不只是"听到文字"。
@@ -238,7 +249,7 @@ class Hf_build(SkillBase):
                     elif "```" in html:
                         html = html.split("```")[1].split("```")[0].strip()
 
-                    if "<div" in html and "</div>" in html:
+                    if "<div" in html and "</div>" in html and not _css_has_chinese(html):
                         r["_llm_html"] = html
                         llm_count += 1
                         continue
@@ -296,7 +307,7 @@ class Hf_build(SkillBase):
                     elif "```" in html:
                         html = html.split("```")[1].split("```")[0].strip()
 
-                    if "<div" in html and "</div>" in html:
+                    if "<div" in html and "</div>" in html and not _css_has_chinese(html):
                         r["_llm_html"] = html
                         llm_count += 1
                         continue
