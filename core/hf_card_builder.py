@@ -717,9 +717,14 @@ def _render_fullscreen(hf_dir, gpu_flag):
     """fullscreen 模式：整体渲染 index.html（背景视频 + 卡片 sub-composition）。"""
     t0 = time.time()
     try:
+        # 动态超时：卡片越多渲染越久（22 卡 ≈ 4-5 分钟，241 卡 ≈ 45-60 分钟）
+        _comp_dir = hf_dir / "compositions"
+        _n_beats = len(list(_comp_dir.glob("beat-*.html"))) if _comp_dir.exists() else 1
+        _timeout = max(900, _n_beats * 15)
+        print(f"      渲染超时预算: {_timeout}s ({_n_beats} 张卡片)")
         cmd = f'hyperframes render --quality high {gpu_flag}'
         proc = subprocess.Popen(cmd, shell=True, cwd=str(hf_dir), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        stdout, stderr = proc.communicate(timeout=900)
+        stdout, stderr = proc.communicate(timeout=_timeout)
         rd = hf_dir / "renders"
         if rd.exists():
             mp4s = sorted(rd.glob("*.mp4"), key=lambda q: q.stat().st_mtime, reverse=True)
@@ -736,7 +741,7 @@ def _render_fullscreen(hf_dir, gpu_flag):
                 for line in err_text.strip().split("\n")[-6:]:
                     print(f"        {line}")
     except subprocess.TimeoutExpired:
-        print("      整体渲染超时 (900s)")
+        print("      整体渲染超时（卡片过多，渲染时间超预算）")
     except Exception as e:
         print(f"      整体渲染错误: {e}")
     return None
