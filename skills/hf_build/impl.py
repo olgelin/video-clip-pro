@@ -44,6 +44,52 @@ def _is_empty_card(html: str) -> bool:
         return True
     return False
 
+
+_ANIM_STMT = re.compile(r'tl\.(?:to|fromTo)\((?:[^()]|\([^()]*\))*\)')
+
+
+def _is_weak_animation(html: str) -> bool:
+    """检测持续微动动画质量：持续动画(repeat≥2)不足2个，或幅度太小肉眼看不出。True=弱(应fallback)。
+
+    只匹配 tl.to/tl.fromTo（入场动画 tl.from 的 scale:0 不误判），区分"持续微动"与"一次性入场"。"""
+    stmts = _ANIM_STMT.findall(html)
+    sustained = [s for s in stmts if re.search(r'repeat\s*:\s*([2-9])', s)]
+    if len(sustained) < 2:
+        return True
+    strong = 0
+    for s in sustained:
+        scales = [float(x) for x in re.findall(r'scale\s*:\s*([\d.]+)', s)]
+        if any(v >= 1.12 or v <= 0.88 for v in scales):
+            strong += 1
+            continue
+        ops = [float(x) for x in re.findall(r'opacity\s*:\s*([\d.]+)', s)]
+        if any(v <= 0.4 for v in ops):
+            strong += 1
+            continue
+        ys = [float(x) for x in re.findall(r'\by\s*:\s*(-?[\d.]+)', s)]
+        if any(abs(v) >= 100 for v in ys):
+            strong += 1
+            continue
+        lefts = [float(x) for x in re.findall(r'left\s*:\s*[\'"]?(-?[\d.]+)%', s)]
+        if any(abs(v) >= 50 for v in lefts):
+            strong += 1
+            continue
+    return strong < 2
+
+
+def _card_quality_check(html: str):
+    """卡片质量门禁：空内容 / 中文CSS / 动画弱 → (False, 原因)；合格 → (True, '')。
+
+    LLM 输出偶发坏卡，此门禁在进入渲染前拦截，fallback 到保证质量的模板卡。"""
+    if _is_empty_card(html):
+        return False, "空内容"
+    if _css_has_chinese(html):
+        return False, "中文CSS"
+    if _is_weak_animation(html):
+        return False, "动画弱(幅度不足/不持续)"
+    return True, ""
+
+
 ENRICH_PROMPT = """你是知识科普类短视频的**PPT视觉设计师**。你的任务是把口播文字转化成视觉卡片——像Keynote幻灯片一样有数据、有图表、有对比，不只是一行字。
 
 🔴 核心使命：每张卡片必须有至少一个"视觉锚点"——数字、对比、图标阵列、进度条、徽章链——让观众"看到信息"而不只是"听到文字"。
@@ -255,7 +301,7 @@ class Hf_build(SkillBase):
                     elif "```" in html:
                         html = html.split("```")[1].split("```")[0].strip()
 
-                    if "<div" in html and "</div>" in html and not _css_has_chinese(html) and not _is_empty_card(html):
+                    if "<div" in html and "</div>" in html and _card_quality_check(html)[0]:
                         r["_llm_html"] = html
                         llm_count += 1
                         continue
@@ -314,7 +360,7 @@ class Hf_build(SkillBase):
                             h = h.split("```html")[1].split("```")[0].strip()
                         elif "```" in h:
                             h = h.split("```")[1].split("```")[0].strip()
-                        if "<div" in h and "</div>" in h and not _css_has_chinese(h) and not _is_empty_card(h):
+                        if "<div" in h and "</div>" in h and _card_quality_check(h)[0]:
                             html = h
                             break
                 except Exception:

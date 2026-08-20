@@ -95,6 +95,20 @@
 - 禁止 `repeat:-1`（无限循环），repeat 必须是正整数 ≤5
 - 时间用绝对秒（`}, 0.8)`），不用 `+=`（seek 下绝对时间更确定，且呼吸能从 0.8s 就开始、覆盖全程）
 
+## 🎯 动画技法菜单（照抄，别改幅度）
+
+持续微动动画从下面菜单里**选 ≥3 个**，参数照抄（可改选择器 `'#value'`/`.glow` 和起始时间，但**幅度数值必须原样保留**，改小 = 失败）：
+
+| 技法 | 完整语句（照抄） |
+|------|-----------------|
+| 光晕大幅呼吸 | `tl.to('.glow', {opacity:0.25, scale:1.5, duration:0.9, repeat:3, yoyo:true, ease:'sine.inOut'}, 0.8);` |
+| 数字脉冲 | `tl.to('#value', {scale:1.15, duration:0.7, repeat:3, yoyo:true, ease:'sine.inOut'}, 0.8);` |
+| 粒子下坠 | `tl.to('.particle', {y:250, opacity:0.1, duration:1.5, repeat:2, ease:'none'}, 0.4);` |
+| 扫光横扫 | `tl.to('#light-scan', {left:'120%', duration:1.3, repeat:2, ease:'none'}, 0.6);` |
+| 脉冲点扩散 | `tl.to('.pulse-dot', {scale:1.6, opacity:0.4, duration:0.8, repeat:3, yoyo:true, ease:'sine.inOut'}, 0.6);` |
+
+🔴 幅度底线（代码会校验，不达标整卡作废换模板）：数字/元素 scale ≥1.12、光晕 opacity ≤0.4、粒子位移 ≥100px。照抄上面菜单参数就达标。
+
 ## 🔥 Few-Shot 示例（严格模仿风格，别照抄数字）
 
 ### 示例1 — 数据卡（triumphant，大数字冲击）

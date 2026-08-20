@@ -1,5 +1,17 @@
 # Changelog — Video Clip Pro
 
+## V30 (2026-08-20) — 卡片质量门禁 + 动画技法菜单（稳定加固）
+
+- 根因：低级错误反复，是因为稳定靠"LLM 自觉"，而不是"代码强制"。LLM 偶发输出空卡/弱动画卡，每次暴露一个修一个
+- **质量门禁 `_card_quality_check`**：空内容 / 中文CSS / 动画弱（幅度不足或持续动不足）统一校验，任一不合格 → fallback 保证质量模板卡
+- **`_is_weak_animation`**：检测持续动画(repeat≥2)不足2个，或幅度太小（scale<1.12/opacity>0.4/y<100px/left<50%）
+- **动画技法菜单**（scene_system.md）：固定幅度参数的 5 种持续动画（光晕呼吸 opacity0.25+scale1.5、数字脉冲 scale1.15、粒子下坠 y250、扫光、脉冲点），LLM 照抄不发明
+- **修复模板卡 CSS 语法 bug**：`pulseRing` 的 `scale(0.6).8`、`greenWave` 的 `width:100%.6`（非法 CSS 导致动画失效）
+- **加大模板卡微动幅度**：pulseAnim 1.02→1.15、breatheAnim 0.92→0.6、countUpPulse 1.08→1.15、cardFloat -6→-14px
+- 隔离：impl.py + scene_system.md 属 fullscreen 专属；card_constants.py 共享但改动为"修 bug + 加幅度"，对 pip 无害改进
+
+---
+
 ## V29.3 (2026-08-20) — 小元素动画幅度加大（肉眼明显）+ 直出重试
 
 - 根因：V29 让动画"动"了但幅度太小（光晕 opacity 1→0.6、数字 scale 1→1.06），像素能测到动但肉眼看不出来，用户感觉"没更新"

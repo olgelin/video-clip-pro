@@ -39,9 +39,9 @@ DEFAULT_ANIM = {"entrance": {"type": "fadeSlideUp", "duration": 0.5, "ease": "po
 
 MICRO_CSS = """
 @keyframes floatAnim{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
-@keyframes pulseAnim{0%,100%{transform:scale(1)}50%{transform:scale(1.02)}}
+@keyframes pulseAnim{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
 @keyframes glowPulseAnim{0%,100%{box-shadow:0 0 20px var(--glow-color, rgba(0,229,255,0.1))}50%{box-shadow:0 0 40px var(--glow-color, rgba(0,229,255,0.25))}}
-@keyframes breatheAnim{0%,100%{opacity:0.92}50%{opacity:1}}
+@keyframes breatheAnim{0%,100%{opacity:0.6}50%{opacity:1}}
 @keyframes lightSweep{0%{transform:translateX(-100%)}100%{transform:translateX(400%)}}
 @keyframes borderShimmer{0%,100%{border-color:rgba(255,255,255,0.08)}50%{border-color:rgba(255,255,255,0.18)}}
 """
@@ -57,15 +57,15 @@ CARD_DECOR_CSS = """
 @keyframes shimmerText{0%,100%{background-position:-200% center}100%{background-position:200% center}}
 @keyframes borderGlow{0%,100%{box-shadow:0 0 8px var(--glow-color)}50%{box-shadow:0 0 25px var(--glow-color),0 0 40px var(--glow-color)}}
 @keyframes cardBreathe{0%,100%{box-shadow:0 20px 80px rgba(0,0,0,0.8),0 0 100px var(--glow-color)}50%{box-shadow:0 20px 80px rgba(0,0,0,0.8),0 0 150px var(--glow-color),0 0 200px var(--glow-color)}}
-@keyframes pulseRing{0%{transform:scale(0.6).8}100%{transform:scale(1.8)}}
+@keyframes pulseRing{0%{transform:scale(0.6);opacity:0.8}100%{transform:scale(1.8);opacity:0}}
 @keyframes signalBar1{0%,100%{height:20%}50%{height:100%}}
 @keyframes signalBar2{0%,100%{height:45%}50%{height:80%}}
 @keyframes signalBar3{0%,100%{height:70%}50%{height:55%}}
 @keyframes checkPop{0%{transform:scale(0)}60%{transform:scale(1.2);opacity:1}100%{transform:scale(1);opacity:1}}
 @keyframes progressFill{0%{width:0%}100%{width:var(--progress-pct, 85%)}}
-@keyframes countUpPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+@keyframes countUpPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
 @keyframes alertFlash{0%,100%{background:rgba(239,68,68,0.15)}50%{background:rgba(239,68,68,0.35)}}
-@keyframes greenWave{0%{width:0%;opacity:1}50%{width:100%.6}100%{width:100%}}
+@keyframes greenWave{0%{width:0%;opacity:1}50%{width:100%}100%{width:100%}}
 @keyframes arrowSlide{0%{transform:translateX(-100%)}100%{transform:translateX(0);opacity:1}}
 @keyframes countUpRoll{0%{opacity:0;transform:translateY(20px)}100%{opacity:1;transform:translateY(0)}}
 @keyframes barFill{0%{width:0%}100%{width:var(--bar-pct,75%)}}
@@ -75,7 +75,7 @@ CARD_DECOR_CSS = """
 @keyframes slamRight{0%{opacity:0;transform:translateX(-80px) scale(1.1)}100%{opacity:1;transform:translateX(0) scale(1)}}
 @keyframes unfoldDown{0%{opacity:0;transform:scaleY(0);transform-origin:top}100%{opacity:1;transform:scaleY(1)}}
 @keyframes celebrateBounce{0%{opacity:0;transform:scale(0.3)}50%{transform:scale(1.15)}70%{transform:scale(0.9)}100%{opacity:1;transform:scale(1)}}
-@keyframes cardFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes cardFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}
 @keyframes iconFloat{0%,100%{transform:rotate(-4deg) scale(1)}50%{transform:rotate(4deg) scale(1.1)}}
 @keyframes labelPulse{0%,100%{opacity:0.6;letter-spacing:1px}50%{opacity:1;letter-spacing:3px}}
 @keyframes barShimmer{0%{left:-100%}100%{left:200%}}
