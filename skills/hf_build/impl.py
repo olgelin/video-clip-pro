@@ -304,22 +304,26 @@ class Hf_build(SkillBase):
                 scene_prompt=scene_prompt
             )
 
-            try:
-                raw = provider.call("card_direct", prompt)
-                if raw and len(raw) > 50 and not raw.startswith("[ERROR"):
-                    html = raw.strip()
-                    if "```html" in html:
-                        html = html.split("```html")[1].split("```")[0].strip()
-                    elif "```" in html:
-                        html = html.split("```")[1].split("```")[0].strip()
+            html = None
+            for _attempt in range(2):  # 空/坏输出重试一次，降低 fallback 到模板的概率
+                try:
+                    raw = provider.call("card_direct", prompt)
+                    if raw and len(raw) > 50 and not raw.startswith("[ERROR"):
+                        h = raw.strip()
+                        if "```html" in h:
+                            h = h.split("```html")[1].split("```")[0].strip()
+                        elif "```" in h:
+                            h = h.split("```")[1].split("```")[0].strip()
+                        if "<div" in h and "</div>" in h and not _css_has_chinese(h) and not _is_empty_card(h):
+                            html = h
+                            break
+                except Exception:
+                    pass
 
-                    if "<div" in html and "</div>" in html and not _css_has_chinese(html) and not _is_empty_card(html):
-                        r["_llm_html"] = html
-                        llm_count += 1
-                        continue
-
-                fail_count += 1
-            except Exception:
+            if html:
+                r["_llm_html"] = html
+                llm_count += 1
+            else:
                 fail_count += 1
 
         print(f"      V19 direct: {llm_count}/{llm_count+fail_count} cards (fail={fail_count})")

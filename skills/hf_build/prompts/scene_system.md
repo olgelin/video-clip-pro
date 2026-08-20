@@ -75,10 +75,11 @@
   tl.from('.badge-item', {scale:0, duration:0.25, stagger:0.1, ease:'back.out(1.5)'}, 0.27);
   // 第4层：进度条慢慢填满（0.6s）
   tl.fromTo('#bar-fill', {width:'0%'}, {width:'85%', duration:0.6, ease:'power2.inOut'}, 0.4);
-  // 🔴 第2层：持续微动（repeat≥3，从入场后开始，覆盖整个卡片时长，不能只动一下）
-  tl.to('#value', {scale:1.06, duration:0.7, repeat:3, yoyo:true, ease:'sine.inOut'}, 0.8);
-  tl.to('.glow', {opacity:0.6, duration:0.9, repeat:3, yoyo:true, ease:'sine.inOut'}, 0.8);
+  // 🔴 第2层：持续微动（repeat≥3，从入场后开始，覆盖整个卡片时长，幅度必须肉眼明显）
+  tl.to('#value', {scale:1.15, duration:0.7, repeat:3, yoyo:true, ease:'sine.inOut'}, 0.8);
+  tl.to('.glow', {opacity:0.25, scale:1.5, duration:0.9, repeat:3, yoyo:true, ease:'sine.inOut'}, 0.8);
   tl.to('#light-scan', {left:'120%', duration:1.3, repeat:2, ease:'none'}, 0.6);
+  tl.to('.particle', {y:300, opacity:0.1, duration:1.5, repeat:2, ease:'none'}, 0.4);
   tl.play();
 })();
 </script>
@@ -87,8 +88,9 @@
 🔴 铁律（渲染层按时间 seek，违反 = 卡片静态不动）：
 - 所有动画必须用 `tl.from`/`tl.to`/`tl.fromTo`（写在 tl 时间线里），**禁止独立的 `gsap.to`/`gsap.from` 在 tl 外**——独立 gsap 不跟随 seek，渲染出来是静态的
 - 呼吸/光晕/脉冲/扫光/粒子必须 `repeat≥3`（覆盖整个卡片时长），禁止 `repeat:1`（动一下就不动 = 失败）
-- 至少 2-3 个持续微动动画（呼吸 + 光晕脉动 + 扫光/粒子下坠）
-- 粒子/光点用 `tl.to` 从 0 秒开始持续下坠 `repeat≥3`
+- 🔴 幅度必须肉眼明显：光晕 opacity 变化 ≥60%（如 1→0.25）+ scale 1→1.4、数字呼吸 scale ≥1.12、粒子位移 ≥200px、扫光全程横扫——微小的 1.06 缩放 / 0.6 opacity 肉眼看不出来 = 失败
+- 至少 2-3 个持续微动动画（光晕大幅脉动 + 数字呼吸 + 扫光/粒子下坠）
+- 粒子/光点用 `tl.to` 从 0 秒开始持续下坠 `repeat≥3`，位移 ≥200px
 - 禁止 `CSS animation`/`@keyframes`（渲染层不跟随 seek，静态），动画只用 GSAP
 - 禁止 `repeat:-1`（无限循环），repeat 必须是正整数 ≤5
 - 时间用绝对秒（`}, 0.8)`），不用 `+=`（seek 下绝对时间更确定，且呼吸能从 0.8s 就开始、覆盖全程）
@@ -123,7 +125,8 @@
   tl.from('#card', {x:40, opacity:0, duration:0.25, ease:'power3.out'}, 0);
   tl.from('#value', {scale:0, opacity:0, duration:0.35, ease:'back.out(2)'}, 0.12);
   tl.fromTo('#bar-fill', {width:'0%'}, {width:'85%', duration:0.6, ease:'power2.inOut'}, 0.4);
-  tl.to('#value', {scale:1.06, duration:0.7, repeat:3, yoyo:true, ease:'sine.inOut'}, 0.8);
+  tl.to('#value', {scale:1.15, duration:0.7, repeat:3, yoyo:true, ease:'sine.inOut'}, 0.8);
+  tl.to('.glow', {opacity:0.25, scale:1.5, duration:0.9, repeat:3, yoyo:true, ease:'sine.inOut'}, 0.8);
   tl.play();
 })();
 </script>
@@ -184,6 +187,7 @@
 - [ ] 有 1-3 个数据/视觉元素（大数字/进度条/引号/图标），不是纯文字卡
 - [ ] 元素依次入场（≥3 层，绝对时间，不重叠）
 - [ ] 呼吸/光晕/扫光/粒子 repeat≥3 持续微动（不是入场后就静止），至少 2-3 个持续动画
+- [ ] 动画幅度肉眼明显（光晕 opacity 变化≥60%+scale、数字呼吸 scale≥1.12、粒子位移≥200px），不是微小到看不出来
 - [ ] 所有动画用 tl.from/tl.to（无独立 gsap.to）
 - [ ] `<style>` 区无中文
 - [ ] 不输出 DOCTYPE/html/head/body/meta
