@@ -27,6 +27,23 @@ def _css_has_chinese(html: str) -> bool:
             return True
     return False
 
+
+def _is_empty_card(html: str) -> bool:
+    """检测空内容/坏卡片：内容过短、省略号占位符、无动画 script、无 GSAP 动画、无文字内容。
+    这类卡片渲染出来是空壳/静态，应 fallback 到模板卡片。"""
+    if len(html) < 800:
+        return True
+    if "..." in html:
+        return True
+    if "<script" not in html:
+        return True
+    if not re.search(r'\btl\.(?:from|to|fromTo)\(', html):
+        return True
+    text = re.sub(r'<[^>]+>', '', html).strip()
+    if len(text) < 2:
+        return True
+    return False
+
 ENRICH_PROMPT = """你是知识科普类短视频的**PPT视觉设计师**。你的任务是把口播文字转化成视觉卡片——像Keynote幻灯片一样有数据、有图表、有对比，不只是一行字。
 
 🔴 核心使命：每张卡片必须有至少一个"视觉锚点"——数字、对比、图标阵列、进度条、徽章链——让观众"看到信息"而不只是"听到文字"。
@@ -238,7 +255,7 @@ class Hf_build(SkillBase):
                     elif "```" in html:
                         html = html.split("```")[1].split("```")[0].strip()
 
-                    if "<div" in html and "</div>" in html and not _css_has_chinese(html):
+                    if "<div" in html and "</div>" in html and not _css_has_chinese(html) and not _is_empty_card(html):
                         r["_llm_html"] = html
                         llm_count += 1
                         continue
@@ -296,7 +313,7 @@ class Hf_build(SkillBase):
                     elif "```" in html:
                         html = html.split("```")[1].split("```")[0].strip()
 
-                    if "<div" in html and "</div>" in html and not _css_has_chinese(html):
+                    if "<div" in html and "</div>" in html and not _css_has_chinese(html) and not _is_empty_card(html):
                         r["_llm_html"] = html
                         llm_count += 1
                         continue

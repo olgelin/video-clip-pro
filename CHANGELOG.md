@@ -1,5 +1,12 @@
 # Changelog — Video Clip Pro
 
+## V29.2 (2026-08-20) — 空内容卡片兜底
+
+- 根因：LLM 偶发输出"完全空"（151 字符无内容）或"有内容无动画"（有 div 无 GSAP script），旧校验只查 `<div>` 导致漏过，渲染出空壳/静态卡片
+- 修复：`skills/hf_build/impl.py` 加 `_is_empty_card()` 校验（内容<800字符 / `...`占位符 / 无 script / 无 tl 动画 / 无文字 → 判空），不合格 fallback 到完整模板卡片
+
+---
+
 ## V29.1 (2026-08-20) — DeepSeek 备用 API key（欠费自动切换）
 
 - 主 key 402 欠费时，自动切换到备用 key（存 `.env`，gitignore 不提交，key 不泄露）
