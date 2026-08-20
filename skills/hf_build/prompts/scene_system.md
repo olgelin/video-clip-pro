@@ -56,29 +56,42 @@
 
 🔴 铁律：没数据不要塞假数字。数据不足时，用图标浮标 + 脉冲灯 + 大引号表达情绪，绝不能是"标题+副文"两行字。
 
-## 🏃 动效铁律：元素依次入场，不要一窝蜂
+## 🏃 动效铁律：入场 + 持续微动，缺一不可
+
+卡片只有 1-3 秒，但观众要在**整个时长**里都看到"活"的画面。动画分两层，两层都要有：
+
+- **第 1 层 · 入场**（0-0.8s）：元素依次进入，制造层次感
+- **第 2 层 · 持续微动**（入场后 → 卡片消失）：呼吸/光晕/扫光/粒子一直动，不能停
 
 ```html
 <script>
 (function(){
   var tl = gsap.timeline({paused:true});
   // 第1层：卡片从侧面滑入 0.25s
-  tl.from('#card', {x:40, opacity:0, duration:0.25, ease:'power3.out'});
-  // 第2层：隔 0.12s，核心元素（大数字/标题）出场
-  tl.from('#value', {scale:0, opacity:0, duration:0.35, ease:'back.out(2)'}, '+=0.12');
-  // 第3层：隔 0.15s，次要元素依次弹出（stagger 别太快）
-  tl.from('.badge-item', {scale:0, duration:0.25, stagger:0.1, ease:'back.out(1.5)'}, '+=0.15');
-  // 第4层：隔 0.2s，进度条慢慢填满（0.6s）
-  tl.fromTo('#bar-fill', {width:'0%'}, {width:'85%', duration:0.6, ease:'power2.inOut'}, '+=0.2');
-  // 收尾：呼吸 + 光晕脉动
-  gsap.to('#value', {scale:1.06, duration:0.8, repeat:1, yoyo:true, ease:'sine.inOut', delay:1.2});
-  gsap.to('.glow', {opacity:0.6, duration:1.2, repeat:1, yoyo:true, ease:'sine.inOut', delay:1.2});
+  tl.from('#card', {x:40, opacity:0, duration:0.25, ease:'power3.out'}, 0);
+  // 第2层：核心元素（大数字/标题）出场
+  tl.from('#value', {scale:0, opacity:0, duration:0.35, ease:'back.out(2)'}, 0.12);
+  // 第3层：次要元素依次弹出（stagger 别太快）
+  tl.from('.badge-item', {scale:0, duration:0.25, stagger:0.1, ease:'back.out(1.5)'}, 0.27);
+  // 第4层：进度条慢慢填满（0.6s）
+  tl.fromTo('#bar-fill', {width:'0%'}, {width:'85%', duration:0.6, ease:'power2.inOut'}, 0.4);
+  // 🔴 第2层：持续微动（repeat≥3，从入场后开始，覆盖整个卡片时长，不能只动一下）
+  tl.to('#value', {scale:1.06, duration:0.7, repeat:3, yoyo:true, ease:'sine.inOut'}, 0.8);
+  tl.to('.glow', {opacity:0.6, duration:0.9, repeat:3, yoyo:true, ease:'sine.inOut'}, 0.8);
+  tl.to('#light-scan', {left:'120%', duration:1.3, repeat:2, ease:'none'}, 0.6);
   tl.play();
 })();
 </script>
 ```
 
-🔴 必须用 `+=` 延迟，不准用 `-=` 重叠。最少 3 层依次入场，stagger≥0.08s，进度条≥0.5s。
+🔴 铁律（渲染层按时间 seek，违反 = 卡片静态不动）：
+- 所有动画必须用 `tl.from`/`tl.to`/`tl.fromTo`（写在 tl 时间线里），**禁止独立的 `gsap.to`/`gsap.from` 在 tl 外**——独立 gsap 不跟随 seek，渲染出来是静态的
+- 呼吸/光晕/脉冲/扫光/粒子必须 `repeat≥3`（覆盖整个卡片时长），禁止 `repeat:1`（动一下就不动 = 失败）
+- 至少 2-3 个持续微动动画（呼吸 + 光晕脉动 + 扫光/粒子下坠）
+- 粒子/光点用 `tl.to` 从 0 秒开始持续下坠 `repeat≥3`
+- 禁止 `CSS animation`/`@keyframes`（渲染层不跟随 seek，静态），动画只用 GSAP
+- 禁止 `repeat:-1`（无限循环），repeat 必须是正整数 ≤5
+- 时间用绝对秒（`}, 0.8)`），不用 `+=`（seek 下绝对时间更确定，且呼吸能从 0.8s 就开始、覆盖全程）
 
 ## 🔥 Few-Shot 示例（严格模仿风格，别照抄数字）
 
@@ -107,10 +120,10 @@
 <script>
 (function(){
   var tl = gsap.timeline({paused:true});
-  tl.from('#card', {x:40, opacity:0, duration:0.25, ease:'power3.out'});
-  tl.from('#value', {scale:0, opacity:0, duration:0.35, ease:'back.out(2)'}, '+=0.12');
-  tl.fromTo('#bar-fill', {width:'0%'}, {width:'85%', duration:0.6, ease:'power2.inOut'}, '+=0.2');
-  gsap.to('#value', {scale:1.06, duration:0.8, repeat:1, yoyo:true, ease:'sine.inOut', delay:1.2});
+  tl.from('#card', {x:40, opacity:0, duration:0.25, ease:'power3.out'}, 0);
+  tl.from('#value', {scale:0, opacity:0, duration:0.35, ease:'back.out(2)'}, 0.12);
+  tl.fromTo('#bar-fill', {width:'0%'}, {width:'85%', duration:0.6, ease:'power2.inOut'}, 0.4);
+  tl.to('#value', {scale:1.06, duration:0.7, repeat:3, yoyo:true, ease:'sine.inOut'}, 0.8);
   tl.play();
 })();
 </script>
@@ -138,11 +151,11 @@
 <script>
 (function(){
   var tl = gsap.timeline({paused:true});
-  tl.from('#card', {x:40, opacity:0, duration:0.25, ease:'power3.out'});
-  tl.from('#quote-mark', {scale:0.5, opacity:0, duration:0.25, ease:'back.out(1.2)'}, '+=0.1');
-  tl.from('#headline', {y:20, opacity:0, duration:0.35, ease:'power3.out'}, '+=0.15');
-  tl.to('#light-scan', {left:'120%', duration:1.2, ease:'power2.inOut'}, '+=0.3');
-  gsap.to('.pulse-dot', {scale:1.6, opacity:0.4, duration:0.8, repeat:2, yoyo:true, ease:'sine.inOut', delay:1.2});
+  tl.from('#card', {x:40, opacity:0, duration:0.25, ease:'power3.out'}, 0);
+  tl.from('#quote-mark', {scale:0.5, opacity:0, duration:0.25, ease:'back.out(1.2)'}, 0.1);
+  tl.from('#headline', {y:20, opacity:0, duration:0.35, ease:'power3.out'}, 0.25);
+  tl.to('#light-scan', {left:'120%', duration:1.2, repeat:2, ease:'power2.inOut'}, 0.5);
+  tl.to('.pulse-dot', {scale:1.6, opacity:0.4, duration:0.8, repeat:3, yoyo:true, ease:'sine.inOut'}, 0.6);
   tl.play();
 })();
 </script>
@@ -157,40 +170,21 @@
 - 最多 1 个视觉焦点（大数字或主标题），其余是辅助
 - 每张卡按 emotion 换配色，相邻卡片视觉明显不同
 - `<style>` 里禁止出现中文（会编译失败）
+- 🔴 所有动画用 `tl.from`/`tl.to`（禁止独立 `gsap.to`），呼吸/光晕/扫光/粒子 `repeat≥3` 持续动（禁止 `repeat:1`），禁止 CSS animation/@keyframes
+- 🔴 禁止输出 `...` 占位符、`<!-- 注释 -->` 空占位、未填充的骨架——每个 div/元素必须有真实内容、真实样式值、真实动画，一个 `...` 都不许出现
 
 ## 输出格式
 
-只输出完整 HTML（div + script），不要解释文字：
-
-```html
-<div data-composition-id="card" data-width="500" data-height="300"
-     style="position:absolute;top:50%;left:60px;transform:translateY(-50%);z-index:50;
-            width:500px;height:300px;overflow:hidden;
-            background:linear-gradient(...按配色...);
-            backdrop-filter:blur(12px);
-            border:1px solid ...;border-left:3px solid 主色;
-            border-radius:0 12px 12px 0;
-            box-shadow:0 20px 80px rgba(0,0,0,0.8);">
-  <!-- 背景元素：光晕/粒子/扫光/网格 -->
-  <div id="card" style="padding:28px 24px;position:relative;z-index:1;">
-    <!-- 内容 + 数据元素 -->
-  </div>
-</div>
-<script>
-(function(){
-  var tl = gsap.timeline({paused:true});
-  // 入场 + 呼吸 + 扫光
-  tl.play();
-})();
-</script>
-```
+只输出完整 HTML（div + script），不要解释文字。**严格参照上方 few-shot 示例的完整度**——示例里每个元素都是真实填充的（真实颜色、真实文字、真实动画），你也必须真实填充，禁止 `...`、`<!-- 注释 -->`、空 div、没写动画的 script。
 
 ## 自检清单
 
 - [ ] 按 emotion 选了对应色板（不是默认青）
 - [ ] 背景有 2-3 种元素（渐变 + 光晕/粒子/扫光/网格），不是纯毛玻璃
 - [ ] 有 1-3 个数据/视觉元素（大数字/进度条/引号/图标），不是纯文字卡
-- [ ] 元素依次入场（≥3 层，`+=` 延迟，不重叠）
+- [ ] 元素依次入场（≥3 层，绝对时间，不重叠）
+- [ ] 呼吸/光晕/扫光/粒子 repeat≥3 持续微动（不是入场后就静止），至少 2-3 个持续动画
+- [ ] 所有动画用 tl.from/tl.to（无独立 gsap.to）
 - [ ] `<style>` 区无中文
 - [ ] 不输出 DOCTYPE/html/head/body/meta
 - [ ] 与上一张卡视觉不同（换配色/元素/布局）

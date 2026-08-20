@@ -1,5 +1,29 @@
 # Changelog — Video Clip Pro
 
+## V29 (2026-08-20) — 卡片装饰元素"静态不动"修复（动效对齐 video-factory）
+
+### 问题
+用户反馈：卡片里有很多元素组件（光晕/扫光/粒子/信号条），但渲染出来是**静态的**，只有入场弹一下。
+
+### 根因（对比 video-factory 成功基线）
+1. **呼吸/光晕动画用独立的 `gsap.to`（不在 `tl` 时间线里）**：HyperFrames 渲染是"按时间 seek 时间线"，独立 gsap 不跟随 seek，渲染出来就是静态。video-factory 铁律明确禁止独立 gsap.to。
+2. **`repeat:1` 只动一下就停**：video-factory 基线是呼吸 `repeat:3`，至少 2-3 个持续微动覆盖整个场景时长。
+3. **"输出格式"模板含 `...`/`<!-- 注释 -->` 占位符**：LLM 被带偏，偶发输出未填充的骨架（空 div、无 script）。
+
+### 修复（scene_system.md 动效规范对齐 video-factory）
+- 所有动画用 `tl.from`/`tl.to`，禁止独立 `gsap.to`/`gsap.from` 在 tl 时间线外
+- 呼吸/光晕/脉冲/扫光/粒子 `repeat≥3`（覆盖整个卡片时长），禁止 `repeat:1`
+- 至少 2-3 个持续微动动画，粒子用 tl.to 从 0 秒开始持续下坠
+- 禁止 CSS animation/@keyframes（渲染层不跟随 seek），动画只用 GSAP
+- 时间用绝对秒（`}, 0.8)`），不用 `+=`
+- 删除"输出格式"占位符模板，禁止 `...`/空注释/未填充骨架
+
+### 验证
+- 2 张测试卡（triumphant + urgent）均输出 18/17 个 tl 动画、repeat≥3 持续微动、0 独立 gsap、0 CSS animation
+- triumphant 卡：10 个 tl.from 入场 + 8 个 tl.to 持续微动（数字呼吸 + 光晕脉动×2 + 扫光循环 + 粒子×3 下坠）
+
+---
+
 ## V28 (2026-08-20) — 支持 20:9 非标准竖屏（1080×2400）
 
 ### 背景
