@@ -1,5 +1,12 @@
 # Changelog — Video Clip Pro
 
+## V29.1 (2026-08-20) — DeepSeek 备用 API key（欠费自动切换）
+
+- 主 key 402 欠费时，自动切换到备用 key（存 `.env`，gitignore 不提交，key 不泄露）
+- `core/provider.py`：`call()` 支持多 key 轮换，`_load_backup_key()` 从环境变量 `DEEPSEEK_API_KEY_BACKUP` 或 `.env` 读备用 key
+
+---
+
 ## V29 (2026-08-20) — 卡片装饰元素"静态不动"修复（动效对齐 video-factory）
 
 ### 问题

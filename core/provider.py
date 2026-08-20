@@ -126,31 +126,35 @@ class Provider:
         cfg=TASK_MODELS.get(task,TASK_MODELS["edit"])
         models=([model] if model else [cfg["primary"]])+cfg["fallback"];mt=cfg.get("max_tokens",4000)
         if max_tokens:mt=max_tokens
-        api_key=self._load_key()
-        if not api_key:return "[ERROR: No API key]"
+        keys=[k for k in (self._load_key(),self._load_backup_key()) if k and k.startswith("sk-")]
+        keys=list(dict.fromkeys(keys))
+        if not keys:return "[ERROR: No API key]"
 
         for model in models:
-            self._rate.wait()
-            try:
-                resp=requests.post(
-                    "https://api.deepseek.com/chat/completions",
-                    headers={"Authorization":f"Bearer {api_key}","Content-Type":"application/json"},
-                    json={"model":model,"messages":([{"role":"system","content":system}]if system else[])+[{"role":"user","content":prompt if prompt else ""}],"temperature":0,"max_tokens":mt},
-                    timeout=120)
-                if resp.status_code==200:
-                    msg = resp.json()["choices"][0]["message"]
-                    raw = (msg.get("content") or msg.get("reasoning_content") or "").strip()
-                    self._last_model=model
-                    self._cost.reconcile(task,True,len(raw),model)
-                    return raw
-                elif resp.status_code==429:
-                    wait=int(resp.headers.get("retry-after",5))
-                    print(f"  [Provider] 429, waiting {wait}s");time.sleep(wait)
-                else:
-                    print(f"  [Provider] {model} HTTP {resp.status_code}")
-                    if resp.status_code==402:return None
-            except requests.Timeout:print(f"  [Provider] {model} timeout")
-            except Exception as e:print(f"  [Provider] {model} error: {e}")
+            for api_key in keys:
+                self._rate.wait()
+                try:
+                    resp=requests.post(
+                        "https://api.deepseek.com/chat/completions",
+                        headers={"Authorization":f"Bearer {api_key}","Content-Type":"application/json"},
+                        json={"model":model,"messages":([{"role":"system","content":system}]if system else[])+[{"role":"user","content":prompt if prompt else ""}],"temperature":0,"max_tokens":mt},
+                        timeout=120)
+                    if resp.status_code==200:
+                        msg = resp.json()["choices"][0]["message"]
+                        raw = (msg.get("content") or msg.get("reasoning_content") or "").strip()
+                        self._last_model=model
+                        self._cost.reconcile(task,True,len(raw),model)
+                        return raw
+                    elif resp.status_code==429:
+                        wait=int(resp.headers.get("retry-after",5))
+                        print(f"  [Provider] 429, waiting {wait}s");time.sleep(wait)
+                    elif resp.status_code==402:
+                        print(f"  [Provider] {model} HTTP 402 欠费，切换备用 key")
+                        continue
+                    else:
+                        print(f"  [Provider] {model} HTTP {resp.status_code}")
+                except requests.Timeout:print(f"  [Provider] {model} timeout")
+                except Exception as e:print(f"  [Provider] {model} error: {e}")
             if model!=models[-1]:time.sleep(3)
         return None
 
@@ -175,4 +179,17 @@ class Provider:
         if kp.exists():
             m = re.search(r"(sk|sks)-[a-zA-Z0-9]+", kp.read_text(encoding="utf-8"))
             if m: return m.group(0)
+        return None
+
+    def _load_backup_key(self):
+        """备用 key（主 key 402 欠费时自动切换）。从环境变量 DEEPSEEK_API_KEY_BACKUP 或 .env 读。"""
+        key = os.environ.get("DEEPSEEK_API_KEY_BACKUP")
+        if key and key.startswith("sk-"): return key
+        env_file = Path(__file__).parent.parent / ".env"
+        if env_file.exists():
+            for line in env_file.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if line.startswith("DEEPSEEK_API_KEY_BACKUP="):
+                    v = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    if v.startswith("sk-"): return v
         return None
