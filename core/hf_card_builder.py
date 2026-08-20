@@ -170,7 +170,16 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
     if not ranges: return None
     seg_offsets = []; acc = 0.0
     for seg in ranges: seg_offsets.append(acc); acc += seg["end"] - seg["start"]
-    total_dur = acc; fw, fh = (1080, 1920) if orientation == "portrait" else (1920, 1080)
+    total_dur = acc
+    # 🔴 读实际分辨率（支持 20:9 等非标准竖屏），失败回退 16:9 标准
+    try:
+        _probe = subprocess.run(["ffprobe","-v","error","-select_streams","v:0",
+                                 "-show_entries","stream=width,height","-of","csv=p=0",str(video_path)],
+                                capture_output=True, text=True, timeout=30)
+        _wh = [int(x) for x in _probe.stdout.replace(",", " ").split()]
+        fw, fh = _wh[0], _wh[1]
+    except Exception:
+        fw, fh = (1080, 1920) if orientation == "portrait" else (1920, 1080)
     captions = _build_captions(ranges, words, seg_offsets, orientation, fw)
     beat_files = []
     for idx, seg in enumerate(ranges):

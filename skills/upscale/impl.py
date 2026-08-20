@@ -48,7 +48,15 @@ class Upscale(SkillBase):
             )
             nums = [int(x) for x in result.stdout.replace(",", " ").split()]
             w, h = nums[0], nums[1]
-            return "2160:3840" if h > w else "3840:2160"
+            # 保持宽高比 2x（20:9 等非标准竖屏不再强制 2160:3840 拉伸变形）
+            tw, th = w * 2, h * 2
+            # NVENC h264 硬编码上限 4096：超长竖屏（1080x2400 → 2160x4800）等比缩到长边 4096
+            max_dim = max(tw, th)
+            if max_dim > 4096:
+                scale = 4096 / max_dim
+                tw, th = int(tw * scale), int(th * scale)
+                tw -= tw % 2; th -= th % 2
+            return f"{tw}:{th}"
         except Exception:
             return "3840:2160"  # 探测失败，默认横屏
 
