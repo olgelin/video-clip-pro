@@ -1,5 +1,14 @@
 # Changelog — Video Clip Pro
 
+## V32 (2026-08-22) — 剪辑 padding 防 ASR 漂移（切掉字首尾）
+
+- 根因：`_delete_to_keep_ranges` 直接按转写时间戳生成保留区间边界，ASR 漂 50-100ms，直接切会吃掉字首尾
+- 修复：每个 keep_range 边界加 50ms padding（start 提前、end 延后），start clamp 到 0，相邻重叠则合并（宁可多留 50ms，不切掉字头字尾）
+- 隔离：只改 `skills/understand/impl.py` 的 `_delete_to_keep_ranges`（vcp 剪辑边界逻辑，独立文件），不动共享 core
+- 验证：单元测试通过——基本 padding + clamp、相邻重叠合并
+
+---
+
 ## V31 (2026-08-22) — 剪辑防爆音（每段 30ms 淡入淡出）
 
 - 根因：剪辑层默认 simple concat 硬切（`_crossfade_concat` 存在但 VFR 源不可靠未用），删减点不在纯静音处会"啪"一声爆音

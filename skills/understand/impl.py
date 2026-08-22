@@ -305,8 +305,8 @@ class Understand(SkillBase):
             return set()
         return {pid for pid, c in cut_count.items() if c >= 2}
 
-    def _delete_to_keep_ranges(self, raw_words, delete):
-        """🔴 删除字集合 → keep_ranges（按 word 边界，连续保留字 <0.5s 合并）"""
+    def _delete_to_keep_ranges(self, raw_words, delete, pad_ms: int = 50):
+        """🔴 删除字集合 → keep_ranges（按 word 边界，连续保留字 <0.5s 合并 + padding 防 ASR 漂移）"""
         keep_ranges = []
         beats = ["HOOK", "CONTEXT", "PROBLEM", "STRUGGLE", "RESOLUTION"]
         for i, w in enumerate(raw_words):
@@ -323,7 +323,21 @@ class Understand(SkillBase):
                     "title": w["text"][:6] if w["text"] else "",
                     "text": w["text"],
                 })
-        return keep_ranges
+
+        # 🔴 padding 防漂移：ASR 时间戳漂 50-100ms，直接按边界切会吃掉字首尾。
+        #    每个 range 边界往外扩 PAD（start 提前、end 延后），相邻重叠则合并（宁可多留 50ms，不切掉字头字尾）
+        PAD = pad_ms / 1000.0
+        padded = []
+        for r in keep_ranges:
+            r["start"] = max(0.0, r["start"] - PAD)
+            r["end"] += PAD
+            if padded and r["start"] < padded[-1]["end"]:
+                # 相邻重叠 → 合并（保留前者 start，后者 end）
+                padded[-1]["end"] = max(padded[-1]["end"], r["end"])
+                padded[-1]["text"] += r["text"]
+            else:
+                padded.append(r)
+        return padded
 
     def _first_pass(self, provider, phrases, context):
         system = self.load_prompt("understand")
