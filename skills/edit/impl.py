@@ -37,8 +37,12 @@ class Edit(SkillBase):
 
             # GPU re-encode for frame-accurate cuts (no keyframe drift)
             enc_args = ffmpeg_encode_args(gpu)
+            # 🔴 防爆音：每段音频 30ms 淡入淡出（simple concat 硬切，不加会在删减点"啪"一声）
+            fade_d = min(0.03, dur / 2)  # 极短片段用一半时长，避免 in/out 重叠
+            fade_out_st = max(0.0, dur - fade_d)
+            afade = f"afade=t=in:st=0:d={fade_d:.3f},afade=t=out:st={fade_out_st:.3f}:d={fade_d:.3f}"
             cmd = ["ffmpeg", "-y", "-ss", f"{start:.3f}", "-i", str(video_path),
-                   "-t", f"{dur:.3f}"] + enc_args + [str(seg_path)]
+                   "-t", f"{dur:.3f}", "-af", afade] + enc_args + [str(seg_path)]
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
             if result.returncode == 0 and seg_path.stat().st_size > 0:
                 seg_files.append(seg_path)

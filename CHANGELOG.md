@@ -1,5 +1,15 @@
 # Changelog — Video Clip Pro
 
+## V31 (2026-08-22) — 剪辑防爆音（每段 30ms 淡入淡出）
+
+- 根因：剪辑层默认 simple concat 硬切（`_crossfade_concat` 存在但 VFR 源不可靠未用），删减点不在纯静音处会"啪"一声爆音
+- 修复：`skills/edit/impl.py` 切分时给每段音频加 `afade=t=in:st=0:d=0.03,afade=t=out:st={dur-0.03}:d=0.03`（30ms 淡入淡出），极短片段用一半时长避免 in/out 重叠
+- 保持 simple concat 不变（不切 crossfade，避免 VFR 风险）
+- 隔离：只改 edit/impl.py（vcp 剪辑层独立文件），不动共享 core
+- 验证：ffmpeg WAV 精确测试，淡入起点样本=0、淡出终点=0，从 0 平滑渐变，无爆音
+
+---
+
 ## V30 (2026-08-20) — 卡片质量门禁 + 动画技法菜单（稳定加固）
 
 - 根因：低级错误反复，是因为稳定靠"LLM 自觉"，而不是"代码强制"。LLM 偶发输出空卡/弱动画卡，每次暴露一个修一个
