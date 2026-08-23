@@ -50,6 +50,14 @@ stages:
     timeout: 300
     description: LLM 质量审查
 
+  - name: visual_check
+    skill: visual_check
+    phase: 6.2
+    critical: false
+    retry: 0
+    timeout: 300
+    description: 成片视觉质检（deepseek 视觉模型抽帧检查画面质量）
+
   - name: upscale
     skill: upscale
     phase: 7

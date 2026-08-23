@@ -158,6 +158,48 @@ class Provider:
             if model!=models[-1]:time.sleep(3)
         return None
 
+    def call_vision(self, prompt, image_path=None, max_tokens=800, timeout=60):
+        """调用 deepseek-v4-flash-vision-exp 视觉模型（支持图片输入）"""
+        import base64
+        keys = [k for k in (self._load_key(), self._load_backup_key()) if k and k.startswith("sk-")]
+        keys = list(dict.fromkeys(keys))
+        if not keys:
+            return None
+        content = [{"type": "text", "text": prompt}]
+        if image_path and os.path.exists(image_path):
+            with open(image_path, "rb") as f:
+                img_b64 = base64.b64encode(f.read()).decode()
+            content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}})
+        # reasoning 模型：reasoning_content 先占 3000+ tokens，需给足空间让 content 输出
+        max_tokens = max(max_tokens, 2000)
+        for api_key in keys:
+            self._rate.wait()
+            try:
+                resp = requests.post(
+                    "https://api.deepseek.com/chat/completions",
+                    headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                    json={"model": "deepseek-v4-flash-vision-exp", "messages": [{"role": "user", "content": content}], "max_tokens": max_tokens},
+                    timeout=timeout)
+                if resp.status_code == 200:
+                    msg = resp.json()["choices"][0]["message"]
+                    raw = (msg.get("content") or "").strip()
+                    if raw:
+                        self._last_model = "deepseek-v4-flash-vision-exp"
+                        self._cost.reconcile("visual_check", True, len(raw), "deepseek-v4-flash-vision-exp")
+                        return raw
+                    return None
+                elif resp.status_code == 429:
+                    time.sleep(5)
+                elif resp.status_code == 402:
+                    continue
+                else:
+                    print(f"  [Provider] vision HTTP {resp.status_code}")
+            except requests.Timeout:
+                print(f"  [Provider] vision timeout")
+            except Exception as e:
+                print(f"  [Provider] vision error: {e}")
+        return None
+
     @property
     def last_model(self):return self._last_model
     @property
