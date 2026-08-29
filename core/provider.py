@@ -34,6 +34,51 @@ MODEL_PRICES = {
 }
 RMB_TO_USD = 0.14
 
+
+# ── V34: LLM 统一配置 — 换模型/供应商只改 llm_config.yaml，不改代码 ──
+import yaml as _yaml
+
+def _load_llm_config() -> dict:
+    """加载统一配置 E:/Hermes-Agent/workspace/xiaoshan/llm_config.yaml。找不到返回 {}（向后兼容）。"""
+    config_path = os.environ.get(
+        "VCP_LLM_CONFIG",
+        str(Path(__file__).resolve().parent.parent.parent / "llm_config.yaml"),
+    )
+    if not Path(config_path).exists():
+        return {}
+    try:
+        with open(config_path) as f:
+            return _yaml.safe_load(f) or {}
+    except Exception:
+        return {}
+
+_LLM_CONFIG = _load_llm_config()
+
+# model_override：把任务映射里的模型名做替换（换模型改 llm_config.yaml，不改代码）
+_OVERRIDE = _LLM_CONFIG.get("model_override", {})
+
+
+def _apply_override(model: str) -> str:
+    return _OVERRIDE.get(model, model)
+
+
+# 把 TASK_MODELS 里的 primary/fallback 做 override
+for _cfg in TASK_MODELS.values():
+    if "primary" in _cfg:
+        _cfg["primary"] = _apply_override(_cfg["primary"])
+    if "fallback" in _cfg:
+        _cfg["fallback"] = [_apply_override(m) for m in _cfg["fallback"]]
+
+# 供应商配置（model → {url, api_key_env}）
+_PROVIDERS = {}
+for _pname, _pcfg in _LLM_CONFIG.get("providers", {}).items():
+    _base = _pcfg.get("base_url", "https://api.deepseek.com")
+    _env = _pcfg.get("api_key_env", "DEEPSEEK_API_KEY")
+    for _m in _pcfg.get("models", []):
+        _PROVIDERS[_m] = {"url": _base.rstrip("/") + "/chat/completions", "api_key_env": _env}
+
+VISION_MODEL = _apply_override(_LLM_CONFIG.get("vision_model", "deepseek-v4-flash-vision-exp"))
+
 class RateLimiter:
     def __init__(self, rpm=10): self.rpm=rpm;self._times=[];self._lock=threading.Lock()
     def wait(self):
@@ -126,22 +171,29 @@ class Provider:
         cfg=TASK_MODELS.get(task,TASK_MODELS["edit"])
         models=([model] if model else [cfg["primary"]])+cfg["fallback"];mt=cfg.get("max_tokens",4000)
         if max_tokens:mt=max_tokens
-        keys=[k for k in (self._load_key(),self._load_backup_key()) if k and k.startswith("sk-")]
-        keys=list(dict.fromkeys(keys))
-        if not keys:return "[ERROR: No API key]"
 
         for model in models:
+            # V34: 从配置查 url 和 key env（多供应商），无配置回退 deepseek 默认
+            pcfg=_PROVIDERS.get(model,{"url":"https://api.deepseek.com/chat/completions","api_key_env":"DEEPSEEK_API_KEY"})
+            url=pcfg["url"];env=pcfg["api_key_env"]
+            keys=[k for k in (self._load_key(env),self._load_backup_key(env)) if k]
+            keys=list(dict.fromkeys(keys))
+            if not keys:
+                print(f"  [Provider] {model} 无 API key");continue
             for api_key in keys:
                 self._rate.wait()
                 try:
                     resp=requests.post(
-                        "https://api.deepseek.com/chat/completions",
+                        url,
                         headers={"Authorization":f"Bearer {api_key}","Content-Type":"application/json"},
                         json={"model":model,"messages":([{"role":"system","content":system}]if system else[])+[{"role":"user","content":prompt if prompt else ""}],"temperature":0,"max_tokens":mt},
                         timeout=120)
                     if resp.status_code==200:
                         msg = resp.json()["choices"][0]["message"]
-                        raw = (msg.get("content") or msg.get("reasoning_content") or "").strip()
+                        # V34 fix: 只取 content，绝不 fallback reasoning_content（思考过程不是答案，会导致 JSON 解析失败）
+                        raw = (msg.get("content") or "").strip()
+                        if not raw:
+                            continue
                         self._last_model=model
                         self._cost.reconcile(task,True,len(raw),model)
                         return raw
@@ -159,9 +211,12 @@ class Provider:
         return None
 
     def call_vision(self, prompt, image_path=None, max_tokens=800, timeout=60):
-        """调用 deepseek-v4-flash-vision-exp 视觉模型（支持图片输入）"""
+        """调用视觉模型（支持图片输入，模型从 llm_config.yaml 的 vision_model 读）"""
         import base64
-        keys = [k for k in (self._load_key(), self._load_backup_key()) if k and k.startswith("sk-")]
+        model = VISION_MODEL
+        pcfg = _PROVIDERS.get(model, {"url": "https://api.deepseek.com/chat/completions", "api_key_env": "DEEPSEEK_API_KEY"})
+        url = pcfg["url"]; env = pcfg["api_key_env"]
+        keys = [k for k in (self._load_key(env), self._load_backup_key(env)) if k]
         keys = list(dict.fromkeys(keys))
         if not keys:
             return None
@@ -176,16 +231,16 @@ class Provider:
             self._rate.wait()
             try:
                 resp = requests.post(
-                    "https://api.deepseek.com/chat/completions",
+                    url,
                     headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                    json={"model": "deepseek-v4-flash-vision-exp", "messages": [{"role": "user", "content": content}], "max_tokens": max_tokens},
+                    json={"model": model, "messages": [{"role": "user", "content": content}], "max_tokens": max_tokens},
                     timeout=timeout)
                 if resp.status_code == 200:
                     msg = resp.json()["choices"][0]["message"]
                     raw = (msg.get("content") or "").strip()
                     if raw:
-                        self._last_model = "deepseek-v4-flash-vision-exp"
-                        self._cost.reconcile("visual_check", True, len(raw), "deepseek-v4-flash-vision-exp")
+                        self._last_model = model
+                        self._cost.reconcile("visual_check", True, len(raw), model)
                         return raw
                     return None
                 elif resp.status_code == 429:
@@ -205,9 +260,12 @@ class Provider:
     @property
     def cost(self):return self._cost
 
-    def _load_key(self):
-        key = os.environ.get("DEEPSEEK_API_KEY")
+    def _load_key(self, env="DEEPSEEK_API_KEY"):
+        key = os.environ.get(env)
         if key: return key
+        # 只有 deepseek 从 Hermes config.yaml 读（glm 等其他供应商走环境变量）
+        if env != "DEEPSEEK_API_KEY":
+            return None
         # 从 Hermes config.yaml 读 key
         hermes_cfg = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes")) / "config.yaml"
         if hermes_cfg.exists():
@@ -223,15 +281,17 @@ class Provider:
             if m: return m.group(0)
         return None
 
-    def _load_backup_key(self):
-        """备用 key（主 key 402 欠费时自动切换）。从环境变量 DEEPSEEK_API_KEY_BACKUP 或 .env 读。"""
-        key = os.environ.get("DEEPSEEK_API_KEY_BACKUP")
-        if key and key.startswith("sk-"): return key
+    def _load_backup_key(self, env="DEEPSEEK_API_KEY"):
+        """备用 key（主 key 402 欠费时自动切换）。从环境变量 <env>_BACKUP 或 .env 读。"""
+        key = os.environ.get(f"{env}_BACKUP")
+        if key: return key
+        if env != "DEEPSEEK_API_KEY":
+            return None
         env_file = Path(__file__).parent.parent / ".env"
         if env_file.exists():
             for line in env_file.read_text(encoding="utf-8").splitlines():
                 line = line.strip()
                 if line.startswith("DEEPSEEK_API_KEY_BACKUP="):
                     v = line.split("=", 1)[1].strip().strip('"').strip("'")
-                    if v.startswith("sk-"): return v
+                    if v: return v
         return None
