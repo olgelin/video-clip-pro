@@ -370,7 +370,7 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
     else:
         gsap_tag = '<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>'
         print("      GSAP from CDN (may fail in headless)")
-    index_html = '\n'.join(['<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"/>',f'<meta name="viewport" content="width={fw},height={fh}"/>','<title>Edited Video</title>',gsap_tag,f'<style>{FONT_CSS}{pip_css_block}{main_style}</style></head><body>',f'<div id="root" data-composition-id="main" data-start="0" data-width="{fw}" data-height="{fh}" data-duration="{td_str}">',pip_video_block,f'<audio id="src-a" src="final.mp4" data-start="0" data-duration="{td_str}" data-track-index="10"></audio>','<div class="bg-glow"></div>',host_block,'</div>','<div class="unified-timeline"><div class="unified-timeline-fill" id="main-timeline"></div></div>',f'<script>window.__timelines=window.__timelines||{{}};const tl=gsap.timeline({{paused:true}});tl.to("#main-timeline",{{width:"100%",duration:{td_str},ease:"linear"}},0);{pip_motion}window.__timelines["main"]=tl;</script>',THREEP_SCRIPT,AUDIO_SYNC_SCRIPT,'</body></html>'])
+    index_html = '\n'.join(['<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"/>',f'<meta name="viewport" content="width={fw},height={fh}"/>','<title>Edited Video</title>',gsap_tag,f'<style>{FONT_CSS}{pip_css_block}{main_style}</style></head><body>',f'<div id="root" data-composition-id="main" data-start="0" data-layout="{layout_mode}" data-width="{fw}" data-height="{fh}" data-duration="{td_str}">',pip_video_block,f'<audio id="src-a" src="final.mp4" data-start="0" data-duration="{td_str}" data-track-index="10"></audio>','<div class="bg-glow"></div>',host_block,'</div>','<div class="unified-timeline"><div class="unified-timeline-fill" id="main-timeline"></div></div>',f'<script>window.__timelines=window.__timelines||{{}};const tl=gsap.timeline({{paused:true}});tl.to("#main-timeline",{{width:"100%",duration:{td_str},ease:"linear"}},0);{pip_motion}window.__timelines["main"]=tl;</script>',THREEP_SCRIPT,AUDIO_SYNC_SCRIPT,'</body></html>'])
     (hf_dir / "index.html").write_text(index_html, encoding="utf-8")
     print("      HyperFrames project:", str(hf_dir / "index.html"))
     print("      Beats:", len(beat_files), "sub-compositions,", len(captions), "caption words")
@@ -573,11 +573,12 @@ def _compose_pip(hf_dir, polished_path):
             print(f"      音频补齐失败: {e}")
         return polished_path
 
-    # ── PIP 模式 ──
-    # 1. 解析换位序列（GSAP tl.to）
+    # ── PIP/avatar 模式 ──
+    is_avatar = 'data-layout="avatar"' in index_html
+    # 1. 解析换位序列（GSAP tl.to）—— 宽松 regex，兼容 avatar 缩位动画里的 width 参数
     motions = []
-    for m in _re.finditer(r'tl\.to\("#pip-win",\{left:"(-?[\d.]+)%",bottom:"(-?[\d.]+)%",duration:([\d.]+)[^}]*\},([\d.]+)\)', index_html):
-        motions.append((float(m.group(4)), float(m.group(1)), float(m.group(2))))
+    for m in _re.finditer(r'tl\.to\("#pip-win",\{left:"(-?[\d.]+)%",bottom:"(-?[\d.]+)%"[^}]*\},([\d.]+)\)', index_html):
+        motions.append((float(m.group(3)), float(m.group(1)), float(m.group(2))))
 
     # 2. 解析字幕
     captions = []
@@ -594,6 +595,11 @@ def _compose_pip(hf_dir, polished_path):
     is_portrait = vid_h > vid_w
     win_w = int(vid_w * (0.22 if is_portrait else 0.12))
     win_h = win_w if is_portrait else int(win_w * 4 / 3)
+
+    # avatar 满幅尺寸 + 时长（与 build 函数一致）
+    hero_dur = 5.0
+    hero_w = int(vid_w * (0.62 if is_portrait else 0.38))
+    hero_h = hero_w if is_portrait else int(hero_w * 4 // 3)
 
     def to_xy(left_pct, bottom_pct):
         x = int(left_pct / 100 * vid_w)
@@ -703,40 +709,75 @@ def _compose_pip(hf_dir, polished_path):
     ass_path.write_text("\n".join(ass_lines), encoding="utf-8")
 
     # 7. ffmpeg 叠加（圆角 + 边框，对齐 V12 人物窗口边缘）
-    crop_expr = f"crop={pw}:{ph}:{px}:{py},scale={win_w}:{win_h}"
+    crop_expr = f"crop={pw}:{ph}:{px}:{py}"
 
     # 圆角 alpha 表达式（geq，四角透明）：横屏 16px 圆角，竖屏圆形（50%）
-    r_round = win_w // 2 if is_portrait else 16
-    w1 = win_w - 1 - r_round
-    h1 = win_h - 1 - r_round
-    def _round_alpha():
+    def _round_alpha(w, h, r):
+        w1 = w - 1 - r
+        h1 = h - 1 - r
         inner = '255'
-        inner = f'if(gt(X,{w1})*gt(Y,{h1}),if(gt(hypot(X-{w1},Y-{h1}),{r_round}),0,255),{inner})'
-        inner = f'if(lt(X,{r_round})*gt(Y,{h1}),if(gt(hypot({r_round}-X,Y-{h1}),{r_round}),0,255),{inner})'
-        inner = f'if(gt(X,{w1})*lt(Y,{r_round}),if(gt(hypot(X-{w1},{r_round}-Y),{r_round}),0,255),{inner})'
-        inner = f'if(lt(X,{r_round})*lt(Y,{r_round}),if(gt(hypot({r_round}-X,{r_round}-Y),{r_round}),0,255),{inner})'
+        inner = f'if(gt(X,{w1})*gt(Y,{h1}),if(gt(hypot(X-{w1},Y-{h1}),{r}),0,255),{inner})'
+        inner = f'if(lt(X,{r})*gt(Y,{h1}),if(gt(hypot({r}-X,Y-{h1}),{r}),0,255),{inner})'
+        inner = f'if(gt(X,{w1})*lt(Y,{r}),if(gt(hypot(X-{w1},{r}-Y),{r}),0,255),{inner})'
+        inner = f'if(lt(X,{r})*lt(Y,{r}),if(gt(hypot({r}-X,{r}-Y),{r}),0,255),{inner})'
         return inner
-    round_alpha = _round_alpha()
 
-    # 圆角边框 PNG（白色淡边框，对齐 V12：border 1.5px rgba(255,255,255,0.1)）
-    frame_path = out_dir / "_pip_frame.png"
-    try:
-        from PIL import Image as _Img2, ImageDraw as _Draw2
-        _fp = _Img2.new('RGBA', (win_w, win_h), (0, 0, 0, 0))
-        _d = _Draw2.Draw(_fp)
-        _d.rounded_rectangle([0, 0, win_w - 1, win_h - 1], radius=r_round, outline=(255, 255, 255, 26), width=2)
-        _fp.save(str(frame_path))
-    except Exception:
-        frame_path = None
+    if is_avatar:
+        # ── avatar: 片头满幅(0-5s 居中) + 角标(5s+ 换位，死锁下1/3) ──
+        r_hero = hero_w // 2 if is_portrait else 16
+        r_pip = win_w // 2 if is_portrait else 16
+        hero_alpha = _round_alpha(hero_w, hero_h, r_hero)
+        pip_alpha = _round_alpha(win_w, win_h, r_pip)
+        # 满幅居中位置（bottom 22%）
+        hero_x = (vid_w - hero_w) // 2
+        hero_y = max(0, int(vid_h - 0.22 * vid_h - hero_h))
+        # 角标换位 timeline（motions 已含缩位目标 + 后续换位）
+        av_timeline = motions if motions else [(hero_dur, 3.0, 10.0)]
+        av_period = max(av_timeline[-1][0] + 5.0, 30.0)
 
-    pip_chain = f"[1:v]{crop_expr},setpts=PTS-STARTPTS,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='{round_alpha}'[pipr]"
-    if frame_path:
-        overlay_expr = (f"{pip_chain};[0:v][pipr]overlay=x='{x_expr}':y='{y_expr}':format=auto[v1];"
-                        f"[v1][2:v]overlay=x='{x_expr}':y='{y_expr}':format=auto[vout]")
-        inputs = ["ffmpeg", "-y", "-i", "final_polished.mp4", "-i", "final.mp4", "-i", "_pip_frame.png"]
-    else:
-        overlay_expr = f"{pip_chain};[0:v][pipr]overlay=x='{x_expr}':y='{y_expr}':format=auto[vout]"
+        def _av_axis(axis):
+            segs = []
+            for i, (t, l, b) in enumerate(av_timeline):
+                x, y = to_xy(l, b)
+                val = x if axis == 'x' else y
+                t_end = av_timeline[i + 1][0] if i + 1 < len(av_timeline) else av_period
+                segs.append((t_end, val))
+            expr = str(segs[-1][1]) if segs else '0'
+            for t_end, val in reversed(segs[:-1]):
+                expr = f"if(lt(t,{t_end}),{val},{expr})"
+            return expr
+        av_x = _av_axis('x')
+        av_y = _av_axis('y')
+
+        hero_chain = f"[1:v]{crop_expr},scale={hero_w}:{hero_h},setpts=PTS-STARTPTS,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='{hero_alpha}'[heror]"
+        pip_chain = f"[1:v]{crop_expr},scale={win_w}:{win_h},setpts=PTS-STARTPTS,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='{pip_alpha}'[pipr]"
+        overlay_expr = (f"{hero_chain};{pip_chain};"
+                        f"[0:v][heror]overlay=x={hero_x}:y={hero_y}:enable='lt(t,{hero_dur})'[v1];"
+                        f"[v1][pipr]overlay=x='{av_x}':y='{av_y}':enable='gte(t,{hero_dur})':format=auto[vout]")
         inputs = ["ffmpeg", "-y", "-i", "final_polished.mp4", "-i", "final.mp4"]
+    else:
+        # ── pip 原有：单 overlay（固定角标尺寸，换位）──
+        r_round = win_w // 2 if is_portrait else 16
+        round_alpha = _round_alpha(win_w, win_h, r_round)
+        # 圆角边框 PNG（白色淡边框，对齐 V12：border 1.5px rgba(255,255,255,0.1)）
+        frame_path = out_dir / "_pip_frame.png"
+        try:
+            from PIL import Image as _Img2, ImageDraw as _Draw2
+            _fp = _Img2.new('RGBA', (win_w, win_h), (0, 0, 0, 0))
+            _d = _Draw2.Draw(_fp)
+            _d.rounded_rectangle([0, 0, win_w - 1, win_h - 1], radius=r_round, outline=(255, 255, 255, 26), width=2)
+            _fp.save(str(frame_path))
+        except Exception:
+            frame_path = None
+
+        pip_chain = f"[1:v]{crop_expr},scale={win_w}:{win_h},setpts=PTS-STARTPTS,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='{round_alpha}'[pipr]"
+        if frame_path:
+            overlay_expr = (f"{pip_chain};[0:v][pipr]overlay=x='{x_expr}':y='{y_expr}':format=auto[v1];"
+                            f"[v1][2:v]overlay=x='{x_expr}':y='{y_expr}':format=auto[vout]")
+            inputs = ["ffmpeg", "-y", "-i", "final_polished.mp4", "-i", "final.mp4", "-i", "_pip_frame.png"]
+        else:
+            overlay_expr = f"{pip_chain};[0:v][pipr]overlay=x='{x_expr}':y='{y_expr}':format=auto[vout]"
+            inputs = ["ffmpeg", "-y", "-i", "final_polished.mp4", "-i", "final.mp4"]
 
     tmp_out = out_dir / "_composed.mp4"
     cmd = inputs + [
