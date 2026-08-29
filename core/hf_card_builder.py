@@ -630,11 +630,13 @@ def _compose_pip(hf_dir, polished_path):
             valid_faces = [(x, y, w, h) for (x, y, w, h) in faces if w > W * 0.15]
             if valid_faces:
                 x, y, w, h = max(valid_faces, key=lambda f: f[2] * f[3])
-                pw = min(max(int(w * 3), 200), 500)
+                # 🔴 正常半身比例：crop 宽=画面宽70%(竖屏)/40%(横屏)，脸只定位中心，不做大脸特写
+                pw = int(W * (0.70 if is_portrait else 0.40))
+                pw = max(200, min(pw, W))
                 ph = pw if is_portrait else int(pw * 4 / 3)
                 cx = x + w // 2; cy = y + h // 2
                 crop_x = cx - pw // 2
-                crop_y = cy - int(ph * 0.42)
+                crop_y = cy - int(ph * 0.42)  # 脸中心在 crop 上 42% 处（头顶留足空间）
                 crop_x = max(0, min(crop_x, W - pw)); crop_y = max(0, min(crop_y, H - ph))
                 return pw, ph, crop_x, crop_y
             if faces:
@@ -669,7 +671,8 @@ def _compose_pip(hf_dir, polished_path):
         if require_person:
             if best_face is not None and best_face[2] > _W_ref * 0.10:
                 x, y, w, h = best_face
-                pw = min(max(int(w * 3), 200), 500)
+                pw = int(_W_ref * (0.70 if is_portrait else 0.40))
+                pw = max(200, min(pw, _W_ref))
                 ph = pw if is_portrait else int(pw * 4 / 3)
                 cx = x + w // 2; cy = y + h // 2
                 crop_x = max(0, min(cx - pw // 2, _W_ref - pw))
