@@ -68,8 +68,8 @@ def main():
     parser.add_argument("--debug", action="store_true", help="Keep intermediate files")
     parser.add_argument("--no-2x", action="store_true", dest="no_2x", help="Skip 2x upscale (save space)")
     parser.add_argument("--bgm", action="store_true", help="Add AI-generated background music with ducking")
-    parser.add_argument("--mode", choices=["fullscreen", "pip"], default="fullscreen",
-                       help="Layout mode: fullscreen (default, original) or pip (person-in-window)")
+    parser.add_argument("--mode", choices=["fullscreen", "pip", "avatar"], default="fullscreen",
+                       help="Layout mode: fullscreen (default) / pip (person-in-window) / avatar (digital-human multi-form)")
     args = parser.parse_args()
 
     if args.doctor:
@@ -97,7 +97,8 @@ def main():
     provider = Provider(cost_tracker)
 
     # Load pipeline definition
-    yaml_path = SCRIPT_DIR / "pipeline_defs" / f"{'pip' if args.mode == 'pip' else 'v23'}.yaml"
+    _mode_yaml = {"fullscreen": "v23", "pip": "pip", "avatar": "avatar"}.get(args.mode, "v23")
+    yaml_path = SCRIPT_DIR / "pipeline_defs" / f"{_mode_yaml}.yaml"
     loader = PipelineLoader(provider)
     manifest = loader.load(str(yaml_path))
 

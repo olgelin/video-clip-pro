@@ -216,7 +216,7 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
         scene_html = seg.get("_scene_html", "")  # 🔴 P0: hf_build_pip 全屏完整场景（含背景+内容+GSAP）
         card_threejs_flag = False
         # ── PIP模式：全屏场景，不用卡片模板 ──
-        if layout_mode == "pip":
+        if layout_mode in ("pip", "avatar"):
             cw, ch = fw, fh  # 全视口
             if scene_html and len(scene_html) > 100:
                 card_html = scene_html
@@ -240,7 +240,7 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
         else:
             full_html = '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><style>'+FONT_CSS+MICRO_CSS+CARD_DECOR_CSS+'*{margin:0;padding:0;box-sizing:border-box}body{overflow:hidden;background:transparent;font-family:CJK,Inter,"Segoe UI",sans-serif}</style></head><body>'+threejs_bg+card_html+gsap_script+'</body></html>'
         (comp_dir / (beat_id + ".html")).write_text(full_html, encoding="utf-8")
-        if layout_mode == "pip":
+        if layout_mode in ("pip", "avatar"):
             card_style = f"position:absolute;inset:0;width:{fw}px;height:{fh}px;z-index:10;"
         else:
             # 位置轮换：左→中→右循环（按 idx），避免卡片锁死底部
@@ -267,9 +267,9 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
     host_block = "\n".join(host_lines); td_str = str(round(total_dur, 2))
     main_style = f"body{{margin:0;background:{COLORS['bg_deep']}}}#root{{position:relative;width:{fw}px;height:{fh}px;overflow:hidden;background:{COLORS['bg_deep']}}}.bg-glow{{position:absolute;inset:0;z-index:2;pointer-events:none;background:radial-gradient(ellipse at 50% 40%,rgba(0,229,255,0.04),transparent 60%),radial-gradient(ellipse at 70% 70%,rgba(239,68,68,0.03),transparent 50%),radial-gradient(ellipse at 30% 60%,rgba(34,211,160,0.03),transparent 50%);}}#src-v{{animation:kenburns {td_str}s ease-in-out infinite alternate;}}@keyframes kenburns{{0%{{transform:scale(1)}}100%{{transform:scale(1.03)}}}}.unified-timeline{{position:absolute;bottom:4px;left:2%;right:2%;height:2px;background:rgba(255,255,255,0.06);border-radius:1px;overflow:hidden;z-index:30;}}.unified-timeline-fill{{height:100%;background:linear-gradient(90deg,{COLORS['cyan']},{COLORS['purple']},#22d3a0);border-radius:1px;width:0%;}}.caption-word{{position:absolute;color:#fff;font-weight:600;text-shadow:0 2px 12px rgba(0,0,0,0.9);white-space:nowrap;z-index:20;transition:text-shadow 0.15s}}.caption-word.active{{text-shadow:0 0 20px rgba(0,229,255,0.8),0 2px 12px rgba(0,0,0,0.9);color:#fff}}.audio-pulse{{filter:brightness(calc(1 + var(--audio-level,0) * 0.3))}}"
 
-    # ── PIP layout (person-in-window) ──
+    # ── PIP/avatar layout (person-in-window / multi-form avatar) ──
     pip_motion = ""  # 🔴 窗口定时换位的 GSAP 动画语句
-    if layout_mode == "pip":
+    if layout_mode in ("pip", "avatar"):
         import random
         # 🔴 窗口大小：竖屏 22%，横屏 12%（12% 在 1920 宽 = 230px，换位靠 rotation 动画已恢复，窗口小更精致）
         pip_size = 22 if orientation == "portrait" else 12  # % of viewport width

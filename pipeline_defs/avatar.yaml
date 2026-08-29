@@ -1,0 +1,83 @@
+name: avatar
+version: "3.0"
+description: 口播视频智能剪辑 Avatar — 全屏HTML场景+人物圆窗+字幕
+stages:
+  - name: transcribe
+    skill: transcribe
+    phase: 1
+    critical: true
+    retry: 1
+    timeout: 600
+    description: Whisper 语音转录（原视频，逐字时间戳）
+
+  - name: understand
+    skill: understand
+    phase: 2
+    critical: true
+    retry: 2
+    timeout: 300
+    description: LLM 按字/按句意语义删减 → keep_ranges
+
+  - name: draft
+    skill: draft
+    phase: 3
+    critical: false
+    retry: 1
+    timeout: 60
+    description: keep_ranges → EDL ranges（纯映射）
+
+  - name: edit
+    skill: edit
+    phase: 4
+    critical: true
+    retry: 1
+    timeout: 300
+    description: ffmpeg 按 keep_ranges 剪切+拼接 → final.mp4
+
+  - name: re_transcribe
+    skill: re_transcribe
+    phase: 5
+    critical: true
+    retry: 1
+    timeout: 600
+    description: 重新转写 final.mp4 → 新时间戳（字幕完全同步）
+
+  - name: storyboard
+    skill: storyboard
+    phase: 6
+    critical: true
+    retry: 2
+    timeout: 300
+    description: 语义分镜（基于新视频时间戳）
+
+  - name: hf_build_avatar
+    skill: hf_build_avatar
+    phase: 7
+    critical: false
+    retry: 1
+    timeout: 600
+    description: 场景HTML生成 + Avatar多形态人物布局 + 渲染
+
+  - name: review
+    skill: review
+    phase: 8
+    critical: false
+    retry: 1
+    timeout: 300
+    description: LLM 质量审查
+
+  - name: visual_check
+    skill: visual_check
+    phase: 8.2
+    critical: false
+    retry: 0
+    timeout: 300
+    description: 成片视觉质检（deepseek 视觉模型抽帧检查画面质量）
+
+  - name: upscale
+    skill: upscale
+    phase: 9
+    critical: false
+    retry: 0
+    timeout: 1200
+    description: 2x 高清修复
