@@ -630,13 +630,13 @@ def _compose_pip(hf_dir, polished_path):
             valid_faces = [(x, y, w, h) for (x, y, w, h) in faces if w > W * 0.15]
             if valid_faces:
                 x, y, w, h = max(valid_faces, key=lambda f: f[2] * f[3])
-                # 🔴 正常半身比例：crop 宽=画面宽78%(竖屏)/42%(横屏)，脸靠上(crop 35%)露更多身体到腰
-                pw = int(W * (0.78 if is_portrait else 0.42))
+                # 🔴 正常半身比例：crop 宽=画面宽90%(竖屏)/48%(横屏)，脸靠上(crop 33%)露更多身体
+                pw = int(W * (0.90 if is_portrait else 0.48))
                 pw = max(200, min(pw, W))
                 ph = pw if is_portrait else int(pw * 4 / 3)
                 cx = x + w // 2; cy = y + h // 2
                 crop_x = cx - pw // 2
-                crop_y = cy - int(ph * 0.35)  # 脸中心在 crop 上 35% 处（脸靠上，露更多身体）
+                crop_y = cy - int(ph * 0.33)  # 脸中心在 crop 上 33% 处（脸靠上，露更多身体）
                 crop_x = max(0, min(crop_x, W - pw)); crop_y = max(0, min(crop_y, H - ph))
                 return pw, ph, crop_x, crop_y
             if faces:
@@ -671,12 +671,12 @@ def _compose_pip(hf_dir, polished_path):
         if require_person:
             if best_face is not None and best_face[2] > _W_ref * 0.10:
                 x, y, w, h = best_face
-                pw = int(_W_ref * (0.78 if is_portrait else 0.42))
+                pw = int(_W_ref * (0.90 if is_portrait else 0.48))
                 pw = max(200, min(pw, _W_ref))
                 ph = pw if is_portrait else int(pw * 4 / 3)
                 cx = x + w // 2; cy = y + h // 2
                 crop_x = max(0, min(cx - pw // 2, _W_ref - pw))
-                crop_y = max(0, min(cy - int(ph * 0.35), _H_ref - ph))
+                crop_y = max(0, min(cy - int(ph * 0.33), _H_ref - ph))
                 return pw, ph, crop_x, crop_y
             return None
         # fallback：按视频实际尺寸中心 crop
@@ -822,8 +822,8 @@ def _compose_pip(hf_dir, polished_path):
                 return _ImgR.alpha_composite(glow, img)
             ring_hero_path = out_dir / "_avatar_ring_hero.png"
             ring_pip_path = out_dir / "_avatar_ring_pip.png"
-            _make_ring_png(hero_w, 8).save(str(ring_hero_path))
-            _make_ring_png(win_w, 6).save(str(ring_pip_path))
+            _make_ring_png(hero_w, 12).save(str(ring_hero_path))
+            _make_ring_png(win_w, 8).save(str(ring_pip_path))
         except Exception:
             ring_hero_path = ring_pip_path = None
 
