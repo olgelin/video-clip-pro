@@ -809,16 +809,20 @@ def _compose_pip(hf_dir, polished_path):
         try:
             from PIL import Image as _ImgR, ImageDraw as _DrawR, ImageFilter as _FilterR
             def _make_ring_png(size, ring_w):
-                img = _ImgR.new('RGBA', (size, size), (0, 0, 0, 0))
-                d = _DrawR.Draw(img)
-                radius = size // 2
-                _ca, _cb = (55, 55, 72), (140, 95, 220)  # 黑灰 → 紫
-                for i in range(ring_w):
-                    r = radius - i - 1
-                    t = i / max(ring_w - 1, 1)
-                    c = tuple(int(_ca[j] + (_cb[j] - _ca[j]) * t) for j in range(3))
-                    d.ellipse([radius - r, radius - r, radius + r, radius + r], outline=c + (255,), width=1)
-                glow = img.filter(_FilterR.GaussianBlur(ring_w * 2))
+                _ny = __import__('numpy')
+                yy, xx = _ny.mgrid[0:size, 0:size]
+                cx = cy = size / 2.0
+                dist = _ny.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
+                radius = size / 2.0
+                ring_band = (dist >= radius - ring_w) & (dist < radius)
+                t = _ny.clip((dist - (radius - ring_w)) / max(ring_w, 1), 0, 1)
+                _ca = _ny.array([105, 105, 130]); _cb = _ny.array([165, 115, 225])
+                color = (_ca[None, None, :] + (_cb - _ca)[None, None, :] * t[:, :, None]).astype(_ny.uint8)
+                rgba = _ny.zeros((size, size, 4), dtype=_ny.uint8)
+                rgba[:, :, :3] = color
+                rgba[:, :, 3] = ring_band.astype(_ny.uint8) * 255
+                img = _ImgR.fromarray(rgba, 'RGBA')
+                glow = img.filter(_FilterR.GaussianBlur(ring_w))
                 return _ImgR.alpha_composite(glow, img)
             ring_hero_path = out_dir / "_avatar_ring_hero.png"
             ring_pip_path = out_dir / "_avatar_ring_pip.png"
