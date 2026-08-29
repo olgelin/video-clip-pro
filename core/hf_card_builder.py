@@ -805,12 +805,43 @@ def _compose_pip(hf_dir, polished_path):
         av_x = _av_axis('x')
         av_y = _av_axis('y')
 
+        # 生成精致发光环（青蓝→紫渐变，符合蓝色科技风审美）
+        try:
+            from PIL import Image as _ImgR, ImageDraw as _DrawR, ImageFilter as _FilterR
+            def _make_ring_png(size, ring_w):
+                img = _ImgR.new('RGBA', (size, size), (0, 0, 0, 0))
+                d = _DrawR.Draw(img)
+                radius = size // 2
+                _ca, _cb = (0, 212, 255), (168, 85, 247)  # 青蓝 → 紫
+                for i in range(ring_w):
+                    r = radius - i - 1
+                    t = i / max(ring_w - 1, 1)
+                    c = tuple(int(_ca[j] + (_cb[j] - _ca[j]) * t) for j in range(3))
+                    d.ellipse([radius - r, radius - r, radius + r, radius + r], outline=c + (255,), width=1)
+                glow = img.filter(_FilterR.GaussianBlur(ring_w * 2))
+                return _ImgR.alpha_composite(glow, img)
+            ring_hero_path = out_dir / "_avatar_ring_hero.png"
+            ring_pip_path = out_dir / "_avatar_ring_pip.png"
+            _make_ring_png(hero_w, 5).save(str(ring_hero_path))
+            _make_ring_png(win_w, 4).save(str(ring_pip_path))
+        except Exception:
+            ring_hero_path = ring_pip_path = None
+
         hero_chain = f"[1:v]{crop_expr},scale={hero_w}:{hero_h},setpts=PTS-STARTPTS,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='{hero_alpha}'[heror]"
         pip_chain = f"[1:v]{crop_expr},scale={win_w}:{win_h},setpts=PTS-STARTPTS,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='{pip_alpha}'[pipr]"
-        overlay_expr = (f"{hero_chain};{pip_chain};"
-                        f"[0:v][heror]overlay=x={hero_x}:y={hero_y}:enable='lt(t,{hero_dur})'[v1];"
-                        f"[v1][pipr]overlay=x='{av_x}':y='{av_y}':enable='gte(t,{hero_dur})':format=auto[vout]")
-        inputs = ["ffmpeg", "-y", "-i", "final_polished.mp4", "-i", "final.mp4"]
+        if ring_hero_path and ring_pip_path:
+            overlay_expr = (f"{hero_chain};{pip_chain};"
+                            f"[0:v][heror]overlay=x={hero_x}:y={hero_y}:enable='lt(t,{hero_dur})'[v1];"
+                            f"[v1][2:v]overlay=x={hero_x}:y={hero_y}:enable='lt(t,{hero_dur})'[v2];"
+                            f"[v2][pipr]overlay=x='{av_x}':y='{av_y}':enable='gte(t,{hero_dur})'[v3];"
+                            f"[v3][3:v]overlay=x='{av_x}':y='{av_y}':enable='gte(t,{hero_dur})':format=auto[vout]")
+            inputs = ["ffmpeg", "-y", "-i", "final_polished.mp4", "-i", "final.mp4",
+                      "-i", "_avatar_ring_hero.png", "-i", "_avatar_ring_pip.png"]
+        else:
+            overlay_expr = (f"{hero_chain};{pip_chain};"
+                            f"[0:v][heror]overlay=x={hero_x}:y={hero_y}:enable='lt(t,{hero_dur})'[v1];"
+                            f"[v1][pipr]overlay=x='{av_x}':y='{av_y}':enable='gte(t,{hero_dur})':format=auto[vout]")
+            inputs = ["ffmpeg", "-y", "-i", "final_polished.mp4", "-i", "final.mp4"]
     else:
         # ── pip 原有：单 overlay（固定角标尺寸，换位）──
         r_round = win_w // 2 if is_portrait else 16
