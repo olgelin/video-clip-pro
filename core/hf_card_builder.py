@@ -607,7 +607,7 @@ def _compose_pip(hf_dir, polished_path):
         return x, y
 
     # 4. 动态检测人物 crop（多时间点采样，肤色最多帧为准；fallback 按视频实际尺寸，clamp 不越界）
-    def detect_person_crop(video, t=5):
+    def detect_person_crop(video, t=5, require_person=False):
         best = None
         # 多个时间点采样，取肤色最多（dense_cols 最长）的帧，避免人物尚未入镜
         for tt in [t, 3, 8, 10, 15, 20]:
@@ -624,6 +624,13 @@ def _compose_pip(hf_dir, polished_path):
             if len(dense_cols) >= 30 and len(dense_rows) >= 30:
                 cx0, cx1 = dense_cols.min(), dense_cols.max()
                 cy0, cy1 = dense_rows.min(), dense_rows.max()
+                # 🔴 无人物兜底：人物区域太小（宽<视频宽15% 或 高<视频高8%）→ 界面元素误检，跳过
+                pw_ratio = (cx1 - cx0) / max(W, 1)
+                ph_ratio = (cy1 - cy0) / max(H, 1)
+                if require_person and (pw_ratio < 0.15 or ph_ratio < 0.08):
+                    if best is None or len(dense_cols) > best[0]:
+                        best = (len(dense_cols), W, H)
+                    continue
                 pw = min(max(cx1 - cx0 + 60, 200), 500)
                 # 🔴 竖屏窗口是圆形 1:1，crop 也 1:1；横屏 3:4（否则 scale 会拉伸变形）
                 ph = pw if is_portrait else int(pw * 4 / 3)
@@ -637,6 +644,9 @@ def _compose_pip(hf_dir, polished_path):
             # 记录肤色最多的帧作为备选（即使未达阈值）
             if best is None or len(dense_cols) > best[0]:
                 best = (len(dense_cols), W, H)
+        # 🔴 无人物兜底：require_person 且所有时间点都没找到足够大的人物 → 返回 None（无人物）
+        if require_person:
+            return None
         # fallback：按视频实际尺寸中心 crop（不再硬编码 810,1080,555,0 横屏值）
         if best is not None:
             _, W, H = best
@@ -649,7 +659,21 @@ def _compose_pip(hf_dir, polished_path):
         x = (W - pw) // 2; y = (H - ph) // 2
         return pw, ph, x, y
 
-    pw, ph, px, py = detect_person_crop(final_mp4)
+    _crop = detect_person_crop(final_mp4, require_person=is_avatar)
+    if _crop is None:
+        # 无人物 → 降级纯 fullscreen：只补字幕+音频，不叠加人物窗口
+        print("      无人物检测 → 降级纯 fullscreen（只补字幕+音频）")
+        try:
+            tmp = out_dir / "_no_person.mp4"
+            cmd = f'ffmpeg -y -i "{polished_path}" -i "{final_mp4}" -map 0:v -map 1:a -c:v copy -c:a aac -b:a 192k -shortest "{tmp}"'
+            r = subprocess.run(cmd, shell=True, capture_output=True, timeout=300)
+            if r.returncode == 0 and tmp.exists():
+                tmp.replace(polished_path)
+                print("      音频已补（无人物降级）")
+        except Exception as e:
+            print(f"      无人物降级失败: {e}")
+        return polished_path
+    pw, ph, px, py = _crop
 
     # 5. 换位表达式（从 index.html 解析的实际换位序列，mod 循环）
     init_left, init_bottom = 75.0, 58.0
