@@ -826,8 +826,8 @@ def _compose_pip(hf_dir, polished_path):
                 return _ImgR.alpha_composite(glow, img)
             ring_hero_path = out_dir / "_avatar_ring_hero.png"
             ring_pip_path = out_dir / "_avatar_ring_pip.png"
-            _make_ring_png(hero_w, 12).save(str(ring_hero_path))
-            _make_ring_png(win_w, 8).save(str(ring_pip_path))
+            _make_ring_png(hero_w, 24).save(str(ring_hero_path))
+            _make_ring_png(win_w, 16).save(str(ring_pip_path))
         except Exception:
             ring_hero_path = ring_pip_path = None
 
