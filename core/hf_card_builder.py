@@ -271,44 +271,86 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
     pip_motion = ""  # 🔴 窗口定时换位的 GSAP 动画语句
     if layout_mode in ("pip", "avatar"):
         import random
+        is_avatar = (layout_mode == "avatar")
         # 🔴 窗口大小：竖屏 22%，横屏 12%（12% 在 1920 宽 = 230px，换位靠 rotation 动画已恢复，窗口小更精致）
         pip_size = 22 if orientation == "portrait" else 12  # % of viewport width
         # 🔴 竖屏 → 圆框（1:1 圆形），横屏 → 竖向长方形框（3:4，高>宽，带边框）
         radius = "50%" if orientation == "portrait" else "16px"
-        # 🔴 位置定时换位：每 5 秒换位（8s 太久，窗口长时间不动显得"没换位"）
         shift_interval = 5
-        n_shifts = max(1, int(total_dur // shift_interval))
-        # 🔴 循环使用位置（横屏 76s 有 9 次换位，不能只换 6 个位置就停——后半段窗口会一直不动）
-        shuffled = random.sample(PIP_POSITIONS, len(PIP_POSITIONS))
-        chosen = [shuffled[i % len(shuffled)] for i in range(n_shifts)]
-        pos_name, pos_css = chosen[0]
-        frame_name = random.choice(list(PIP_FRAMES.keys()))
-        frame_css = PIP_FRAMES[frame_name]
-        pip_motion_lines = []
-        for i in range(1, len(chosen)):
-            _name, _css = chosen[i]
-            # _css = "left:75%;bottom:14%" → 解析成 left="75%" bottom="14%"
-            _kv = {}
-            for _pair in _css.split(";"):
-                if ":" in _pair:
-                    _k, _v = _pair.split(":", 1)
-                    _kv[_k.strip()] = _v.strip()
-            _left = _kv.get("left", "3%")
-            _bottom = _kv.get("bottom", "14%")
-            _t = i * shift_interval
-            if i % 3 == 0:
-                # 🔴 偶尔消失式换位：双属性滑出视口（消失 1s）→ 滑入新位置（出现）
-                pip_motion_lines.append(f'tl.to("#pip-win",{{left:"-32%",bottom:"-12%",duration:0.5,ease:"power1.in"}},{_t});')
-                pip_motion_lines.append(f'tl.to("#pip-win",{{left:"{_left}",bottom:"{_bottom}",duration:0.6,ease:"power2.out"}},{_t + 1.4});')
-            else:
-                # 普通换位
-                pip_motion_lines.append(f'tl.to("#pip-win",{{left:"{_left}",bottom:"{_bottom}",duration:0.8,ease:"power2.inOut"}},{_t});')
-        pip_motion = "".join(pip_motion_lines)
+
+        if is_avatar:
+            # ── avatar: 片头满幅建立人物(5s) → 缩位角标(死锁下1/3) → 左右轮换 ──
+            hero_size = 62 if orientation == "portrait" else 38  # 片头满幅尺寸
+            hero_dur = 5.0  # 片头满幅时长（video-talkcraft: 5-8s 建立人物）
+            hero_left = round((100 - hero_size) / 2, 1)
+            hero_bottom = 22
+            # 初始：满幅居中
+            pos_name, pos_css = "hero", f"left:{hero_left}%;bottom:{hero_bottom}%"
+            # 角标位置：死锁下 1/3 带（bottom ≤ 16%），左右轮换
+            avatar_positions = [
+                ("corner-left",  "left:3%;bottom:10%"),
+                ("corner-right", "left:75%;bottom:10%"),
+                ("corner-left",  "left:3%;bottom:16%"),
+                ("corner-right", "left:75%;bottom:16%"),
+            ]
+            n_shifts = max(1, int((total_dur - hero_dur) // shift_interval))
+            chosen = [avatar_positions[i % len(avatar_positions)] for i in range(n_shifts + 1)]
+            frame_name = random.choice(list(PIP_FRAMES.keys()))
+            frame_css = PIP_FRAMES[frame_name]
+            pip_motion_lines = []
+            # 1) 片头满幅 → 缩位到第一个角标（同时缩小 + 移到角落）
+            _c0 = chosen[0][1]
+            _kv0 = dict(p.split(":", 1) for p in _c0.split(";") if ":" in p)
+            _l0 = _kv0.get("left", "3%"); _b0 = _kv0.get("bottom", "10%")
+            pip_motion_lines.append(f'tl.to("#pip-win",{{left:"{_l0}",bottom:"{_b0}",width:"{pip_size}%",duration:1.2,ease:"power3.inOut"}},{hero_dur});')
+            # 2) 后续角标轮换（死锁下 1/3）
+            for i in range(1, len(chosen)):
+                _c = chosen[i][1]
+                _kv = dict(p.split(":", 1) for p in _c.split(";") if ":" in p)
+                _l = _kv.get("left", "3%"); _b = _kv.get("bottom", "10%")
+                _t = hero_dur + i * shift_interval
+                pip_motion_lines.append(f'tl.to("#pip-win",{{left:"{_l}",bottom:"{_b}",duration:0.8,ease:"power2.inOut"}},{_t});')
+            pip_motion = "".join(pip_motion_lines)
+            _aspect = "1" if orientation == "portrait" else "3/4"
+            # 初始窗口：满幅（hero），动画里缩到角标
+            _init_size = hero_size
+        else:
+            # ── pip 原有：定时换位（垂直中部）──
+            n_shifts = max(1, int(total_dur // shift_interval))
+            # 🔴 循环使用位置（横屏 76s 有 9 次换位，不能只换 6 个位置就停——后半段窗口会一直不动）
+            shuffled = random.sample(PIP_POSITIONS, len(PIP_POSITIONS))
+            chosen = [shuffled[i % len(shuffled)] for i in range(n_shifts)]
+            pos_name, pos_css = chosen[0]
+            frame_name = random.choice(list(PIP_FRAMES.keys()))
+            frame_css = PIP_FRAMES[frame_name]
+            pip_motion_lines = []
+            for i in range(1, len(chosen)):
+                _name, _css = chosen[i]
+                # _css = "left:75%;bottom:14%" → 解析成 left="75%" bottom="14%"
+                _kv = {}
+                for _pair in _css.split(";"):
+                    if ":" in _pair:
+                        _k, _v = _pair.split(":", 1)
+                        _kv[_k.strip()] = _v.strip()
+                _left = _kv.get("left", "3%")
+                _bottom = _kv.get("bottom", "14%")
+                _t = i * shift_interval
+                if i % 3 == 0:
+                    # 🔴 偶尔消失式换位：双属性滑出视口（消失 1s）→ 滑入新位置（出现）
+                    pip_motion_lines.append(f'tl.to("#pip-win",{{left:"-32%",bottom:"-12%",duration:0.5,ease:"power1.in"}},{_t});')
+                    pip_motion_lines.append(f'tl.to("#pip-win",{{left:"{_left}",bottom:"{_bottom}",duration:0.6,ease:"power2.out"}},{_t + 1.4});')
+                else:
+                    # 普通换位
+                    pip_motion_lines.append(f'tl.to("#pip-win",{{left:"{_left}",bottom:"{_bottom}",duration:0.8,ease:"power2.inOut"}},{_t});')
+            pip_motion = "".join(pip_motion_lines)
+            _aspect = "1" if orientation == "portrait" else "3/4"
+            _init_size = pip_size
+
         pip_css_block = PIP_CSS.replace("%%TD%%", td_str)
         main_style = f"body{{margin:0;background:{COLORS['bg_deep']}}}#root{{position:relative;width:{fw}px;height:{fh}px;overflow:hidden;background:{COLORS['bg_deep']}}}.bg-glow{{position:absolute;inset:0;z-index:4;pointer-events:none;background:radial-gradient(ellipse at 50% 40%,rgba(0,229,255,0.04),transparent 60%),radial-gradient(ellipse at 70% 70%,rgba(239,68,68,0.03),transparent 50%),radial-gradient(ellipse at 30% 60%,rgba(34,211,160,0.03),transparent 50%);}}.unified-timeline{{position:absolute;bottom:4px;left:2%;right:2%;height:2px;background:rgba(255,255,255,0.06);border-radius:1px;overflow:hidden;z-index:30;}}.unified-timeline-fill{{height:100%;background:linear-gradient(90deg,{COLORS['cyan']},{COLORS['purple']},#22d3a0);border-radius:1px;width:0%;}}.caption-word{{position:absolute;color:#fff;font-weight:600;text-shadow:0 2px 12px rgba(0,0,0,0.9);white-space:nowrap;z-index:20;transition:text-shadow 0.15s}}.caption-word.active{{text-shadow:0 0 20px rgba(0,229,255,0.8),0 2px 12px rgba(0,0,0,0.9);color:#fff}}.audio-pulse{{filter:brightness(calc(1 + var(--audio-level,0) * 0.3))}}"
         # 🔴 窗口比例：竖屏 1:1（圆框），横屏 3:4（竖向长方形框，高>宽）
         _aspect = "1" if orientation == "portrait" else "3/4"
-        pip_video_block = f'<div id="pip-bg"></div><video id="pip-bg-v" src="final.mp4" data-start="0" data-duration="{td_str}" data-track-index="0" muted playsinline></video><div id="pip-win" style="{pos_css};width:{pip_size}%;aspect-ratio:{_aspect};--pip-radius:{radius};">'
+        pip_video_block = f'<div id="pip-bg"></div><video id="pip-bg-v" src="final.mp4" data-start="0" data-duration="{td_str}" data-track-index="0" muted playsinline></video><div id="pip-win" style="{pos_css};width:{_init_size}%;aspect-ratio:{_aspect};--pip-radius:{radius};">'
         pip_video_block += f'<video id="pip-win-v" src="final.mp4" data-start="0" data-duration="{td_str}" data-track-index="1" muted playsinline></video>'
         pip_video_block += f'<div id="pip-frame" style="{frame_css}"></div></div>'
         print(f"      PIP mode: pos={pos_name} frame={frame_name}")
