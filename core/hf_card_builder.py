@@ -606,17 +606,42 @@ def _compose_pip(hf_dir, polished_path):
         y = int(vid_h - (bottom_pct / 100 * vid_h) - win_h)
         return x, y
 
-    # 4. 动态检测人物 crop（多时间点采样，肤色最多帧为准；fallback 按视频实际尺寸，clamp 不越界）
+    # 4. 动态检测人物 crop（人脸检测优先 + 肤色检测兜底；fallback 按视频实际尺寸，clamp 不越界）
     def detect_person_crop(video, t=5, require_person=False):
+        import cv2 as _cv2
+        face_cascade = _cv2.CascadeClassifier(_cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
         best = None
-        # 多个时间点采样，取肤色最多（dense_cols 最长）的帧，避免人物尚未入镜
+        best_face = None
+        _W_ref, _H_ref = 1080, 1920
         for tt in [t, 3, 8, 10, 15, 20]:
             cmd = ['ffmpeg', '-ss', str(tt), '-i', str(video), '-frames:v', '1', '-f', 'image2pipe', '-vcodec', 'png', '-']
             try:
-                img = _np.array(_Img.open(_io.BytesIO(subprocess.run(cmd, capture_output=True, timeout=30).stdout)).convert('RGB'), dtype=_np.float32)
+                data = subprocess.run(cmd, capture_output=True, timeout=30).stdout
+                arr = _np.frombuffer(data, _np.uint8)
+                frame_bgr = _cv2.imdecode(arr, _cv2.IMREAD_COLOR)
+                img = _np.array(_Img.open(_io.BytesIO(data)).convert('RGB'), dtype=_np.float32)
             except Exception:
                 continue
-            H, W, _ = img.shape
+            H, W = frame_bgr.shape[:2]
+            _W_ref, _H_ref = W, H
+            # ── 人脸检测（优先）：脸宽 > 画面宽 15% 才算真人/数字人，过滤头像/界面元素误检 ──
+            gray = _cv2.cvtColor(frame_bgr, _cv2.COLOR_BGR2GRAY)
+            faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(60, 60))
+            valid_faces = [(x, y, w, h) for (x, y, w, h) in faces if w > W * 0.15]
+            if valid_faces:
+                x, y, w, h = max(valid_faces, key=lambda f: f[2] * f[3])
+                pw = min(max(int(w * 3), 200), 500)
+                ph = pw if is_portrait else int(pw * 4 / 3)
+                cx = x + w // 2; cy = y + h // 2
+                crop_x = cx - pw // 2
+                crop_y = cy - int(ph * 0.42)
+                crop_x = max(0, min(crop_x, W - pw)); crop_y = max(0, min(crop_y, H - ph))
+                return pw, ph, crop_x, crop_y
+            if faces:
+                _bf = max(faces, key=lambda f: f[2] * f[3])
+                if best_face is None or _bf[2] > best_face[2]:
+                    best_face = _bf
+            # ── 肤色检测兜底 ──
             R, G, B = img[:, :, 0], img[:, :, 1], img[:, :, 2]
             skin = (R > 100) & (R > G) & (G > B) & (R - B > 20) & (R - G > 12)
             col = skin.sum(axis=0); row = skin.sum(axis=1)
@@ -624,7 +649,6 @@ def _compose_pip(hf_dir, polished_path):
             if len(dense_cols) >= 30 and len(dense_rows) >= 30:
                 cx0, cx1 = dense_cols.min(), dense_cols.max()
                 cy0, cy1 = dense_rows.min(), dense_rows.max()
-                # 🔴 无人物兜底：人物区域太小（宽<视频宽15% 或 高<视频高8%）→ 界面元素误检，跳过
                 pw_ratio = (cx1 - cx0) / max(W, 1)
                 ph_ratio = (cy1 - cy0) / max(H, 1)
                 if require_person and (pw_ratio < 0.15 or ph_ratio < 0.08):
@@ -632,22 +656,27 @@ def _compose_pip(hf_dir, polished_path):
                         best = (len(dense_cols), W, H)
                     continue
                 pw = min(max(cx1 - cx0 + 60, 200), 500)
-                # 🔴 竖屏窗口是圆形 1:1，crop 也 1:1；横屏 3:4（否则 scale 会拉伸变形）
                 ph = pw if is_portrait else int(pw * 4 / 3)
                 cx = (cx0 + cx1) // 2
                 y = max(0, cy0 - 40)
                 x = cx - pw // 2
-                # clamp 保证 crop 不越界（视频可能比窗口小，如微信视频 544x960）
                 pw = min(pw, W); ph = min(ph, H)
                 x = max(0, min(x, W - pw)); y = max(0, min(y, H - ph))
                 return pw, ph, x, y
-            # 记录肤色最多的帧作为备选（即使未达阈值）
             if best is None or len(dense_cols) > best[0]:
                 best = (len(dense_cols), W, H)
-        # 🔴 无人物兜底：require_person 且所有时间点都没找到足够大的人物 → 返回 None（无人物）
+        # 全部采样完成：人脸检测放宽阈值（脸宽 > 10%）再试一次
         if require_person:
+            if best_face is not None and best_face[2] > _W_ref * 0.10:
+                x, y, w, h = best_face
+                pw = min(max(int(w * 3), 200), 500)
+                ph = pw if is_portrait else int(pw * 4 / 3)
+                cx = x + w // 2; cy = y + h // 2
+                crop_x = max(0, min(cx - pw // 2, _W_ref - pw))
+                crop_y = max(0, min(cy - int(ph * 0.42), _H_ref - ph))
+                return pw, ph, crop_x, crop_y
             return None
-        # fallback：按视频实际尺寸中心 crop（不再硬编码 810,1080,555,0 横屏值）
+        # fallback：按视频实际尺寸中心 crop
         if best is not None:
             _, W, H = best
         else:
