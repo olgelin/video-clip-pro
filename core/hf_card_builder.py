@@ -295,7 +295,8 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
             ]
             n_shifts = max(1, int((total_dur - hero_dur) // shift_interval))
             chosen = [avatar_positions[i % len(avatar_positions)] for i in range(n_shifts + 1)]
-            frame_name = random.choice(list(PIP_FRAMES.keys()))
+            # 🔴 稍加装饰：固定极简白线边框（用户拍板取消彩色发光环，保持干净）
+            frame_name = "minimal-line"
             frame_css = PIP_FRAMES[frame_name]
             pip_motion_lines = []
             # 1) 片头满幅 → 缩位到第一个角标（同时缩小 + 移到角落）
@@ -315,8 +316,6 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
             pip_motion += f'tl.to("#pip-win",{{scale:1.005,duration:2.2,repeat:-1,yoyo:true,ease:"sine.inOut"}},{hero_dur + 1.4});'
             pip_motion += 'tl.fromTo("#env-vignette",{opacity:0.55},{opacity:1,duration:8,repeat:-1,yoyo:true,ease:"sine.inOut"},0);'
             pip_motion += 'tl.fromTo("#env-scan",{left:"-45%"},{left:"110%",duration:12,repeat:-1,ease:"none"},0);'
-            # 🔴 ① 光效呼应：发光环呼吸和 vignette 同周期(8s)，人物光效与背景"同频"
-            pip_motion += 'tl.fromTo("#pip-frame",{opacity:0.65},{opacity:1,duration:8,repeat:-1,yoyo:true,ease:"sine.inOut"},0);'
             # 🔴 ③ 粒子互动：前景粒子层(人物窗口之上 z17)，粒子缓慢上飘掠过人物，让人物被环境"包"住
             import random as _rnd3
             _fg = []
@@ -872,45 +871,38 @@ def _compose_pip(hf_dir, polished_path):
         av_x = _av_axis('x')
         av_y = _av_axis('y')
 
-        # 生成精致发光环（青蓝→紫渐变，符合蓝色科技风审美）
+        # 稍加装饰：白色淡边框（跟随形状：竖屏圆 / 横屏圆角矩形），不套彩色发光环
         try:
-            from PIL import Image as _ImgR, ImageDraw as _DrawR, ImageFilter as _FilterR
-            def _make_ring_png(size, ring_w):
-                _ny = __import__('numpy')
-                yy, xx = _ny.mgrid[0:size, 0:size]
-                cx = cy = size / 2.0
-                dist = _ny.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
-                radius = size / 2.0
-                ring_band = (dist >= radius - ring_w) & (dist < radius)
-                t = _ny.clip((dist - (radius - ring_w)) / max(ring_w, 1), 0, 1)
-                _ca = _ny.array([105, 105, 130]); _cb = _ny.array([165, 115, 225])
-                color = (_ca[None, None, :] + (_cb - _ca)[None, None, :] * t[:, :, None]).astype(_ny.uint8)
-                rgba = _ny.zeros((size, size, 4), dtype=_ny.uint8)
-                rgba[:, :, :3] = color
-                rgba[:, :, 3] = ring_band.astype(_ny.uint8) * 255
-                img = _ImgR.fromarray(rgba, 'RGBA')
-                # 🔴 ② 边缘渐隐：光晕加宽(ring_w*2.5)，硬边圆 → 柔光过渡，人物"浮"进背景
-                glow = img.filter(_FilterR.GaussianBlur(int(ring_w * 2.5)))
-                return _ImgR.alpha_composite(glow, img)
-            ring_hero_path = out_dir / "_avatar_ring_hero.png"
-            ring_pip_path = out_dir / "_avatar_ring_pip.png"
-            _make_ring_png(hero_w, 24).save(str(ring_hero_path))
-            _make_ring_png(win_w, 16).save(str(ring_pip_path))
+            from PIL import Image as _ImgR, ImageDraw as _DrawR
+            def _make_frame_png(w, h, r):
+                _fp = _ImgR.new('RGBA', (w, h), (0, 0, 0, 0))
+                _d = _DrawR.Draw(_fp)
+                if r >= min(w, h) // 2:
+                    # 竖屏圆形窗口 → 椭圆细边框
+                    _d.ellipse([0, 0, w - 1, h - 1], outline=(255, 255, 255, 30), width=2)
+                else:
+                    # 横屏圆角矩形窗口 → 圆角矩形细边框
+                    _d.rounded_rectangle([0, 0, w - 1, h - 1], radius=r, outline=(255, 255, 255, 30), width=2)
+                return _fp
+            frame_hero_path = out_dir / "_avatar_frame_hero.png"
+            frame_pip_path = out_dir / "_avatar_frame_pip.png"
+            _make_frame_png(hero_w, hero_h, hero_w // 2 if is_portrait else 16).save(str(frame_hero_path))
+            _make_frame_png(win_w, win_h, win_w // 2 if is_portrait else 16).save(str(frame_pip_path))
         except Exception:
-            ring_hero_path = ring_pip_path = None
+            frame_hero_path = frame_pip_path = None
 
         # 🔴 video-talkcraft 让位过渡：hero 让位前 0.6s 变暗+模糊（前兆），pip 让位后 0.6s 从暗模糊恢复
         _hdr = hero_dur
         hero_chain = f"[1:v]{crop_expr},scale={hero_w}:{hero_h},setpts=PTS-STARTPTS,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='{hero_alpha}',gblur=sigma=3:enable='between(t,{_hdr - 0.6},{_hdr})',eq=brightness=-0.35:enable='between(t,{_hdr - 0.6},{_hdr})'[heror]"
         pip_chain = f"[1:v]{crop_expr},scale={win_w}:{win_h},setpts=PTS-STARTPTS,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='{pip_alpha}',gblur=sigma=3:enable='between(t,{_hdr},{_hdr + 0.6})',eq=brightness=-0.35:enable='between(t,{_hdr},{_hdr + 0.6})'[pipr]"
-        if ring_hero_path and ring_pip_path:
+        if frame_hero_path and frame_pip_path:
             overlay_expr = (f"{hero_chain};{pip_chain};"
                             f"[0:v][heror]overlay=x={hero_x}:y={hero_y}:enable='lt(t,{hero_dur})'[v1];"
                             f"[v1][2:v]overlay=x={hero_x}:y={hero_y}:enable='lt(t,{hero_dur})'[v2];"
                             f"[v2][pipr]overlay=x='{av_x}':y='{av_y}':enable='gte(t,{hero_dur})'[v3];"
                             f"[v3][3:v]overlay=x='{av_x}':y='{av_y}':enable='gte(t,{hero_dur})':format=auto[vout]")
             inputs = ["ffmpeg", "-y", "-i", "final_polished.mp4", "-i", "final.mp4",
-                      "-i", "_avatar_ring_hero.png", "-i", "_avatar_ring_pip.png"]
+                      "-i", "_avatar_frame_hero.png", "-i", "_avatar_frame_pip.png"]
         else:
             overlay_expr = (f"{hero_chain};{pip_chain};"
                             f"[0:v][heror]overlay=x={hero_x}:y={hero_y}:enable='lt(t,{hero_dur})'[v1];"
