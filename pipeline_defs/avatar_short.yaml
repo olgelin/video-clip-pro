@@ -1,0 +1,67 @@
+name: avatar-short
+version: "1.0"
+description: 数字人口播视频 — 话题输入，全自动（话题→口播稿→配音→数字人→分镜→画面，无剪切）
+stages:
+  - name: script_writer
+    skill: script_writer
+    phase: 1
+    critical: true
+    retry: 2
+    timeout: 300
+    description: 话题 → 深度口播稿 step03_script.json
+
+  - name: voice_gen
+    skill: voice_gen
+    phase: 2
+    critical: true
+    retry: 1
+    timeout: 1800
+    description: VoxCPM2 配音 → step05_voice.wav
+
+  - name: duix
+    skill: duix
+    phase: 3
+    critical: true
+    retry: 1
+    timeout: 1800
+    description: Duix 数字人对口型 → avatar_video.mp4
+
+  - name: storyboard
+    skill: storyboard
+    phase: 4
+    critical: true
+    retry: 2
+    timeout: 300
+    description: 口播稿 + 配音时长 → 语义分镜 scenes
+
+  - name: hf_build_avatar
+    skill: hf_build_avatar
+    phase: 5
+    critical: false
+    retry: 1
+    timeout: 1200
+    description: 数字人视频 + 分镜 → 全屏HTML场景 + 人物窗口 + 渲染
+
+  - name: review
+    skill: review
+    phase: 6
+    critical: false
+    retry: 1
+    timeout: 300
+    description: LLM 质量审查
+
+  - name: visual_check
+    skill: visual_check
+    phase: 6.2
+    critical: false
+    retry: 0
+    timeout: 300
+    description: 成片视觉质检
+
+  - name: upscale
+    skill: upscale
+    phase: 7
+    critical: false
+    retry: 0
+    timeout: 1200
+    description: 2x 高清修复

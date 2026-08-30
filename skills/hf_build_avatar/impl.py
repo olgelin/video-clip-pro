@@ -19,6 +19,12 @@ class Hf_build_avatar(SkillBase):
         # 🔴 avatar 数据适配：数字人视频 + 口播稿字幕（无剪切，不走转录）
         if context.get("avatar_video_path"):
             context["video_path"] = context["avatar_video_path"]
+            # 数字人视频复制成 final.mp4（叠加逻辑 _compose_pip 期待 final.mp4）
+            import shutil as _shutil
+            _av = Path(context["avatar_video_path"])
+            _final = Path(context.get("output_dir", ".")) / "final.mp4"
+            if _av.exists() and not _final.exists():
+                _shutil.copy2(_av, _final)
             if not context.get("words") and context.get("script_data"):
                 context["words"] = self._script_to_words(
                     context["script_data"], context.get("voice_scene_durations", []))

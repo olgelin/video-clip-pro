@@ -162,7 +162,11 @@ def _wrap_scripts_scope(frag):
 def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mode="fullscreen"):
     hf_dir = output_dir / "hyperframes"; comp_dir = hf_dir / "compositions"
     hf_dir.mkdir(parents=True, exist_ok=True); comp_dir.mkdir(exist_ok=True)
-    src_v = str(output_dir / "final.mp4"); dst_v = str(hf_dir / "final.mp4")
+    src_v = str(output_dir / "final.mp4")
+    # 🔴 avatar 新流程：无剪切无 final.mp4，用数字人视频（video_path=avatar_video.mp4）
+    if not os.path.exists(src_v) and video_path and os.path.exists(str(video_path)):
+        src_v = str(video_path)
+    dst_v = str(hf_dir / "final.mp4")
     if os.path.exists(src_v): shutil.copy2(src_v, dst_v); print("      Video copied")
     orientation = _detect_orientation(video_path)
     print("      Orientation:", orientation)
