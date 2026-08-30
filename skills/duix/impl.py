@@ -37,6 +37,10 @@ class Duix(SkillBase):
             print("  [duix] ❌ 找不到配音")
             return context
 
+        # 🔴 等 VoxCPM2 释放 GPU 显存（voice_gen 配音后模型可能未即时释放，
+        #    长视频 Duix 合成需要更多显存，叠加会导致推理死锁）
+        self._wait_gpu_memory(threshold_mb=8000, timeout_s=180)
+
         orientation = context.get("orientation", "portrait")
         avatar = AVATAR_LIBRARY.get(orientation, AVATAR_LIBRARY["portrait"])
         code = avatar["code"]
@@ -102,3 +106,22 @@ class Duix(SkillBase):
         context["avatar_video_path"] = str(dst)
         print(f"  [duix] 📁 数字人视频: {dst}")
         return context
+
+    def _wait_gpu_memory(self, threshold_mb: int = 8000, timeout_s: int = 180):
+        """等 GPU 显存降到阈值以下（VoxCPM2 配音后显存释放），避免和 Duix 抢显存死锁。"""
+        import subprocess as _sp
+        import time as _time
+        start = _time.time()
+        while _time.time() - start < timeout_s:
+            try:
+                r = _sp.run(["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"],
+                            capture_output=True, text=True, timeout=10)
+                used = int(r.stdout.strip().split()[0])
+                if used < threshold_mb:
+                    print(f"  [duix] GPU 显存 {used}MB < {threshold_mb}MB，安全，开始合成")
+                    return
+                print(f"  [duix] ⏳ GPU 显存 {used}MB ≥ {threshold_mb}MB，等 VoxCPM2 释放...")
+            except Exception:
+                pass
+            _time.sleep(10)
+        print("  [duix] ⚠️ 显存等待超时，继续合成（若失败请重试）")
