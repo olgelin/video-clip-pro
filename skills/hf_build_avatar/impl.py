@@ -32,9 +32,9 @@ class Hf_build_avatar(SkillBase):
         n = len(scenes)
         print(f"\n[6/6] Avatar — {n}场景")
 
-        # 🔴 P1：检测输入视频方向（竖屏/横屏），动态场景尺寸
+        # 🔴 场景方向优先用 --orientation（数字人合成用竖屏素材时，场景仍可横屏）
         from core.hf_card_builder import _detect_orientation
-        orientation = _detect_orientation(context.get("video_path", ""))
+        orientation = context.get("orientation") or _detect_orientation(context.get("video_path", ""))
         print(f"      方向: {'横屏 1920×1080' if orientation == 'landscape' else '竖屏 1080×1920'}")
 
         from skills.hf_build_avatar.color_grader import grade
@@ -124,7 +124,8 @@ class Hf_build_avatar(SkillBase):
         render_edl = {"ranges": render_ranges}
         try:
             print(f"\n[渲染] HyperFrames 合成 {len(render_ranges)} 个全屏场景 (Avatar)...")
-            hf_dir = build_hyperframes_composition(render_edl, words, project_root, video_path, layout_mode="avatar")
+            hf_dir = build_hyperframes_composition(render_edl, words, project_root, video_path,
+                                                   layout_mode="avatar", orientation=context.get("orientation"))
             if hf_dir:
                 polished = render_hyperframes(hf_dir)
                 if polished:

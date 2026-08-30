@@ -159,7 +159,7 @@ def _wrap_scripts_scope(frag):
 
 # Visual components
 
-def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mode="fullscreen"):
+def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mode="fullscreen", orientation=None):
     hf_dir = output_dir / "hyperframes"; comp_dir = hf_dir / "compositions"
     hf_dir.mkdir(parents=True, exist_ok=True); comp_dir.mkdir(exist_ok=True)
     src_v = str(output_dir / "final.mp4")
@@ -168,22 +168,17 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
         src_v = str(video_path)
     dst_v = str(hf_dir / "final.mp4")
     if os.path.exists(src_v): shutil.copy2(src_v, dst_v); print("      Video copied")
-    orientation = _detect_orientation(video_path)
+    # 🔴 场景方向优先用传入 orientation（数字人合成用竖屏素材时，场景仍可横屏）
+    orientation = orientation or _detect_orientation(video_path)
     print("      Orientation:", orientation)
     ranges = edl.get("ranges", [])
     if not ranges: return None
     seg_offsets = []; acc = 0.0
     for seg in ranges: seg_offsets.append(acc); acc += seg["end"] - seg["start"]
     total_dur = acc
-    # 🔴 读实际分辨率（支持 20:9 等非标准竖屏），失败回退 16:9 标准
-    try:
-        _probe = subprocess.run(["ffprobe","-v","error","-select_streams","v:0",
-                                 "-show_entries","stream=width,height","-of","csv=p=0",str(video_path)],
-                                capture_output=True, text=True, timeout=30)
-        _wh = [int(x) for x in _probe.stdout.replace(",", " ").split()]
-        fw, fh = _wh[0], _wh[1]
-    except Exception:
-        fw, fh = (1080, 1920) if orientation == "portrait" else (1920, 1080)
+    # 🔴 场景尺寸由 orientation 决定（横屏 1920×1080 / 竖屏 1080×1920），
+    #    不读数字人视频分辨率（竖屏素材放横屏场景时，场景尺寸必须独立于素材）
+    fw, fh = (1920, 1080) if orientation == "landscape" else (1080, 1920)
     captions = _build_captions(ranges, words, seg_offsets, orientation, fw)
     beat_files = []
     for idx, seg in enumerate(ranges):
@@ -645,6 +640,8 @@ def _compose_pip(hf_dir, polished_path):
                 continue
             H, W = frame_bgr.shape[:2]
             _W_ref, _H_ref = W, H
+            # 🔴 视频自身方向（竖屏素材放横屏场景时，crop 必须按视频方向切，不能用场景方向）
+            is_pv = H > W
             # ── 人脸检测（优先）：脸宽 > 画面宽 15% 才算真人/数字人，过滤头像/界面元素误检 ──
             gray = _cv2.cvtColor(frame_bgr, _cv2.COLOR_BGR2GRAY)
             faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(60, 60))
@@ -652,11 +649,11 @@ def _compose_pip(hf_dir, polished_path):
             if valid_faces:
                 x, y, w, h = max(valid_faces, key=lambda f: f[2] * f[3])
                 # 🔴 正常半身比例：crop 宽=画面宽90%(竖屏)/48%(横屏)，脸靠上(crop 33%)露更多身体
-                pw = int(W * (0.90 if is_portrait else 0.48))
+                pw = int(W * (0.90 if is_pv else 0.48))
                 pw = max(200, min(pw, W))
-                ph = pw if is_portrait else int(pw * 4 / 3)
+                ph = pw if is_pv else int(pw * 4 / 3)
                 # 🔴 横屏 clamp：3:4 竖向 crop 不能超画面高（否则 ffmpeg crop 越界报 Invalid argument）
-                if not is_portrait and ph > H:
+                if not is_pv and ph > H:
                     ph = H; pw = int(ph * 3 / 4)
                 cx = x + w // 2; cy = y + h // 2
                 crop_x = cx - pw // 2
@@ -682,7 +679,7 @@ def _compose_pip(hf_dir, polished_path):
                         best = (len(dense_cols), W, H)
                     continue
                 pw = min(max(cx1 - cx0 + 60, 200), 500)
-                ph = pw if is_portrait else int(pw * 4 / 3)
+                ph = pw if is_pv else int(pw * 4 / 3)
                 cx = (cx0 + cx1) // 2
                 y = max(0, cy0 - 40)
                 x = cx - pw // 2
@@ -693,13 +690,14 @@ def _compose_pip(hf_dir, polished_path):
                 best = (len(dense_cols), W, H)
         # 全部采样完成：人脸检测放宽阈值（脸宽 > 10%）再试一次
         if require_person:
+            _is_pv = _H_ref > _W_ref  # 🔴 视频自身方向
             if best_face is not None and best_face[2] > _W_ref * 0.10:
                 x, y, w, h = best_face
-                pw = int(_W_ref * (0.90 if is_portrait else 0.48))
+                pw = int(_W_ref * (0.90 if _is_pv else 0.48))
                 pw = max(200, min(pw, _W_ref))
-                ph = pw if is_portrait else int(pw * 4 / 3)
+                ph = pw if _is_pv else int(pw * 4 / 3)
                 # 🔴 横屏 clamp：3:4 竖向 crop 不能超画面高
-                if not is_portrait and ph > _H_ref:
+                if not _is_pv and ph > _H_ref:
                     ph = _H_ref; pw = int(ph * 3 / 4)
                 cx = x + w // 2; cy = y + h // 2
                 crop_x = max(0, min(cx - pw // 2, _W_ref - pw))
@@ -711,7 +709,7 @@ def _compose_pip(hf_dir, polished_path):
             _, W, H = best
         else:
             W, H = 1080, 1920
-        if is_portrait:
+        if H > W:  # 🔴 视频自身方向
             pw = ph = min(W, H)
         else:
             pw = min(W, H * 3 // 4); ph = min(H, pw * 4 // 3)

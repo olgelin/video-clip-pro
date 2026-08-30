@@ -41,10 +41,13 @@ class Duix(SkillBase):
         #    长视频 Duix 合成需要更多显存，叠加会导致推理死锁）
         self._wait_gpu_memory(threshold_mb=8000, timeout_s=180)
 
+        # 🔴 数字人合成固定用竖屏素材（竖屏对口型正常，横屏素材 Duix 会死锁）。
+        #    场景方向由 --orientation 决定，最终画面横屏时，竖屏数字人 crop 进横屏窗口。
+        #    形象库 AVATAR_LIBRARY 保留 portrait/landscape 两个入口，未来横屏素材修好再切回。
         orientation = context.get("orientation", "portrait")
-        avatar = AVATAR_LIBRARY.get(orientation, AVATAR_LIBRARY["portrait"])
-        code = avatar["code"]
-        avatar_video = avatar["video"]
+        synth_avatar = AVATAR_LIBRARY["portrait"]  # 合成永远用竖屏素材
+        code = synth_avatar["code"]
+        avatar_video = synth_avatar["video"]
 
         # 1. 配音复制到 Duix 数据目录（容器内 /code/data/<name>）
         audio_name = Path(voice_path).name
@@ -52,7 +55,7 @@ class Duix(SkillBase):
         shutil.copy2(voice_path, audio_dst)
         audio_url = f"/code/data/{audio_name}"
         video_url = f"/code/data/{avatar_video}"
-        print(f"  [duix] 形象: {code} ({orientation}), 配音: {audio_name}")
+        print(f"  [duix] 合成形象: {code} (竖屏素材，场景方向={orientation}), 配音: {audio_name}")
 
         # 2. 提交合成
         payload = {"code": code, "audio_url": audio_url, "video_url": video_url,
