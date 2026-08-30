@@ -695,6 +695,25 @@ def _compose_pip(hf_dir, polished_path):
         x = (W - pw) // 2; y = (H - ph) // 2
         return pw, ph, x, y
 
+    def detect_face_bbox(video, t=5):
+        """检测人脸 bbox（素材像素系），返回 (x, y, w, h) 或 None。脸宽>10% 才算真人/数字人。"""
+        import cv2 as _cv2
+        face_cascade = _cv2.CascadeClassifier(_cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        for tt in [t, 3, 8, 10, 15]:
+            cmd = ['ffmpeg', '-ss', str(tt), '-i', str(video), '-frames:v', '1', '-f', 'image2pipe', '-vcodec', 'png', '-']
+            try:
+                data = subprocess.run(cmd, capture_output=True, timeout=30).stdout
+                frame_bgr = _cv2.imdecode(_np.frombuffer(data, _np.uint8), _cv2.IMREAD_COLOR)
+            except Exception:
+                continue
+            H, W = frame_bgr.shape[:2]
+            gray = _cv2.cvtColor(frame_bgr, _cv2.COLOR_BGR2GRAY)
+            faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(60, 60))
+            valid = [(int(x), int(y), int(w), int(h)) for (x, y, w, h) in faces if w > W * 0.10]
+            if valid:
+                return max(valid, key=lambda f: f[2] * f[3])
+        return None
+
     _crop = detect_person_crop(final_mp4, require_person=is_avatar)
     if _crop is None:
         # 无人物 → 降级纯 fullscreen：只补字幕+音频，不叠加人物窗口
@@ -747,6 +766,30 @@ def _compose_pip(hf_dir, polished_path):
         return expr
     x_expr = _build_axis_expr('x')
     y_expr = _build_axis_expr('y')
+
+    # 5.5 精确人脸安全区（avatar）：检测人脸 bbox，上扩60%+30px，映射画布，字幕避开
+    if is_avatar:
+        _face = detect_face_bbox(final_mp4)
+        if _face is not None:
+            fx, fy, fw, fh = _face
+            # 满幅位置（bottom 22%，水平居中）
+            _hx = (vid_w - hero_w) // 2
+            _hy = max(0, int(vid_h - 0.22 * vid_h - hero_h))
+            # 人脸在 crop 内相对位置 → 映射到画布
+            rel_x = (fx - px) / max(pw, 1)
+            rel_y = (fy - py) / max(ph, 1)
+            face_cy = _hy + rel_y * hero_h
+            face_ch = fh / max(ph, 1) * hero_h
+            safe_bottom_y = face_cy + face_ch + 30  # 脸下沿 + 30px 余量
+            _cap_bottom = 130
+            _cap_font = 48
+            cap_top_y = vid_h - _cap_bottom - _cap_font  # 字幕顶部 y
+            if safe_bottom_y > cap_top_y:
+                _shift = int(safe_bottom_y - cap_top_y) + 6
+                captions = [(s, d, max(b, _cap_bottom + _shift), l, f, t) for (s, d, b, l, f, t) in captions]
+                print(f"      🔴 人脸安全区：字幕下移 {_shift}px 避开人脸（脸底={safe_bottom_y:.0f} 字幕顶={cap_top_y:.0f}）")
+            else:
+                print(f"      ✅ 人脸安全区通过（脸底={safe_bottom_y:.0f} 字幕顶={cap_top_y:.0f} 不压脸）")
 
     # 6. ASS 字幕
     def _ass_time(sec):
