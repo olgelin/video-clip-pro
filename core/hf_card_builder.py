@@ -638,6 +638,9 @@ def _compose_pip(hf_dir, polished_path):
                 pw = int(W * (0.90 if is_portrait else 0.48))
                 pw = max(200, min(pw, W))
                 ph = pw if is_portrait else int(pw * 4 / 3)
+                # 🔴 横屏 clamp：3:4 竖向 crop 不能超画面高（否则 ffmpeg crop 越界报 Invalid argument）
+                if not is_portrait and ph > H:
+                    ph = H; pw = int(ph * 3 / 4)
                 cx = x + w // 2; cy = y + h // 2
                 crop_x = cx - pw // 2
                 crop_y = cy - int(ph * 0.33)  # 脸中心在 crop 上 33% 处（脸靠上，露更多身体）
@@ -678,6 +681,9 @@ def _compose_pip(hf_dir, polished_path):
                 pw = int(_W_ref * (0.90 if is_portrait else 0.48))
                 pw = max(200, min(pw, _W_ref))
                 ph = pw if is_portrait else int(pw * 4 / 3)
+                # 🔴 横屏 clamp：3:4 竖向 crop 不能超画面高
+                if not is_portrait and ph > _H_ref:
+                    ph = _H_ref; pw = int(ph * 3 / 4)
                 cx = x + w // 2; cy = y + h // 2
                 crop_x = max(0, min(cx - pw // 2, _W_ref - pw))
                 crop_y = max(0, min(cy - int(ph * 0.33), _H_ref - ph))
