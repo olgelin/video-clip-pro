@@ -127,6 +127,10 @@ def build_stage(scene_idx: int, dur: float, palette: dict, motion: dict,
     if llm_motion:
         motion_code += llm_motion + "\n"
 
+    # 🔴 错峰三段序：场景进场淡入 + 退场淡出（场景切换从硬切变成淡出→淡入过渡）
+    motion_code = f'tl.from("[data-composition-id=\\"beat-{scene_idx}\\"]",{{opacity:0,duration:0.45,ease:"power2.out"}},0);\n' + motion_code
+    motion_code += f'tl.to("[data-composition-id=\\"beat-{scene_idx}\\"]",{{opacity:0,duration:0.45,ease:"power2.in"}},{dur - 0.45});\n'
+
     gsap_block = _GSAP_FIXED.format(gsap_local=_load_gsap_local(), motion_code=motion_code, scene_idx=scene_idx)
     three_block = _load_three_local()
 
