@@ -127,14 +127,15 @@ def build_stage(scene_idx: int, dur: float, palette: dict, motion: dict,
     if llm_motion:
         motion_code += llm_motion + "\n"
 
-    # 🔴 错峰三段序：场景进场淡入 + 退场淡出（场景切换从硬切变成淡出→淡入过渡）
-    motion_code = f'tl.from("[data-composition-id=\\"beat-{scene_idx}\\"]",{{opacity:0,duration:0.45,ease:"power2.out"}},0);\n' + motion_code
-    motion_code += f'tl.to("[data-composition-id=\\"beat-{scene_idx}\\"]",{{opacity:0,duration:0.45,ease:"power2.in"}},{dur - 0.45});\n'
+    # 🔴 错峰三段序：场景进场淡入 + 退场淡出（作用在内层 #scene-inner-N，避免根元素 opacity 被 HyperFrames 忽略）
+    motion_code = f'tl.from("#scene-inner-{scene_idx}",{{opacity:0,duration:0.45,ease:"power2.out"}},0);\n' + motion_code
+    motion_code += f'tl.to("#scene-inner-{scene_idx}",{{opacity:0,duration:0.45,ease:"power2.in"}},{dur - 0.45});\n'
 
     gsap_block = _GSAP_FIXED.format(gsap_local=_load_gsap_local(), motion_code=motion_code, scene_idx=scene_idx)
     three_block = _load_three_local()
 
     return f"""<div data-composition-id="beat-{scene_idx}" data-width="{fw}" data-height="{fh}" style="position:absolute;inset:0;z-index:10;overflow:hidden;background:linear-gradient(180deg,{gs},{gm},{ge});font-family:'PingFang SC','Microsoft YaHei',sans-serif;">
+<div id="scene-inner-{scene_idx}" style="position:absolute;inset:0;">
 {three_block}
 {grid_3d}
 {glow}
@@ -144,5 +145,6 @@ def build_stage(scene_idx: int, dur: float, palette: dict, motion: dict,
 {rain_html}
 {scan}
 <div style="position:absolute;inset:0;z-index:45;pointer-events:none;background:radial-gradient(ellipse 75% 65% at 50% 45%,transparent 55%,rgba(0,0,0,0.38) 100%);"></div>
+</div>
 </div>
 {gsap_block}"""
