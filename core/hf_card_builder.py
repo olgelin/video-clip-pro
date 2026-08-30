@@ -315,6 +315,8 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
             pip_motion += f'tl.to("#pip-win",{{scale:1.005,duration:2.2,repeat:-1,yoyo:true,ease:"sine.inOut"}},{hero_dur + 1.4});'
             pip_motion += 'tl.fromTo("#env-vignette",{opacity:0.55},{opacity:1,duration:8,repeat:-1,yoyo:true,ease:"sine.inOut"},0);'
             pip_motion += 'tl.fromTo("#env-scan",{left:"-45%"},{left:"110%",duration:12,repeat:-1,ease:"none"},0);'
+            # 🔴 ① 光效呼应：发光环呼吸和 vignette 同周期(8s)，人物光效与背景"同频"
+            pip_motion += 'tl.fromTo("#pip-frame",{opacity:0.65},{opacity:1,duration:8,repeat:-1,yoyo:true,ease:"sine.inOut"},0);'
             _aspect = "1" if orientation == "portrait" else "3/4"
             # 初始窗口：满幅（hero），动画里缩到角标
             _init_size = hero_size
@@ -875,7 +877,8 @@ def _compose_pip(hf_dir, polished_path):
                 rgba[:, :, :3] = color
                 rgba[:, :, 3] = ring_band.astype(_ny.uint8) * 255
                 img = _ImgR.fromarray(rgba, 'RGBA')
-                glow = img.filter(_FilterR.GaussianBlur(ring_w))
+                # 🔴 ② 边缘渐隐：光晕加宽(ring_w*2.5)，硬边圆 → 柔光过渡，人物"浮"进背景
+                glow = img.filter(_FilterR.GaussianBlur(int(ring_w * 2.5)))
                 return _ImgR.alpha_composite(glow, img)
             ring_hero_path = out_dir / "_avatar_ring_hero.png"
             ring_pip_path = out_dir / "_avatar_ring_pip.png"
