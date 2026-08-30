@@ -16,6 +16,13 @@ class Hf_build_avatar(SkillBase):
             print("  ⛔ 无 storyboard 场景")
             return {"html_files": [], "review": {}}
 
+        # 🔴 avatar 数据适配：数字人视频 + 口播稿字幕（无剪切，不走转录）
+        if context.get("avatar_video_path"):
+            context["video_path"] = context["avatar_video_path"]
+            if not context.get("words") and context.get("script_data"):
+                context["words"] = self._script_to_words(
+                    context["script_data"], context.get("voice_scene_durations", []))
+
         n = len(scenes)
         print(f"\n[6/6] Avatar — {n}场景")
 
@@ -119,6 +126,17 @@ class Hf_build_avatar(SkillBase):
         except Exception as e:
             print(f"      PIP 渲染错误: {e}")
         return {}
+
+    def _script_to_words(self, script_data: dict, scene_durations: list) -> list:
+        """口播稿段落 + 配音时长 → words（逐段字幕，时间戳从配音时长累积，音画同步）"""
+        sections = script_data.get("voiceover_sections", [])
+        words = []
+        acc = 0.0
+        for i, sec in enumerate(sections):
+            dur = scene_durations[i]["duration"] if i < len(scene_durations) else max(len(sec.get("content", "")) / 4.0, 2.0)
+            words.append({"start": round(acc, 2), "end": round(acc + dur, 2), "text": sec.get("content", "")})
+            acc += dur
+        return words
 
     def _dict_to_brief(self, d: dict, idx: int, total: int, prev: dict = None) -> str:
         parts = [

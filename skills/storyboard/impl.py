@@ -69,8 +69,10 @@ class Storyboard(SkillBase):
     name = "storyboard"
 
     def execute(self, context: dict) -> dict:
-        # 🔴 re_transcribe 后：用新 words（新视频时间戳）分镜，字幕完全同步
-        if context.get("re_transcribed") and context.get("words"):
+        # 🔴 avatar 分支：口播稿 + 配音时长直接分镜（无剪切，不依赖转录）
+        if context.get("script_data") and context.get("voice_scene_durations"):
+            ranges = self._script_to_ranges(context["script_data"], context["voice_scene_durations"])
+        elif context.get("re_transcribed") and context.get("words"):
             ranges = self._words_to_ranges(context["words"])
         else:
             edl = context.get("edl") or context.get("draft_edl", {})
@@ -103,6 +105,28 @@ class Storyboard(SkillBase):
                 "quote": w["text"],
                 "trimmed": w["text"],
             })
+        return ranges
+
+    def _script_to_ranges(self, script_data: dict, scene_durations: list) -> list:
+        """avatar：口播稿段落 + 配音时长 → ranges（每段一个场景，时间戳从配音时长累积，音画同步）"""
+        sections = script_data.get("voiceover_sections", [])
+        beats = ["HOOK", "CONTEXT", "PROBLEM", "STRUGGLE", "RESOLUTION"]
+        ranges = []
+        acc = 0.0
+        n = max(len(sections), 1)
+        for i, sec in enumerate(sections):
+            dur = scene_durations[i]["duration"] if i < len(scene_durations) else max(len(sec.get("content", "")) / 4.0, 2.0)
+            beat = beats[min(int(i / n * len(beats)), len(beats) - 1)]
+            content = sec.get("content", "")
+            ranges.append({
+                "start": round(acc, 2),
+                "end": round(acc + dur, 2),
+                "beat": beat,
+                "title": "",
+                "quote": content,
+                "trimmed": content,
+            })
+            acc += dur
         return ranges
 
     def _build(self, ranges: list, provider=None) -> list:

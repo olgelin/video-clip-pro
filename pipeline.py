@@ -60,7 +60,8 @@ def _load_api_key():
 
 def main():
     parser = argparse.ArgumentParser(description="Video Factory Pro — YAML-driven pipeline")
-    parser.add_argument("video", nargs="?", help="Input video file path")
+    parser.add_argument("video", nargs="?", help="Input video file path (pip/V23 必填；avatar 模式用 --topic 代替)")
+    parser.add_argument("--topic", type=str, help="话题/碎碎念文字输入（avatar-seed / avatar-short 模式用）")
     parser.add_argument("--output", "-o", help="Output directory")
     parser.add_argument("--whisper-model", "-m", default="large-v3", help="Whisper model size (default: large-v3)")
     parser.add_argument("--lang", default="zh", help="Language code (default: zh)")
@@ -68,8 +69,8 @@ def main():
     parser.add_argument("--debug", action="store_true", help="Keep intermediate files")
     parser.add_argument("--no-2x", action="store_true", dest="no_2x", help="Skip 2x upscale (save space)")
     parser.add_argument("--bgm", action="store_true", help="Add AI-generated background music with ducking")
-    parser.add_argument("--mode", choices=["fullscreen", "pip", "avatar"], default="fullscreen",
-                       help="Layout mode: fullscreen (default) / pip (person-in-window) / avatar (digital-human multi-form)")
+    parser.add_argument("--mode", choices=["fullscreen", "pip", "avatar", "avatar-seed", "avatar-short"], default="fullscreen",
+                       help="Layout mode: fullscreen(V23) / pip(画中画) / avatar-seed(碎碎念→数字人) / avatar-short(话题→数字人)")
     args = parser.parse_args()
 
     if args.doctor:
@@ -77,17 +78,28 @@ def main():
         print("\n  " + ("ALL OK!" if ok else "SOME CHECKS FAILED!"))
         return
 
-    if not args.video:
-        parser.print_help()
-        sys.exit(1)
+    # 🔴 avatar 系列（seed/short）用 --topic 输入，不走 video 剪切
+    is_avatar_topic = args.mode in ("avatar-seed", "avatar-short")
+    if is_avatar_topic:
+        if not args.topic or not args.topic.strip():
+            print(f"ERROR: --mode {args.mode} 需要 --topic \"话题/碎碎念\"")
+            sys.exit(1)
+        video_path = Path(args.topic.strip())  # 占位，实际走 topic 文字
+    else:
+        if not args.video:
+            parser.print_help()
+            sys.exit(1)
+        video_path = Path(args.video).resolve()
+        if not video_path.exists():
+            print(f"ERROR: File not found: {video_path}")
+            sys.exit(1)
 
-    video_path = Path(args.video).resolve()
-    if not video_path.exists():
-        print(f"ERROR: File not found: {video_path}")
-        sys.exit(1)
-
-    # 🔴 统一输出路径：output/<mode>/<视频名>/（方便查找，--output 可覆盖）
-    output_dir = Path(args.output) if args.output else Path(SCRIPT_DIR, "output", args.mode, video_path.stem)
+    # 🔴 统一输出路径：output/<mode>/<标识>/（avatar 用 topic 前 20 字做目录名）
+    if is_avatar_topic:
+        topic_tag = re.sub(r'[\\/:*?"<>|\s]+', "_", args.topic.strip())[:20]
+        output_dir = Path(args.output) if args.output else Path(SCRIPT_DIR, "output", args.mode, topic_tag)
+    else:
+        output_dir = Path(args.output) if args.output else Path(SCRIPT_DIR, "output", args.mode, video_path.stem)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Init core modules
@@ -97,7 +109,8 @@ def main():
     provider = Provider(cost_tracker)
 
     # Load pipeline definition
-    _mode_yaml = {"fullscreen": "v23", "pip": "pip", "avatar": "avatar"}.get(args.mode, "v23")
+    _mode_yaml = {"fullscreen": "v23", "pip": "pip", "avatar": "avatar",
+                  "avatar-seed": "avatar_seed", "avatar-short": "avatar_short"}.get(args.mode, "v23")
     yaml_path = SCRIPT_DIR / "pipeline_defs" / f"{_mode_yaml}.yaml"
     loader = PipelineLoader(provider)
     manifest = loader.load(str(yaml_path))
@@ -105,7 +118,7 @@ def main():
     print("\n" + "=" * 60)
     print(f"  {manifest.get('description', 'Video Factory Pro')}")
     print("=" * 60)
-    print(f"  Input : {video_path}")
+    print(f"  Input : {args.topic if is_avatar_topic else video_path}")
     print(f"  Output: {output_dir}/")
     print(f"  Stages: {len(manifest.get('stages', []))}")
     print(f"  API   : {provider._load_key()[:8]}...")
@@ -121,6 +134,8 @@ def main():
         "enable_bgm": args.bgm,
         "layout_mode": args.mode,
         "no_2x": args.no_2x,
+        "topic": args.topic or "",  # 🔴 avatar-seed/short 的文字输入
+        "speech_text": args.topic or "",  # 🔴 avatar-seed 的碎碎念原文
     }
 
     # Run pipeline
