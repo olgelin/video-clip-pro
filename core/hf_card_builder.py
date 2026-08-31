@@ -743,16 +743,20 @@ def _compose_pip(hf_dir, polished_path):
                 return max(valid, key=lambda f: f[2] * f[3])
         return None
 
-    # 🔴 v39 同层排版：解析人物区（数字人叠加位置），从 index.html 读 data-person-zone 属性
+    # 🔴 v39 同层排版：解析人物区（数字人叠加位置），从 compositions/beat-0.html 读 data-person-zone 属性
+    # （index.html 只有 beat 占位 div，实际内容+占位框在 compositions/beat-N.html）
     person_layout = "corner"
     person_zw, person_zh = win_w, win_h
     person_zx = person_zy = None
     try:
-        _pzm = _re.search(r'data-person-zone="([\w-]+)"[^>]*data-person-x="(\d+)" data-person-y="(\d+)" data-person-w="(\d+)" data-person-h="(\d+)"', index_html)
-        if _pzm:
-            person_layout = _pzm.group(1)
-            person_zx = int(_pzm.group(2)); person_zy = int(_pzm.group(3))
-            person_zw = int(_pzm.group(4)); person_zh = int(_pzm.group(5))
+        _beat0 = hf_dir / "compositions" / "beat-0.html"
+        if _beat0.exists():
+            _pz_html = _beat0.read_text(encoding="utf-8")
+            _pzm = _re.search(r'data-person-zone="([\w-]+)"[^>]*data-person-x="(\d+)" data-person-y="(\d+)" data-person-w="(\d+)" data-person-h="(\d+)"', _pz_html)
+            if _pzm:
+                person_layout = _pzm.group(1)
+                person_zx = int(_pzm.group(2)); person_zy = int(_pzm.group(3))
+                person_zw = int(_pzm.group(4)); person_zh = int(_pzm.group(5))
     except Exception:
         pass
     person_ratio = person_zw / max(person_zh, 1)
