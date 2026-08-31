@@ -302,7 +302,6 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
             pip_motion += 'tl.fromTo("#env-vignette",{opacity:0.55},{opacity:1,duration:8,repeat:3,yoyo:true,ease:"sine.inOut"},0);'
             pip_motion += 'tl.fromTo("#env-scan",{left:"-45%"},{left:"110%",duration:12,repeat:3,ease:"none"},0);'
             pip_motion += 'tl.to(".fg-p",{y:"random(-200,-320)",duration:9,repeat:3,ease:"none",stagger:0.4},0);'
-            pip_motion += 'tl.to("#avatar-video",{scale:1.005,duration:2.2,repeat:3,yoyo:true,ease:"sine.inOut"},0);'
             # 🔴 满幅→缩位 transform 动画（片头满幅建立人物 → 缩到 person_zone）
             _hero_w = int(fw * (0.62 if orientation == "portrait" else 0.38))
             _hero_h = _hero_w if orientation == "portrait" else int(_hero_w * 4 // 3)
@@ -314,6 +313,8 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
             _ty = (_hero_y + _hero_h / 2) - (_zone["y"] + _zone["h"] / 2)
             pip_motion += f'tl.set("#avatar-video",{{scaleX:{_sx:.3f},scaleY:{_sy:.3f},x:{_tx:.0f},y:{_ty:.0f}}},0);'
             pip_motion += f'tl.to("#avatar-video",{{scaleX:1,scaleY:1,x:0,y:0,duration:1.2,ease:"power3.inOut"}},{hero_dur});'
+            # 🔴 呼吸动画延后到缩位完成后（避免 scale 覆盖满幅的 scaleX）
+            pip_motion += f'tl.to("#avatar-video",{{scale:1.005,duration:2.2,repeat:3,yoyo:true,ease:"sine.inOut"}},{hero_dur + 1.5});'
             avatar_shadow_css = "#avatar-video{box-shadow:0 26px 52px rgba(0,0,0,0.6),0 10px 20px rgba(0,0,0,0.45);}"
             _aspect = "1" if orientation == "portrait" else "3/4"
             _init_size = 100  # 占位，avatar 用 person_zone 绝对像素定位
