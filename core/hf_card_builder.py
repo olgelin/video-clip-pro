@@ -280,22 +280,27 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
         if is_avatar:
             # ── avatar v40：数字人 video 作为 host root 直接子元素，同层渲染（方案 A，整体渲染）──
             # 数字人位置：横屏左侧竖条(left-rail)，竖屏角标(corner)。满幅→缩位动画第2步再加。
-            from skills.hf_build_avatar.person_zone import person_zone as _pz
-            _pl = "left-rail" if orientation == "landscape" else "corner"
-            _zone = _pz(_pl, orientation)
-            hero_dur = 5.0  # 保留（第2步满幅→缩位用）
+            from skills.hf_build_avatar.person_zone import person_zone as _pz, person_layout_for_visual_type as _pz_vt
+            hero_dur = 5.0  # 片头满幅→缩位的触发时间
+            # 🔴 v41 语义换位：每个 beat 按 visual_type 决定人物位置（金句/对比/时间线→左下/右分栏，其余→右下角标）
+            _zones = []
+            for _seg in ranges:
+                _pl_seg = _pz_vt(_seg.get("visual_type", ""), orientation)
+                _zones.append(_pz(_pl_seg, orientation))
+            _zone = _zones[0]  # 第一个场景的位置（video 初始位置 + 满幅缩位目标）
             pos_name, pos_css = "avatar-rail", ""
             frame_name, frame_css = "minimal-line", PIP_FRAMES["minimal-line"]
             # 前景粒子层（z17，人物窗口之上）+ 环境呼吸 + 数字人呼吸（repeat 有限，符合 determinism 规则）
             import random as _rnd3
-            # 🔴 粒子集中在数字人窗口附近（覆盖窗口 + 周围 30% 余量），明显从数字人前面飘过（"包装"关键）
-            _pad_x = int(_zone["w"] * 0.3)
-            _pad_y = int(_zone["h"] * 0.3)
+            # 🔴 粒子覆盖所有数字人位置的并集区域（v41 换位后粒子仍环绕数字人，不悬空）
+            _min_x = min(z["x"] for z in _zones); _min_y = min(z["y"] for z in _zones)
+            _max_x = max(z["x"] + z["w"] for z in _zones); _max_y = max(z["y"] + z["h"] for z in _zones)
+            _pad_x = int((_max_x - _min_x) * 0.15); _pad_y = int((_max_y - _min_y) * 0.15)
             _fg = []
-            for _i in range(30):
+            for _i in range(36):
                 _fs = _rnd3.choice([4, 5, 6, 7, 8])
-                _px = max(0, _zone["x"] - _pad_x + _rnd3.randint(0, _zone["w"] + 2 * _pad_x))
-                _py = max(0, _zone["y"] - _pad_y + _rnd3.randint(0, _zone["h"] + 2 * _pad_y))
+                _px = max(0, _min_x - _pad_x + _rnd3.randint(0, (_max_x - _min_x) + 2 * _pad_x))
+                _py = max(0, _min_y - _pad_y + _rnd3.randint(0, (_max_y - _min_y) + 2 * _pad_y))
                 _fg.append(f'<span class="fg-p" style="left:{_px}px;top:{_py}px;width:{_fs}px;height:{_fs}px;"></span>')
             fg_particles_html = f'<div class="fg-particles" id="fg-particles">{"".join(_fg)}</div>'
             pip_motion = ''
@@ -313,6 +318,12 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
             _hero_y = max(0, int(fh - 0.22 * fh - _hero_h))
             pip_motion += f'tl.set("#avatar-video",{{left:{_hero_x},top:{_hero_y},width:{_hero_w},height:{_hero_h}}},0);'
             pip_motion += f'tl.to("#avatar-video",{{left:{_zone["x"]},top:{_zone["y"]},width:{_zone["w"]},height:{_zone["h"]},duration:1.2,ease:"power3.inOut"}},{hero_dur});'
+            # 🔴 v41 语义换位：每个 beat 边界做位置切换动画（位置变了才切，避免无意义动画）
+            for _i in range(1, len(_zones)):
+                _sw_t = round(seg_offsets[_i], 2)
+                _prev = _zones[_i - 1]; _cur = _zones[_i]
+                if (_prev["x"], _prev["y"], _prev["w"], _prev["h"]) != (_cur["x"], _cur["y"], _cur["w"], _cur["h"]):
+                    pip_motion += f'tl.to("#avatar-video",{{left:{_cur["x"]},top:{_cur["y"]},width:{_cur["w"]},height:{_cur["h"]},duration:0.8,ease:"power3.inOut"}},{_sw_t});'
             pip_motion += f'tl.to("#avatar-video",{{scale:1.005,duration:2.2,repeat:3,yoyo:true,ease:"sine.inOut"}},{hero_dur + 1.5});'
             avatar_shadow_css = "#avatar-video{box-shadow:0 26px 52px rgba(0,0,0,0.6),0 10px 20px rgba(0,0,0,0.45);}"
             _aspect = "1" if orientation == "portrait" else "3/4"

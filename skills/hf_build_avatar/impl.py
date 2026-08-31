@@ -79,7 +79,7 @@ class Hf_build_avatar(SkillBase):
                 # 🔴 P0：提取 LLM 动画语句，合并进 stage 的统一 timeline（单一 __timelines["beat-N"]）
                 content_html, llm_motion = self._extract_llm_motion(content, dur=dur)
                 content_html = self._ensure_threejs(content_html, orientation)  # 🔴 兜底：Three.js 缺失注入默认粒子
-                _pl = self._person_layout(orientation)
+                _pl = self._person_layout(orientation, scene.get('visual_type'))
                 stage = build_stage(idx, dur, palette, motion, ghost=ghost, quote=quote, llm_motion=llm_motion,
                                     orientation=orientation, person_layout=_pl)
                 scene["person_layout"] = _pl
@@ -194,10 +194,13 @@ class Hf_build_avatar(SkillBase):
             parts.append(f"动画动词：标题 {ch.get('title','')}，内容 {ch.get('content','')}")
         return "\n".join(parts)
 
-    def _person_layout(self, orientation: str) -> str:
-        """🔴 数字人位置布局（v39 同层排版）：横屏 left-rail（左分栏），竖屏 corner。
-        整个视频统一一个布局——ffmpeg 叠加用统一位置，不能每场景换（否则叠加位置和占位框错位）。"""
-        return "left-rail" if orientation == "landscape" else "corner"
+    def _person_layout(self, orientation: str, visual_type: str = "") -> str:
+        """🔴 数字人位置布局（v41 语义换位）：按视觉类型决定，金句/对比/时间线 → 左下（横屏右分栏），
+        其余 → 右下角标。占位框（stage_template）和数字人 video 位置（hf_card_builder）都走同一映射，
+        保证两层对齐。v40 已改 HyperFrames 同层渲染，位置切换用 GSAP 动画在 main timeline 上做，
+        不再受 v39「ffmpeg 叠加统一位置」的约束。"""
+        from skills.hf_build_avatar.person_zone import person_layout_for_visual_type
+        return person_layout_for_visual_type(visual_type, orientation)
 
     def _layout_menu(self, idx: int) -> str:
         opts = [

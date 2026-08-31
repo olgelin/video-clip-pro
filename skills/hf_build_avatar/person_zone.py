@@ -18,12 +18,19 @@ def person_zone(layout: str, orientation: str = "portrait") -> dict:
     fw, fh = (1920, 1080) if orientation == "landscape" else (1080, 1920)
     is_portrait = fh > fw
 
-    if layout == "corner":
+    if layout in ("corner", "corner-br"):
         # 🔴 严格对齐 _compose_pip 现状：横屏 12%宽×4:3高，竖屏 22%宽×1:1
         w = int(fw * (0.22 if is_portrait else 0.12))
         h = w if is_portrait else int(w * 4 / 3)
         # 右下角，留 40px 边距（对齐现状 to_xy 的初始位置附近）
         x = fw - w - 40
+        y = fh - h - 40
+
+    elif layout == "corner-bl":
+        # 🔴 v41 语义换位：左下角。竖屏 22%宽×1:1，横屏 12%宽×4:3，留 40px 边距
+        w = int(fw * (0.22 if is_portrait else 0.12))
+        h = w if is_portrait else int(w * 4 / 3)
+        x = 40
         y = fh - h - 40
 
     elif layout == "left-rail":
@@ -47,3 +54,28 @@ def person_zone(layout: str, orientation: str = "portrait") -> dict:
         return person_zone("corner", orientation)
 
     return {"x": x, "y": y, "w": w, "h": h, "ratio": w / h}
+
+
+# 🔴 v41 语义换位：视觉类型 → 人物位置。让数字人在整条视频里按内容语义换位置，
+#    而不是死贴一个角。金句/对比/时间线 → 左下（或横屏右分栏），内容有足够空间；
+#    数据/流程/列表/仪表盘 → 右下角标（内容在上/左）。
+_VT_LAYOUT_PORTRAIT = {
+    "quote_hero": "corner-bl",
+    "compare": "corner-bl",
+    "timeline_event": "corner-bl",
+    # 默认（data_impact / flow / list_alert / hud / 其他）→ 右下角标
+}
+_VT_LAYOUT_LANDSCAPE = {
+    "quote_hero": "right-rail",
+    "compare": "right-rail",
+    "timeline_event": "right-rail",
+    # 默认 → 右下角标
+}
+
+
+def person_layout_for_visual_type(visual_type: str, orientation: str = "portrait") -> str:
+    """按视觉类型决定人物位置布局（v41）。默认右下角标。"""
+    vt = (visual_type or "").strip().lower()
+    if orientation == "landscape":
+        return _VT_LAYOUT_LANDSCAPE.get(vt, "corner-br")
+    return _VT_LAYOUT_PORTRAIT.get(vt, "corner-br")
