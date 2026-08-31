@@ -33,3 +33,4 @@ test_output/
 *.log
 .DS_Store
 Thumbs.db
+.backup_v40/
