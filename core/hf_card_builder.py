@@ -302,14 +302,23 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
             pip_motion += 'tl.fromTo("#env-vignette",{opacity:0.55},{opacity:1,duration:8,repeat:3,yoyo:true,ease:"sine.inOut"},0);'
             pip_motion += 'tl.fromTo("#env-scan",{left:"-45%"},{left:"110%",duration:12,repeat:3,ease:"none"},0);'
             pip_motion += 'tl.to(".fg-p",{y:"random(-200,-320)",duration:9,repeat:3,ease:"none",stagger:0.4},0);'
-            # 🔴 满幅→缩位 transform 动画（在 LLM 复杂 sub-composition 下 HyperFrames 不生效，暂时回退固定位置）
-            #    hf_debug 实验：简单场景满幅缩位生效，LLM 复杂场景不生效（根因待查，见 skill avatar-v40）
-            pip_motion += 'tl.to("#avatar-video",{scale:1.005,duration:2.2,repeat:3,yoyo:true,ease:"sine.inOut"},0);'
+            # 🔴 满幅→缩位：用 left/top/width/height 位置动画（不用 transform）
+            #    根因：composition 有 <canvas>（Three.js 场景）时，HyperFrames 的 canvas 合成路径（drawImage）
+            #    忽略 video 的 CSS transform（scaleX/scaleY/x/y 失效），但 left/top/width/height 位置动画生效。
+            #    video 必须 host root 直接子元素才能 seek/播放（包 untimed wrapper 会让 video 不 seek、显示首帧）。
+            #    lint 报 gsap_non_transform_motion（建议 transform），但 _render_fullscreen 不带 --strict 不 block。
+            _hero_w = int(fw * (0.62 if orientation == "portrait" else 0.38))
+            _hero_h = _hero_w if orientation == "portrait" else int(_hero_w * 4 // 3)
+            _hero_x = (fw - _hero_w) // 2
+            _hero_y = max(0, int(fh - 0.22 * fh - _hero_h))
+            pip_motion += f'tl.set("#avatar-video",{{left:{_hero_x},top:{_hero_y},width:{_hero_w},height:{_hero_h}}},0);'
+            pip_motion += f'tl.to("#avatar-video",{{left:{_zone["x"]},top:{_zone["y"]},width:{_zone["w"]},height:{_zone["h"]},duration:1.2,ease:"power3.inOut"}},{hero_dur});'
+            pip_motion += f'tl.to("#avatar-video",{{scale:1.005,duration:2.2,repeat:3,yoyo:true,ease:"sine.inOut"}},{hero_dur + 1.5});'
             avatar_shadow_css = "#avatar-video{box-shadow:0 26px 52px rgba(0,0,0,0.6),0 10px 20px rgba(0,0,0,0.45);}"
             _aspect = "1" if orientation == "portrait" else "3/4"
             _init_size = 100  # 占位，avatar 用 person_zone 绝对像素定位
             _zr = _zone["w"] // 2 if orientation == "portrait" else 16
-            # 🔴 数字人 video 是 host root 直接子元素（不包 div），框架才能 seek/解码
+            # 🔴 数字人 video 是 host root 直接子元素（不包 div），框架才能 seek/解码；满幅缩位用 left/top/width/height
             pip_video_block = (
                 f'<video id="avatar-video" class="clip" src="final.mp4" data-start="0" data-duration="{td_str}" data-track-index="0" muted playsinline '
                 f'style="position:absolute;left:{_zone["x"]}px;top:{_zone["y"]}px;width:{_zone["w"]}px;height:{_zone["h"]}px;object-fit:cover;z-index:15;border-radius:{_zr}px;"></video>')
