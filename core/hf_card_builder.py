@@ -623,7 +623,7 @@ def _compose_pip(hf_dir, polished_path):
         return x, y
 
     # 4. 动态检测人物 crop（人脸检测优先 + 肤色检测兜底；fallback 按视频实际尺寸，clamp 不越界）
-    def detect_person_crop(video, t=5, require_person=False):
+    def detect_person_crop(video, t=5, require_person=False, target_ratio=None):
         import cv2 as _cv2
         face_cascade = _cv2.CascadeClassifier(_cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
         best = None
@@ -648,13 +648,21 @@ def _compose_pip(hf_dir, polished_path):
             valid_faces = [(x, y, w, h) for (x, y, w, h) in faces if w > W * 0.15]
             if valid_faces:
                 x, y, w, h = max(valid_faces, key=lambda f: f[2] * f[3])
-                # 🔴 正常半身比例：crop 宽=画面宽90%(竖屏)/48%(横屏)，脸靠上(crop 33%)露更多身体
-                pw = int(W * (0.90 if is_pv else 0.48))
-                pw = max(200, min(pw, W))
-                ph = pw if is_pv else int(pw * 4 / 3)
-                # 🔴 横屏 clamp：3:4 竖向 crop 不能超画面高（否则 ffmpeg crop 越界报 Invalid argument）
-                if not is_pv and ph > H:
-                    ph = H; pw = int(ph * 3 / 4)
+                if target_ratio is not None:
+                    # 🔴 v39 按窗口比例 crop：ph 由脸高决定露半身，pw = ph * target_ratio，scale 不变形
+                    ph = int(h * 3.2)
+                    pw = int(ph * target_ratio)
+                    # clamp 到视频尺寸（宽不超 W，高不超 H）
+                    if pw > W: pw = W; ph = int(pw / target_ratio)
+                    if ph > H: ph = H; pw = int(ph * target_ratio)
+                else:
+                    # 🔴 正常半身比例：crop 宽=画面宽90%(竖屏)/48%(横屏)，脸靠上(crop 33%)露更多身体
+                    pw = int(W * (0.90 if is_pv else 0.48))
+                    pw = max(200, min(pw, W))
+                    ph = pw if is_pv else int(pw * 4 / 3)
+                    # 🔴 横屏 clamp：3:4 竖向 crop 不能超画面高（否则 ffmpeg crop 越界报 Invalid argument）
+                    if not is_pv and ph > H:
+                        ph = H; pw = int(ph * 3 / 4)
                 cx = x + w // 2; cy = y + h // 2
                 crop_x = cx - pw // 2
                 crop_y = cy - int(ph * 0.33)  # 脸中心在 crop 上 33% 处（脸靠上，露更多身体）
@@ -735,7 +743,27 @@ def _compose_pip(hf_dir, polished_path):
                 return max(valid, key=lambda f: f[2] * f[3])
         return None
 
-    _crop = detect_person_crop(final_mp4, require_person=is_avatar)
+    # 🔴 v39 同层排版：解析人物区（数字人叠加位置），从 index.html 读 data-person-zone 属性
+    person_layout = "corner"
+    person_zw, person_zh = win_w, win_h
+    person_zx = person_zy = None
+    try:
+        _pzm = _re.search(r'data-person-zone="([\w-]+)"[^>]*data-person-x="(\d+)" data-person-y="(\d+)" data-person-w="(\d+)" data-person-h="(\d+)"', index_html)
+        if _pzm:
+            person_layout = _pzm.group(1)
+            person_zx = int(_pzm.group(2)); person_zy = int(_pzm.group(3))
+            person_zw = int(_pzm.group(4)); person_zh = int(_pzm.group(5))
+    except Exception:
+        pass
+    person_ratio = person_zw / max(person_zh, 1)
+    # hero 满幅 crop（4:3）+ pip crop（按人物区比例），让 crop 比例 = 窗口比例，scale 不变形
+    hero_ratio = hero_w / max(hero_h, 1)
+    hero_crop = detect_person_crop(final_mp4, require_person=is_avatar, target_ratio=hero_ratio)
+    if person_layout in ("left-rail", "right-rail") and abs(person_ratio - hero_ratio) > 0.05:
+        pip_crop = detect_person_crop(final_mp4, require_person=is_avatar, target_ratio=person_ratio)
+    else:
+        pip_crop = hero_crop
+    _crop = hero_crop
     if _crop is None:
         # 无人物 → 降级纯 fullscreen：只补字幕+音频，不叠加人物窗口
         print("      无人物检测 → 降级纯 fullscreen（只补字幕+音频）")
@@ -749,7 +777,8 @@ def _compose_pip(hf_dir, polished_path):
         except Exception as e:
             print(f"      无人物降级失败: {e}")
         return polished_path
-    pw, ph, px, py = _crop
+    pw, ph, px, py = hero_crop
+    ppw, pph, ppx, ppy = pip_crop if pip_crop else hero_crop
 
     # 5. 换位表达式（从 index.html 解析的实际换位序列，mod 循环）
     init_left, init_bottom = 75.0, 58.0
@@ -833,7 +862,8 @@ def _compose_pip(hf_dir, polished_path):
     ass_path.write_text("\n".join(ass_lines), encoding="utf-8")
 
     # 7. ffmpeg 叠加（圆角 + 边框，对齐 V12 人物窗口边缘）
-    crop_expr = f"crop={pw}:{ph}:{px}:{py}"
+    hero_crop_expr = f"crop={pw}:{ph}:{px}:{py}"
+    pip_crop_expr = f"crop={ppw}:{pph}:{ppx}:{ppy}"
 
     # 圆角 alpha 表达式（geq，四角透明）：横屏 16px 圆角，竖屏圆形（50%）
     def _round_alpha(w, h, r):
@@ -847,11 +877,15 @@ def _compose_pip(hf_dir, polished_path):
         return inner
 
     if is_avatar:
-        # ── avatar: 片头满幅(0-5s 居中) + 角标(5s+ 换位，死锁下1/3) ──
+        # ── avatar: 片头满幅(0-5s 居中) + pip(5s+ 换位/分栏) ──
+        # 🔴 v39 同层排版：pip 窗口尺寸按 layout——corner 用 win_w/win_h，left/right rail 用人物区 person_zw/person_zh
+        is_rail = person_layout in ("left-rail", "right-rail")
+        pip_w = person_zw if is_rail else win_w
+        pip_h = person_zh if is_rail else win_h
         r_hero = hero_w // 2 if is_portrait else 16
-        r_pip = win_w // 2 if is_portrait else 16
+        r_pip = pip_w // 2 if is_portrait else 16
         hero_alpha = _round_alpha(hero_w, hero_h, r_hero)
-        pip_alpha = _round_alpha(win_w, win_h, r_pip)
+        pip_alpha = _round_alpha(pip_w, pip_h, r_pip)
         # 满幅居中位置（bottom 22%）
         hero_x = (vid_w - hero_w) // 2
         hero_y = max(0, int(vid_h - 0.22 * vid_h - hero_h))
@@ -889,27 +923,34 @@ def _compose_pip(hf_dir, polished_path):
             frame_hero_path = out_dir / "_avatar_frame_hero.png"
             frame_pip_path = out_dir / "_avatar_frame_pip.png"
             _make_frame_png(hero_w, hero_h, hero_w // 2 if is_portrait else 16).save(str(frame_hero_path))
-            _make_frame_png(win_w, win_h, win_w // 2 if is_portrait else 16).save(str(frame_pip_path))
+            _make_frame_png(pip_w, pip_h, pip_w // 2 if is_portrait else 16).save(str(frame_pip_path))
         except Exception:
             frame_hero_path = frame_pip_path = None
 
         # 🔴 video-talkcraft 让位过渡：hero 让位前 0.6s 变暗+模糊（前兆），pip 让位后 0.6s 从暗模糊恢复
         _hdr = hero_dur
         # 🔴 硬切：去掉让位变暗+模糊（用户反馈"开屏突然变灰"），直接切换不变暗
-        hero_chain = f"[1:v]{crop_expr},scale={hero_w}:{hero_h},setpts=PTS-STARTPTS,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='{hero_alpha}'[heror]"
-        pip_chain = f"[1:v]{crop_expr},scale={win_w}:{win_h},setpts=PTS-STARTPTS,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='{pip_alpha}'[pipr]"
+        hero_chain = f"[1:v]{hero_crop_expr},scale={hero_w}:{hero_h},setpts=PTS-STARTPTS,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='{hero_alpha}'[heror]"
+        pip_chain = f"[1:v]{pip_crop_expr},scale={pip_w}:{pip_h},setpts=PTS-STARTPTS,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='{pip_alpha}'[pipr]"
+        # 🔴 v39 pip 位置：left/right rail 固定坐标，corner 换位表达式
+        if is_rail:
+            pip_x_expr = str(person_zx)
+            pip_y_expr = str(person_zy)
+        else:
+            pip_x_expr = f"'{av_x}'"
+            pip_y_expr = f"'{av_y}'"
         if frame_hero_path and frame_pip_path:
             overlay_expr = (f"{hero_chain};{pip_chain};"
                             f"[0:v][heror]overlay=x={hero_x}:y={hero_y}:enable='lt(t,{hero_dur})'[v1];"
                             f"[v1][2:v]overlay=x={hero_x}:y={hero_y}:enable='lt(t,{hero_dur})'[v2];"
-                            f"[v2][pipr]overlay=x='{av_x}':y='{av_y}':enable='gte(t,{hero_dur})'[v3];"
-                            f"[v3][3:v]overlay=x='{av_x}':y='{av_y}':enable='gte(t,{hero_dur})':format=auto[vout]")
+                            f"[v2][pipr]overlay=x={pip_x_expr}:y={pip_y_expr}:enable='gte(t,{hero_dur})'[v3];"
+                            f"[v3][3:v]overlay=x={pip_x_expr}:y={pip_y_expr}:enable='gte(t,{hero_dur})':format=auto[vout]")
             inputs = ["ffmpeg", "-y", "-i", "final_polished.mp4", "-i", "final.mp4",
                       "-i", "_avatar_frame_hero.png", "-i", "_avatar_frame_pip.png"]
         else:
             overlay_expr = (f"{hero_chain};{pip_chain};"
                             f"[0:v][heror]overlay=x={hero_x}:y={hero_y}:enable='lt(t,{hero_dur})'[v1];"
-                            f"[v1][pipr]overlay=x='{av_x}':y='{av_y}':enable='gte(t,{hero_dur})':format=auto[vout]")
+                            f"[v1][pipr]overlay=x={pip_x_expr}:y={pip_y_expr}:enable='gte(t,{hero_dur})':format=auto[vout]")
             inputs = ["ffmpeg", "-y", "-i", "final_polished.mp4", "-i", "final.mp4"]
     else:
         # ── pip 原有：单 overlay（固定角标尺寸，换位）──
@@ -926,7 +967,7 @@ def _compose_pip(hf_dir, polished_path):
         except Exception:
             frame_path = None
 
-        pip_chain = f"[1:v]{crop_expr},scale={win_w}:{win_h},setpts=PTS-STARTPTS,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='{round_alpha}'[pipr]"
+        pip_chain = f"[1:v]{hero_crop_expr},scale={win_w}:{win_h},setpts=PTS-STARTPTS,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='{round_alpha}'[pipr]"
         if frame_path:
             overlay_expr = (f"{pip_chain};[0:v][pipr]overlay=x='{x_expr}':y='{y_expr}':format=auto[v1];"
                             f"[v1][2:v]overlay=x='{x_expr}':y='{y_expr}':format=auto[vout]")

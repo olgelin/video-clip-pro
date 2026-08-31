@@ -79,7 +79,10 @@ class Hf_build_avatar(SkillBase):
                 # 🔴 P0：提取 LLM 动画语句，合并进 stage 的统一 timeline（单一 __timelines["beat-N"]）
                 content_html, llm_motion = self._extract_llm_motion(content, dur=dur)
                 content_html = self._ensure_threejs(content_html, orientation)  # 🔴 兜底：Three.js 缺失注入默认粒子
-                stage = build_stage(idx, dur, palette, motion, ghost=ghost, quote=quote, llm_motion=llm_motion, orientation=orientation)
+                _pl = self._person_layout(idx, orientation)
+                stage = build_stage(idx, dur, palette, motion, ghost=ghost, quote=quote, llm_motion=llm_motion,
+                                    orientation=orientation, person_layout=_pl)
+                scene["person_layout"] = _pl
                 html = stage.replace("<!-- LLM_CONTENT_INSERT -->", content_html)
                 (output_dir / f"beat-{idx}.html").write_text(html, encoding="utf-8")
                 html_files.append(str(output_dir / f"beat-{idx}.html"))
@@ -190,6 +193,14 @@ class Hf_build_avatar(SkillBase):
         if ch:
             parts.append(f"动画动词：标题 {ch.get('title','')}，内容 {ch.get('content','')}")
         return "\n".join(parts)
+
+    def _person_layout(self, idx: int, orientation: str) -> str:
+        """🔴 数字人位置布局（v39 同层排版）：横屏按 idx 轮换 left/right 分栏 + 角标，竖屏固定角标。
+        Python 决定（架构决策），LLM 只通过占位框避让。"""
+        if orientation != "landscape":
+            return "corner"
+        layouts = ["left-rail", "right-rail", "corner"]
+        return layouts[idx % len(layouts)]
 
     def _layout_menu(self, idx: int) -> str:
         opts = [
