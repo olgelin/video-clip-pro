@@ -278,56 +278,34 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
         shift_interval = 5
 
         if is_avatar:
-            # ── avatar: 片头满幅建立人物(5s) → 缩位角标(死锁下1/3) → 左右轮换 ──
-            hero_size = 62 if orientation == "portrait" else 38  # 片头满幅尺寸
-            hero_dur = 5.0  # 片头满幅时长（video-talkcraft: 5-8s 建立人物）
-            hero_left = round((100 - hero_size) / 2, 1)
-            hero_bottom = 22
-            # 初始：满幅居中
-            pos_name, pos_css = "hero", f"left:{hero_left}%;bottom:{hero_bottom}%"
-            # 角标位置：死锁下 1/3 带（bottom ≤ 16%），左右轮换
-            avatar_positions = [
-                ("corner-left",  "left:3%;bottom:10%"),
-                ("corner-right", "left:75%;bottom:10%"),
-                ("corner-left",  "left:3%;bottom:16%"),
-                ("corner-right", "left:75%;bottom:16%"),
-            ]
-            n_shifts = max(1, int((total_dur - hero_dur) // shift_interval))
-            chosen = [avatar_positions[i % len(avatar_positions)] for i in range(n_shifts + 1)]
-            # 🔴 稍加装饰：固定极简白线边框（用户拍板取消彩色发光环，保持干净）
-            frame_name = "minimal-line"
-            frame_css = PIP_FRAMES[frame_name]
-            pip_motion_lines = []
-            # 1) 片头满幅 → 缩位到第一个角标（同时缩小 + 移到角落）
-            _c0 = chosen[0][1]
-            _kv0 = dict(p.split(":", 1) for p in _c0.split(";") if ":" in p)
-            _l0 = _kv0.get("left", "3%"); _b0 = _kv0.get("bottom", "10%")
-            pip_motion_lines.append(f'tl.to("#pip-win",{{left:"{_l0}",bottom:"{_b0}",width:"{pip_size}%",duration:1.2,ease:"power3.inOut"}},{hero_dur});')
-            # 2) 后续角标轮换（死锁下 1/3）
-            for i in range(1, len(chosen)):
-                _c = chosen[i][1]
-                _kv = dict(p.split(":", 1) for p in _c.split(";") if ":" in p)
-                _l = _kv.get("left", "3%"); _b = _kv.get("bottom", "10%")
-                _t = hero_dur + i * shift_interval
-                pip_motion_lines.append(f'tl.to("#pip-win",{{left:"{_l}",bottom:"{_b}",duration:0.8,ease:"power2.inOut"}},{_t});')
-            pip_motion = "".join(pip_motion_lines)
-            # 🔴 video-talkcraft 融合手法：就位后 idle 微动 + 呼吸环境层（vignette 呼吸 + 扫光）
-            pip_motion += f'tl.to("#pip-win",{{scale:1.005,duration:2.2,repeat:-1,yoyo:true,ease:"sine.inOut"}},{hero_dur + 1.4});'
-            pip_motion += 'tl.fromTo("#env-vignette",{opacity:0.55},{opacity:1,duration:8,repeat:-1,yoyo:true,ease:"sine.inOut"},0);'
-            pip_motion += 'tl.fromTo("#env-scan",{left:"-45%"},{left:"110%",duration:12,repeat:-1,ease:"none"},0);'
-            # 🔴 ③ 粒子互动：前景粒子层(人物窗口之上 z17)，粒子缓慢上飘掠过人物，让人物被环境"包"住
+            # ── avatar v40：数字人 video 作为 host root 直接子元素，同层渲染（方案 A，整体渲染）──
+            # 数字人位置：横屏左侧竖条(left-rail)，竖屏角标(corner)。满幅→缩位动画第2步再加。
+            from skills.hf_build_avatar.person_zone import person_zone as _pz
+            _pl = "left-rail" if orientation == "landscape" else "corner"
+            _zone = _pz(_pl, orientation)
+            hero_dur = 5.0  # 保留（第2步满幅→缩位用）
+            pos_name, pos_css = "avatar-rail", ""
+            frame_name, frame_css = "minimal-line", PIP_FRAMES["minimal-line"]
+            # 前景粒子层（z17，人物窗口之上）+ 环境呼吸 + 数字人呼吸（repeat 有限，符合 determinism 规则）
             import random as _rnd3
             _fg = []
             for _i in range(20):
                 _fs = _rnd3.choice([2, 3, 4])
-                _fg.append(f'<span class="fg-p" data-dy="{_rnd3.choice([-80,-120,-160])}" style="left:{_rnd3.randint(0,100)}%;top:{_rnd3.randint(5,100)}%;width:{_fs}px;height:{_fs}px;"></span>')
+                _fg.append(f'<span class="fg-p" style="left:{_rnd3.randint(0,100)}%;top:{_rnd3.randint(5,100)}%;width:{_fs}px;height:{_fs}px;"></span>')
             fg_particles_html = f'<div class="fg-particles" id="fg-particles">{"".join(_fg)}</div>'
-            pip_motion += 'tl.to(".fg-p",{y:-140,duration:9,repeat:-1,ease:"none",stagger:0.5},0);'
-            # 🔴 ④ 景深分层：人物投影，让人物"浮"在内容之上（前后景深，不平面叠加）
-            avatar_shadow_css = "#pip-win{box-shadow:0 26px 52px rgba(0,0,0,0.6),0 10px 20px rgba(0,0,0,0.45);}"
+            pip_motion = ''
+            pip_motion += 'tl.fromTo("#env-vignette",{opacity:0.55},{opacity:1,duration:8,repeat:3,yoyo:true,ease:"sine.inOut"},0);'
+            pip_motion += 'tl.fromTo("#env-scan",{left:"-45%"},{left:"110%",duration:12,repeat:3,ease:"none"},0);'
+            pip_motion += 'tl.to(".fg-p",{y:-140,duration:9,repeat:3,ease:"none",stagger:0.5},0);'
+            pip_motion += 'tl.to("#avatar-video",{scale:1.005,duration:2.2,repeat:3,yoyo:true,ease:"sine.inOut"},0);'
+            avatar_shadow_css = "#avatar-video{box-shadow:0 26px 52px rgba(0,0,0,0.6),0 10px 20px rgba(0,0,0,0.45);}"
             _aspect = "1" if orientation == "portrait" else "3/4"
-            # 初始窗口：满幅（hero），动画里缩到角标
-            _init_size = hero_size
+            _init_size = 100  # 占位，avatar 用 person_zone 绝对像素定位
+            _zr = _zone["w"] // 2 if orientation == "portrait" else 16
+            # 🔴 数字人 video 是 host root 直接子元素（不包 div），框架才能 seek/解码
+            pip_video_block = (
+                f'<video id="avatar-video" class="clip" src="final.mp4" data-start="0" data-duration="{td_str}" data-track-index="0" muted playsinline '
+                f'style="position:absolute;left:{_zone["x"]}px;top:{_zone["y"]}px;width:{_zone["w"]}px;height:{_zone["h"]}px;object-fit:cover;z-index:15;border-radius:{_zr}px;"></video>')
         else:
             # ── pip 原有：定时换位（垂直中部）──
             n_shifts = max(1, int(total_dur // shift_interval))
@@ -366,9 +344,11 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
         main_style = f"body{{margin:0;background:{COLORS['bg_deep']}}}#root{{position:relative;width:{fw}px;height:{fh}px;overflow:hidden;background:{COLORS['bg_deep']}}}.bg-glow{{position:absolute;inset:0;z-index:4;pointer-events:none;background:radial-gradient(ellipse at 50% 40%,rgba(0,229,255,0.04),transparent 60%),radial-gradient(ellipse at 70% 70%,rgba(239,68,68,0.03),transparent 50%),radial-gradient(ellipse at 30% 60%,rgba(34,211,160,0.03),transparent 50%);}}.unified-timeline{{position:absolute;bottom:4px;left:2%;right:2%;height:2px;background:rgba(255,255,255,0.06);border-radius:1px;overflow:hidden;z-index:30;}}.unified-timeline-fill{{height:100%;background:linear-gradient(90deg,{COLORS['cyan']},{COLORS['purple']},#22d3a0);border-radius:1px;width:0%;}}.caption-word{{position:absolute;color:#fff;font-weight:600;text-shadow:0 2px 12px rgba(0,0,0,0.9);white-space:nowrap;z-index:20;transition:text-shadow 0.15s}}.caption-word.active{{text-shadow:0 0 20px rgba(0,229,255,0.8),0 2px 12px rgba(0,0,0,0.9);color:#fff}}.audio-pulse{{filter:brightness(calc(1 + var(--audio-level,0) * 0.3))}}.env-vignette{{position:absolute;inset:0;z-index:5;pointer-events:none;background:radial-gradient(ellipse at 50% 45%,transparent 52%,rgba(5,8,20,0.55) 100%);}}.env-scan{{position:absolute;top:-18%;bottom:-18%;width:38%;z-index:6;pointer-events:none;background:linear-gradient(105deg,transparent,rgba(140,165,255,0.07),transparent);mix-blend-mode:screen;transform:skewX(-12deg);}}.fg-particles{{position:absolute;inset:0;z-index:17;pointer-events:none;overflow:hidden;}}.fg-p{{position:absolute;border-radius:50%;background:rgba(165,140,255,0.55);box-shadow:0 0 6px rgba(165,140,255,0.7);}}"
         # 🔴 窗口比例：竖屏 1:1（圆框），横屏 3:4（竖向长方形框，高>宽）
         _aspect = "1" if orientation == "portrait" else "3/4"
-        pip_video_block = f'<div id="pip-bg"></div><video id="pip-bg-v" src="final.mp4" data-start="0" data-duration="{td_str}" data-track-index="0" muted playsinline></video><div id="pip-win" style="{pos_css};width:{_init_size}%;aspect-ratio:{_aspect};--pip-radius:{radius};">'
-        pip_video_block += f'<video id="pip-win-v" src="final.mp4" data-start="0" data-duration="{td_str}" data-track-index="1" muted playsinline></video>'
-        pip_video_block += f'<div id="pip-frame" style="{frame_css}"></div></div>'
+        # 🔴 avatar 已在分支内生成 pip_video_block（video direct child），这里只给 pip 生成
+        if not is_avatar:
+            pip_video_block = f'<div id="pip-bg"></div><video id="pip-bg-v" src="final.mp4" data-start="0" data-duration="{td_str}" data-track-index="0" muted playsinline></video><div id="pip-win" style="{pos_css};width:{_init_size}%;aspect-ratio:{_aspect};--pip-radius:{radius};">'
+            pip_video_block += f'<video id="pip-win-v" src="final.mp4" data-start="0" data-duration="{td_str}" data-track-index="1" muted playsinline></video>'
+            pip_video_block += f'<div id="pip-frame" style="{frame_css}"></div></div>'
         print(f"      PIP mode: pos={pos_name} frame={frame_name}")
     else:
         pip_css_block = ""
@@ -474,7 +454,10 @@ def render_hyperframes(hf_dir):
         _idx_html = (hf_dir / "index.html").read_text(encoding="utf-8")
     except Exception:
         _idx_html = ""
-    if "pip-win" not in _idx_html:
+    if "pip-win" not in _idx_html or 'data-layout="avatar"' in _idx_html:
+        # 🔴 fullscreen（卡片 sub-comp 叠加背景视频）→ 整体渲染 index.html
+        # 🔴 avatar v40（数字人 video direct child + 卡片 sub-comp + 前景粒子）→ 整体渲染 index.html
+        #    （数字人作为 composition 里的 video 轨道，和卡片同层渲染，不再 ffmpeg 后期叠加）
         return _render_fullscreen(hf_dir, gpu_flag)
 
     # 🔴 照抄 video-factory：每个 beat 单独 standalone 渲染成 segment，再 concat 拼接
