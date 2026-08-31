@@ -895,8 +895,9 @@ def _compose_pip(hf_dir, polished_path):
 
         # 🔴 video-talkcraft 让位过渡：hero 让位前 0.6s 变暗+模糊（前兆），pip 让位后 0.6s 从暗模糊恢复
         _hdr = hero_dur
-        hero_chain = f"[1:v]{crop_expr},scale={hero_w}:{hero_h},setpts=PTS-STARTPTS,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='{hero_alpha}',gblur=sigma=3:enable='between(t,{_hdr - 0.6},{_hdr})',eq=brightness=-0.35:enable='between(t,{_hdr - 0.6},{_hdr})'[heror]"
-        pip_chain = f"[1:v]{crop_expr},scale={win_w}:{win_h},setpts=PTS-STARTPTS,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='{pip_alpha}',gblur=sigma=3:enable='between(t,{_hdr},{_hdr + 0.6})',eq=brightness=-0.35:enable='between(t,{_hdr},{_hdr + 0.6})'[pipr]"
+        # 🔴 硬切：去掉让位变暗+模糊（用户反馈"开屏突然变灰"），直接切换不变暗
+        hero_chain = f"[1:v]{crop_expr},scale={hero_w}:{hero_h},setpts=PTS-STARTPTS,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='{hero_alpha}'[heror]"
+        pip_chain = f"[1:v]{crop_expr},scale={win_w}:{win_h},setpts=PTS-STARTPTS,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='{pip_alpha}'[pipr]"
         if frame_hero_path and frame_pip_path:
             overlay_expr = (f"{hero_chain};{pip_chain};"
                             f"[0:v][heror]overlay=x={hero_x}:y={hero_y}:enable='lt(t,{hero_dur})'[v1];"
