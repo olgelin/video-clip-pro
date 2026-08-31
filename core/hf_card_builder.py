@@ -319,9 +319,10 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
             _hero_y = max(0, int(fh - 0.22 * fh - _hero_h))
             pip_motion += f'tl.set("#avatar-video",{{left:{_hero_x},top:{_hero_y},width:{_hero_w},height:{_hero_h}}},0);'
             pip_motion += f'tl.to("#avatar-video",{{left:{_zone["x"]},top:{_zone["y"]},width:{_zone["w"]},height:{_zone["h"]},duration:1.2,ease:"power3.inOut"}},{hero_dur});'
-            # 🔴 v41 语义换位：每个 beat 边界做位置切换动画（位置变了才切，避免无意义动画）
+            # 🔴 v41 语义换位：每个 beat 边界做位置切换动画（位置变了才切）。错峰：提前 0.3s 开始，
+            #    让数字人先动、新内容后进，避免"换位 + 内容进场"同时发生（三段序的简化版）。
             for _i in range(1, len(_zones)):
-                _sw_t = round(seg_offsets[_i], 2)
+                _sw_t = round(seg_offsets[_i] - 0.3, 2)
                 _prev = _zones[_i - 1]; _cur = _zones[_i]
                 if (_prev["x"], _prev["y"], _prev["w"], _prev["h"]) != (_cur["x"], _cur["y"], _cur["w"], _cur["h"]):
                     pip_motion += f'tl.to("#avatar-video",{{left:{_cur["x"]},top:{_cur["y"]},width:{_cur["w"]},height:{_cur["h"]},duration:0.8,ease:"power3.inOut"}},{_sw_t});'
