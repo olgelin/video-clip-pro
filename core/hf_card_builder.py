@@ -312,8 +312,9 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
             #    忽略 video 的 CSS transform（scaleX/scaleY/x/y 失效），但 left/top/width/height 位置动画生效。
             #    video 必须 host root 直接子元素才能 seek/播放（包 untimed wrapper 会让 video 不 seek、显示首帧）。
             #    lint 报 gsap_non_transform_motion（建议 transform），但 _render_fullscreen 不带 --strict 不 block。
-            _hero_w = int(fw * (0.62 if orientation == "portrait" else 0.38))
-            _hero_h = _hero_w if orientation == "portrait" else int(_hero_w * 4 // 3)
+            # 🔴 开屏满幅框：竖向 3:4（高 > 宽），符合竖屏感；横屏同样竖向（用户反馈：别用正方形）
+            _hero_w = int(fw * (0.50 if orientation == "portrait" else 0.38))
+            _hero_h = int(_hero_w * 4 / 3)
             _hero_x = (fw - _hero_w) // 2
             _hero_y = max(0, int(fh - 0.22 * fh - _hero_h))
             pip_motion += f'tl.set("#avatar-video",{{left:{_hero_x},top:{_hero_y},width:{_hero_w},height:{_hero_h}}},0);'
@@ -324,6 +325,20 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
                 _prev = _zones[_i - 1]; _cur = _zones[_i]
                 if (_prev["x"], _prev["y"], _prev["w"], _prev["h"]) != (_cur["x"], _cur["y"], _cur["w"], _cur["h"]):
                     pip_motion += f'tl.to("#avatar-video",{{left:{_cur["x"]},top:{_cur["y"]},width:{_cur["w"]},height:{_cur["h"]},duration:0.8,ease:"power3.inOut"}},{_sw_t});'
+            # 🔴 v41 让位：data_impact 场景数字人临时缩小+变暗退后，让大数字满屏（场景中段让位，末尾恢复）
+            for _i in range(len(_zones)):
+                if ranges[_i].get("visual_type", "") == "data_impact":
+                    _yd_start = seg_offsets[_i]
+                    _yd_dur = ranges[_i]["end"] - ranges[_i]["start"]
+                    _yield_t = round(_yd_start + 2.0, 2)
+                    _restore_t = round(_yd_start + _yd_dur - 1.2, 2)
+                    if _yield_t < _restore_t:
+                        _z = _zones[_i]
+                        _w_s = int(_z["w"] * 0.62); _h_s = int(_z["h"] * 0.62)
+                        _x_s = _z["x"] + (_z["w"] - _w_s) // 2
+                        _y_s = _z["y"] + (_z["h"] - _h_s) // 2
+                        pip_motion += f'tl.to("#avatar-video",{{left:{_x_s},top:{_y_s},width:{_w_s},height:{_h_s},opacity:0.5,duration:0.5,ease:"power3.inOut"}},{_yield_t});'
+                        pip_motion += f'tl.to("#avatar-video",{{left:{_z["x"]},top:{_z["y"]},width:{_z["w"]},height:{_z["h"]},opacity:1,duration:0.5,ease:"power3.inOut"}},{_restore_t});'
             pip_motion += f'tl.to("#avatar-video",{{scale:1.005,duration:2.2,repeat:3,yoyo:true,ease:"sine.inOut"}},{hero_dur + 1.5});'
             avatar_shadow_css = "#avatar-video{box-shadow:0 26px 52px rgba(0,0,0,0.6),0 10px 20px rgba(0,0,0,0.45);}"
             _aspect = "1" if orientation == "portrait" else "3/4"
