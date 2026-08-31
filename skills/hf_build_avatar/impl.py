@@ -119,6 +119,7 @@ class Hf_build_avatar(SkillBase):
                 "end": scene.get("final_end", scene.get("start", 0) + scene.get("duration", 5)),
                 "beat": "INFO",
                 "quote": scene.get("narration", ""),
+                "visual_type": scene.get("visual_type", ""),  # 🔴 v41 语义换位：传给 build 决定人物位置
                 "_scene_html": html_content,
             })
         if not render_ranges:
