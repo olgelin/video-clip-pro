@@ -312,7 +312,8 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
             _sy = _hero_h / _zone["h"]
             _tx = (_hero_x + _hero_w / 2) - (_zone["x"] + _zone["w"] / 2)
             _ty = (_hero_y + _hero_h / 2) - (_zone["y"] + _zone["h"] / 2)
-            pip_motion += f'tl.fromTo("#avatar-video",{{scaleX:{_sx:.3f},scaleY:{_sy:.3f},x:{_tx:.0f},y:{_ty:.0f}}},{{scaleX:1,scaleY:1,x:0,y:0,duration:1.2,ease:"power3.inOut"}},{hero_dur});'
+            pip_motion += f'tl.set("#avatar-video",{{scaleX:{_sx:.3f},scaleY:{_sy:.3f},x:{_tx:.0f},y:{_ty:.0f}}},0);'
+            pip_motion += f'tl.to("#avatar-video",{{scaleX:1,scaleY:1,x:0,y:0,duration:1.2,ease:"power3.inOut"}},{hero_dur});'
             avatar_shadow_css = "#avatar-video{box-shadow:0 26px 52px rgba(0,0,0,0.6),0 10px 20px rgba(0,0,0,0.45);}"
             _aspect = "1" if orientation == "portrait" else "3/4"
             _init_size = 100  # 占位，avatar 用 person_zone 绝对像素定位
