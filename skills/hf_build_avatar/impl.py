@@ -233,7 +233,7 @@ class Hf_build_avatar(SkillBase):
 
     def _opening_hint(self, idx: int) -> str:
         if idx == 0:
-            return "🔴 开场——大字110-130px，选最炫Three.js，1-2个标签慢飘入，不用KPI。"
+            return "🔴 开场——满幅数字人在底部（占下 1/3），你的内容全部排在上 2/3（标题大字110-130px + 1-2个标签慢飘入，不用KPI）。禁止把内容排到底部——底部是满幅数字人的位置，会被盖住。"
         return ""
 
     def _threejs_menu(self, orientation: str = "portrait") -> str:

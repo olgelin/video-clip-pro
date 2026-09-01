@@ -312,11 +312,16 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
             #    忽略 video 的 CSS transform（scaleX/scaleY/x/y 失效），但 left/top/width/height 位置动画生效。
             #    video 必须 host root 直接子元素才能 seek/播放（包 untimed wrapper 会让 video 不 seek、显示首帧）。
             #    lint 报 gsap_non_transform_motion（建议 transform），但 _render_fullscreen 不带 --strict 不 block。
-            # 🔴 开屏满幅框：竖向 3:4（高 > 宽），符合竖屏感；横屏同样竖向（用户反馈：别用正方形）
+            # 🔴 开屏满幅框：竖向 3:4，分区定位——竖屏贴底（数字人在下、内容在上），横屏贴右（数字人在右、内容在左）
+            #    满幅时数字人占自己的地盘，不遮挡内容区（物理分离，不是叠放）。缩位后再缩到角落小图标（小图标叠一点无妨）。
             _hero_w = int(fw * (0.50 if orientation == "portrait" else 0.38))
             _hero_h = int(_hero_w * 4 / 3)
-            _hero_x = (fw - _hero_w) // 2
-            _hero_y = max(0, int(fh - 0.22 * fh - _hero_h))
+            if orientation == "portrait":
+                _hero_x = (fw - _hero_w) // 2   # 水平居中
+                _hero_y = fh - _hero_h - 40      # 贴底，内容在上
+            else:
+                _hero_x = fw - _hero_w - 40      # 贴右，内容在左
+                _hero_y = (fh - _hero_h) // 2    # 垂直居中
             pip_motion += f'tl.set("#avatar-video",{{left:{_hero_x},top:{_hero_y},width:{_hero_w},height:{_hero_h}}},0);'
             pip_motion += f'tl.to("#avatar-video",{{left:{_zone["x"]},top:{_zone["y"]},width:{_zone["w"]},height:{_zone["h"]},duration:1.2,ease:"power3.inOut"}},{hero_dur});'
             # 🔴 v41 语义换位：每个 beat 边界做位置切换动画（位置变了才切）。错峰：提前 0.3s 开始，
