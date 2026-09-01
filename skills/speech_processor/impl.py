@@ -67,7 +67,7 @@ class SpeechProcessor(SkillBase):
         if not provider:
             print("  [speech-processor] ❌ 无 provider")
             return None
-        raw = provider.call("speech_processor", user_prompt, system=system_prompt, max_tokens=4000)
+        raw = provider.call("speech_processor", user_prompt, system=system_prompt, max_tokens=8000)
         if not raw:
             return None
         return self._parse_json(raw)

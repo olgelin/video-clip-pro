@@ -27,7 +27,7 @@ TASK_MODELS = {
     "storyboard_split": {"primary": "deepseek-chat", "fallback": [], "max_tokens": 300},
     "design_system": {"primary": "deepseek-v4-pro", "fallback": [], "max_tokens": 2000},
     # 🔴 avatar 系列（话题→口播稿→配音→数字人）
-    "speech_processor": {"primary": "deepseek-v4-pro", "fallback": [], "max_tokens": 4000},
+    "speech_processor": {"primary": "deepseek-v4-pro", "fallback": [], "max_tokens": 8000},
     "script_writer": {"primary": "deepseek-v4-pro", "fallback": [], "max_tokens": 8000},
     "topic_scout": {"primary": "deepseek-v4-pro", "fallback": [], "max_tokens": 3000},
     "topic_selector": {"primary": "deepseek-v4-pro", "fallback": [], "max_tokens": 2000},
