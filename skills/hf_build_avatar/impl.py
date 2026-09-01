@@ -63,13 +63,15 @@ class Hf_build_avatar(SkillBase):
 
             brief = self._dict_to_brief(scene, idx, n, prev_scene)
             prompt = scene_prompt_tpl
+            _pl = self._person_layout(orientation, scene.get('visual_type'))
             reps = {
                 "visual_brief": brief,
                 "color_palette": json.dumps(palette, ensure_ascii=False, indent=2),
                 "layout_options": self._layout_menu(idx),
-                "threejs_menu": self._threejs_menu(orientation),
+                "threejs_menu": self._threejs_menu(orientation, _pl),
                 "motion_instructions": self._motion_nl(motion),
                 "opening_hint": self._opening_hint(idx),
+                "canvas_hint": self._canvas_hint(orientation, _pl),
             }
             for k, v in reps.items():
                 prompt = prompt.replace("{" + k + "}", v)
@@ -79,7 +81,6 @@ class Hf_build_avatar(SkillBase):
                 # 🔴 P0：提取 LLM 动画语句，合并进 stage 的统一 timeline（单一 __timelines["beat-N"]）
                 content_html, llm_motion = self._extract_llm_motion(content, dur=dur)
                 content_html = self._ensure_threejs(content_html, orientation)  # 🔴 兜底：Three.js 缺失注入默认粒子
-                _pl = self._person_layout(orientation, scene.get('visual_type'))
                 stage = build_stage(idx, dur, palette, motion, ghost=ghost, quote=quote, llm_motion=llm_motion,
                                     orientation=orientation, person_layout=_pl)
                 scene["person_layout"] = _pl
@@ -203,6 +204,21 @@ class Hf_build_avatar(SkillBase):
         from skills.hf_build_avatar.person_zone import person_layout_for_visual_type
         return person_layout_for_visual_type(visual_type, orientation)
 
+    def _canvas_hint(self, orientation: str, person_layout: str) -> str:
+        """🔴 v42 画布尺寸提示：横屏分栏时告诉 LLM 画布=内容区(1370×1080)，不是全屏 1920×1080。
+        这样 LLM 在内容区内排版，数字人独占对侧竖条，真分区不叠放。"""
+        if orientation == "landscape" and person_layout in ("left-rail", "right-rail"):
+            from skills.hf_build_avatar.person_zone import content_zone as _cz
+            z = _cz(person_layout, orientation)
+            w = z["w"]
+            person_side = "右侧" if person_layout == "right-rail" else "左侧"
+            content_side = "左侧" if person_layout == "right-rail" else "右侧"
+            return (f"- 🔴 画布 = 横屏内容区 {w}×1080（你在{content_side}；{person_side} 520px 是数字人竖条，不在你的画布内，你根本不用管它）。"
+                    f"90% 安全区：左右 {max(20, int(w * 0.05))}px、上下 54px。水平填满不留大片空白。所有 left/right/width 定位都基于 {w}px 宽。")
+        if orientation == "landscape":
+            return "- 🔴 画布 = 横屏 1920×1080。90% 安全区：左右 96px、上下 54px。水平填满不留大片空白"
+        return "- 🔴 画布 = 竖屏 1080×1920。90% 安全区：左右 54px、上下 96px。垂直填满不留大片空白"
+
     def _layout_menu(self, idx: int) -> str:
         opts = [
             "主标题居中大字，标签在下方弧形排列",
@@ -236,8 +252,12 @@ class Hf_build_avatar(SkillBase):
             return "🔴 开场——满幅数字人在底部（占下 1/3），你的内容全部排在上 2/3（标题大字110-130px + 1-2个标签慢飘入，不用KPI）。禁止把内容排到底部——底部是满幅数字人的位置，会被盖住。"
         return ""
 
-    def _threejs_menu(self, orientation: str = "portrait") -> str:
+    def _threejs_menu(self, orientation: str = "portrait", person_layout: str = "corner") -> str:
         fw, fh = (1920, 1080) if orientation == "landscape" else (1080, 1920)
+        # 🔴 v42 横屏真分区：分栏时 Three.js canvas 用内容区尺寸（1370×1080），不是全屏
+        if orientation == "landscape" and person_layout in ("left-rail", "right-rail"):
+            from skills.hf_build_avatar.person_zone import content_zone as _cz
+            fw = _cz(person_layout, orientation)["w"]
         menu = """选1个:
 
 A. 粒子场聚散:

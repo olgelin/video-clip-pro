@@ -46,6 +46,12 @@ def build_stage(scene_idx: int, dur: float, palette: dict, motion: dict,
                 ghost: str, quote: str, llm_motion: str = "",
                 orientation: str = "portrait", person_layout: str = "corner") -> str:
     fw, fh = (1920, 1080) if orientation == "landscape" else (1080, 1920)
+    # 🔴 v42 横屏真分区：分栏时内容画布 = 内容区宽度（人物区 520 + 缝隙 30 之外），
+    #    LLM 在内容区内排版，数字人独占对侧竖条，物理分离不叠放。
+    is_split = orientation == "landscape" and person_layout in ("left-rail", "right-rail")
+    if is_split:
+        from skills.hf_build_avatar.person_zone import content_zone as _cz
+        fw = _cz(person_layout, orientation)["w"]
     gs = palette["gradient_start"]
     gm = palette["gradient_mid"]
     ge = palette["gradient_end"]
@@ -130,20 +136,23 @@ def build_stage(scene_idx: int, dur: float, palette: dict, motion: dict,
     gsap_block = _GSAP_FIXED.format(gsap_local=_load_gsap_local(), motion_code=motion_code, scene_idx=scene_idx)
     three_block = _load_three_local()
 
-    # ── 人物区占位框（v39 同层排版）：data-person-zone 标记，LLM 视觉避让提示 + _compose_pip 叠加对齐 ──
-    try:
-        from skills.hf_build_avatar.person_zone import person_zone as _pz
-        _zone = _pz(person_layout, orientation)
-        person_zone_html = (
-            f'<div data-person-zone="{person_layout}" '
-            f'data-person-x="{_zone["x"]}" data-person-y="{_zone["y"]}" '
-            f'data-person-w="{_zone["w"]}" data-person-h="{_zone["h"]}" '
-            f'style="position:absolute;left:{_zone["x"]}px;top:{_zone["y"]}px;'
-            f'width:{_zone["w"]}px;height:{_zone["h"]}px;z-index:40;pointer-events:none;'
-            f'border:2px dashed rgba(255,255,255,0.12);background:rgba(255,255,255,0.02);'
-            f'box-sizing:border-box;border-radius:16px;"></div>')
-    except Exception:
-        person_zone_html = ""
+    # ── 人物区占位框（v39 同层排版）：data-person-zone 标记，LLM 视觉避让提示 ──
+    # 🔴 v42 横屏真分区：分栏时数字人在内容区之外（host 层），不需要占位框；竖屏/角标才需要。
+    person_zone_html = ""
+    if not is_split:
+        try:
+            from skills.hf_build_avatar.person_zone import person_zone as _pz
+            _zone = _pz(person_layout, orientation)
+            person_zone_html = (
+                f'<div data-person-zone="{person_layout}" '
+                f'data-person-x="{_zone["x"]}" data-person-y="{_zone["y"]}" '
+                f'data-person-w="{_zone["w"]}" data-person-h="{_zone["h"]}" '
+                f'style="position:absolute;left:{_zone["x"]}px;top:{_zone["y"]}px;'
+                f'width:{_zone["w"]}px;height:{_zone["h"]}px;z-index:40;pointer-events:none;'
+                f'border:2px dashed rgba(255,255,255,0.12);background:rgba(255,255,255,0.02);'
+                f'box-sizing:border-box;border-radius:16px;"></div>')
+        except Exception:
+            person_zone_html = ""
 
     return f"""<div data-composition-id="beat-{scene_idx}" data-width="{fw}" data-height="{fh}" style="position:absolute;inset:0;z-index:10;overflow:hidden;background:linear-gradient(180deg,{gs},{gm},{ge});font-family:'PingFang SC','Microsoft YaHei',sans-serif;">
 {three_block}

@@ -214,9 +214,14 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
         llm_html = seg.get("_llm_html", "")
         scene_html = seg.get("_scene_html", "")  # 🔴 P0: hf_build_pip 全屏完整场景（含背景+内容+GSAP）
         card_threejs_flag = False
+        # 🔴 v42 横屏真分区：该 beat 的内容区画布（横屏分栏时 = 全屏 - 人物区520 - 缝隙30，物理分离不叠放）
+        _split_czone = None
+        if layout_mode == "avatar" and orientation == "landscape":
+            from skills.hf_build_avatar.person_zone import person_layout_for_visual_type as _plvt, content_zone as _cz
+            _split_czone = _cz(_plvt(seg.get("visual_type", ""), orientation), orientation)
         # ── PIP模式：全屏场景，不用卡片模板 ──
         if layout_mode in ("pip", "avatar"):
-            cw, ch = fw, fh  # 全视口
+            cw, ch = (_split_czone["w"], _split_czone["h"]) if _split_czone else (fw, fh)
             if scene_html and len(scene_html) > 100:
                 card_html = scene_html
             elif llm_html and len(llm_html) > 100:
@@ -240,7 +245,11 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
             full_html = '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><style>'+FONT_CSS+MICRO_CSS+CARD_DECOR_CSS+'*{margin:0;padding:0;box-sizing:border-box}body{overflow:hidden;background:transparent;font-family:CJK,Inter,"Segoe UI",sans-serif}</style></head><body>'+threejs_bg+card_html+gsap_script+'</body></html>'
         (comp_dir / (beat_id + ".html")).write_text(full_html, encoding="utf-8")
         if layout_mode in ("pip", "avatar"):
-            card_style = f"position:absolute;inset:0;width:{fw}px;height:{fh}px;z-index:10;"
+            if _split_czone is not None:
+                # 🔴 横屏真分区：sub-composition 定位在内容区（左或右），数字人在对侧竖条
+                card_style = f"position:absolute;left:{_split_czone['x']}px;top:0;width:{_split_czone['w']}px;height:{_split_czone['h']}px;z-index:10;"
+            else:
+                card_style = f"position:absolute;inset:0;width:{fw}px;height:{fh}px;z-index:10;"
         else:
             # 位置轮换：左→中→右循环（按 idx），避免卡片锁死底部
             if orientation == "portrait":
@@ -320,8 +329,9 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
                 _hero_x = (fw - _hero_w) // 2   # 水平居中
                 _hero_y = fh - _hero_h - 180     # 贴底但留 180px 给底部字幕（字幕 bottom=130px），内容在上
             else:
-                # 横屏满幅 = 右侧分栏（35% 宽 × 全高），与 right-rail 缩位尺寸一致，满幅→分栏过渡自然
-                _hero_w = int(fw * 0.35)
+                # 横屏满幅 = 右侧人物区（520 宽 × 全高），与 right-rail 缩位尺寸一致，满幅→分栏过渡自然
+                from skills.hf_build_avatar.person_zone import LANDSCAPE_PERSON_W as _LPW
+                _hero_w = _LPW
                 _hero_h = fh
                 _hero_x = fw - _hero_w           # 贴右，内容在左
                 _hero_y = 0
@@ -335,20 +345,22 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
                 if (_prev["x"], _prev["y"], _prev["w"], _prev["h"]) != (_cur["x"], _cur["y"], _cur["w"], _cur["h"]):
                     pip_motion += f'tl.to("#avatar-video",{{left:{_cur["x"]},top:{_cur["y"]},width:{_cur["w"]},height:{_cur["h"]},duration:0.8,ease:"power3.inOut"}},{_sw_t});'
             # 🔴 v41 让位：data_impact 场景数字人临时缩小+变暗退后，让大数字满屏（场景中段让位，末尾恢复）
-            for _i in range(len(_zones)):
-                if ranges[_i].get("visual_type", "") == "data_impact":
-                    _yd_start = seg_offsets[_i]
-                    _yd_dur = ranges[_i]["end"] - ranges[_i]["start"]
-                    # 🔴 让位必须在满幅缩位完成后（hero_dur+1.5），否则第一个场景让位会在满幅期间提前缩小数字人
-                    _yield_t = round(max(_yd_start + 2.0, hero_dur + 1.5), 2)
-                    _restore_t = round(_yd_start + _yd_dur - 1.2, 2)
-                    if _yield_t < _restore_t:
-                        _z = _zones[_i]
-                        _w_s = int(_z["w"] * 0.62); _h_s = int(_z["h"] * 0.62)
-                        _x_s = _z["x"] + (_z["w"] - _w_s) // 2
-                        _y_s = _z["y"] + (_z["h"] - _h_s) // 2
-                        pip_motion += f'tl.to("#avatar-video",{{left:{_x_s},top:{_y_s},width:{_w_s},height:{_h_s},opacity:0.5,duration:0.5,ease:"power3.inOut"}},{_yield_t});'
-                        pip_motion += f'tl.to("#avatar-video",{{left:{_z["x"]},top:{_z["y"]},width:{_z["w"]},height:{_z["h"]},opacity:1,duration:0.5,ease:"power3.inOut"}},{_restore_t});'
+            # 🔴 v42 横屏分栏真分区：内容区固定 1370，数字人缩小不增空间反而让 520 人物区留白，横屏跳过让位
+            if orientation == "portrait":
+                for _i in range(len(_zones)):
+                    if ranges[_i].get("visual_type", "") == "data_impact":
+                        _yd_start = seg_offsets[_i]
+                        _yd_dur = ranges[_i]["end"] - ranges[_i]["start"]
+                        # 🔴 让位必须在满幅缩位完成后（hero_dur+1.5），否则第一个场景让位会在满幅期间提前缩小数字人
+                        _yield_t = round(max(_yd_start + 2.0, hero_dur + 1.5), 2)
+                        _restore_t = round(_yd_start + _yd_dur - 1.2, 2)
+                        if _yield_t < _restore_t:
+                            _z = _zones[_i]
+                            _w_s = int(_z["w"] * 0.62); _h_s = int(_z["h"] * 0.62)
+                            _x_s = _z["x"] + (_z["w"] - _w_s) // 2
+                            _y_s = _z["y"] + (_z["h"] - _h_s) // 2
+                            pip_motion += f'tl.to("#avatar-video",{{left:{_x_s},top:{_y_s},width:{_w_s},height:{_h_s},opacity:0.5,duration:0.5,ease:"power3.inOut"}},{_yield_t});'
+                            pip_motion += f'tl.to("#avatar-video",{{left:{_z["x"]},top:{_z["y"]},width:{_z["w"]},height:{_z["h"]},opacity:1,duration:0.5,ease:"power3.inOut"}},{_restore_t});'
             pip_motion += f'tl.to("#avatar-video",{{scale:1.005,duration:2.2,repeat:3,yoyo:true,ease:"sine.inOut"}},{hero_dur + 1.5});'
             avatar_shadow_css = "#avatar-video{box-shadow:0 26px 52px rgba(0,0,0,0.6),0 10px 20px rgba(0,0,0,0.45);}"
             _aspect = "1" if orientation == "portrait" else "3/4"

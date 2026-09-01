@@ -13,6 +13,10 @@ _compose_pip（ffmpeg 叠加）都从这里取坐标，保证两层对齐不偏�
   right-rail  右分栏（对称）
 """
 
+# 🔴 v42 横屏真分区常量：人物区 + 缝隙 + 内容区 三者物理分离（不是叠放）
+LANDSCAPE_PERSON_W = 520   # 横屏人物区宽（用户拍板：520×1080 侧边竖条）
+LANDSCAPE_GAP = 30         # 人物区与内容区之间的缝隙
+
 
 def person_zone(layout: str, orientation: str = "portrait") -> dict:
     fw, fh = (1920, 1080) if orientation == "landscape" else (1080, 1920)
@@ -37,7 +41,7 @@ def person_zone(layout: str, orientation: str = "portrait") -> dict:
         if is_portrait:
             # 竖屏左分栏太窄会变形，回退 corner
             return person_zone("corner", orientation)
-        w = int(fw * 0.35)   # 横屏左侧竖条 35% 宽
+        w = LANDSCAPE_PERSON_W   # 横屏人物区 520 宽（真分区，非 35%）
         h = fh
         x = 0
         y = 0
@@ -45,7 +49,7 @@ def person_zone(layout: str, orientation: str = "portrait") -> dict:
     elif layout == "right-rail":
         if is_portrait:
             return person_zone("corner", orientation)
-        w = int(fw * 0.35)
+        w = LANDSCAPE_PERSON_W
         h = fh
         x = fw - w
         y = 0
@@ -69,13 +73,37 @@ _VT_LAYOUT_LANDSCAPE = {
     "quote_hero": "right-rail",
     "compare": "right-rail",
     "timeline_event": "right-rail",
-    # 默认 → 右下角标
+    # 数据/流程/列表/仪表盘 → 人物左（内容右），与金句/对比形成左右切换
+    "data_impact": "left-rail",
+    "flow": "left-rail",
+    "list_alert": "left-rail",
+    "hud": "left-rail",
+    # 默认 → right-rail（横屏统一分栏，不做角标叠放）
 }
 
 
 def person_layout_for_visual_type(visual_type: str, orientation: str = "portrait") -> str:
-    """按视觉类型决定人物位置布局（v41）。默认右下角标。"""
+    """按视觉类型决定人物位置布局（v42）。横屏统一分栏（人物侧边+内容对侧真分区）；
+    竖屏仍按金句→左下、其余→右下角标。"""
     vt = (visual_type or "").strip().lower()
     if orientation == "landscape":
-        return _VT_LAYOUT_LANDSCAPE.get(vt, "corner-br")
+        return _VT_LAYOUT_LANDSCAPE.get(vt, "right-rail")
     return _VT_LAYOUT_PORTRAIT.get(vt, "corner-br")
+
+
+def content_zone(layout: str, orientation: str = "portrait") -> dict:
+    """🔴 v42 横屏真分区：返回内容区（sub-composition 画布）坐标。
+    横屏分栏时，内容画布 = 全屏 - 人物区 - 缝隙，LLM 在内容区内排版，人物独占对侧，物理分离。
+    竖屏/角标 → 内容全屏。"""
+    fw, fh = (1920, 1080) if orientation == "landscape" else (1080, 1920)
+    if orientation != "landscape":
+        return {"x": 0, "y": 0, "w": fw, "h": fh}
+    if layout == "left-rail":
+        # 人物左（520），内容右：内容 x = 520+30 = 550，宽 = 1920-550 = 1370
+        cx = LANDSCAPE_PERSON_W + LANDSCAPE_GAP
+        return {"x": cx, "y": 0, "w": fw - cx, "h": fh}
+    if layout == "right-rail":
+        # 人物右（520），内容左：内容 x = 0，宽 = 1920-520-30 = 1370
+        return {"x": 0, "y": 0, "w": fw - LANDSCAPE_PERSON_W - LANDSCAPE_GAP, "h": fh}
+    # 角标 → 内容全屏
+    return {"x": 0, "y": 0, "w": fw, "h": fh}

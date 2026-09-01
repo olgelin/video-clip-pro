@@ -88,7 +88,7 @@
 
 ## 排版规范
 
-- 🔴 90% 安全区（1080×1920）：左右 54px、上下 96px。垂直填满不留大片空白
+{canvas_hint}
 - 主标题：80-120px，font-weight:900，letter-spacing 4-8px（禁止 0 或 >10px），发光 2-3 层 `text-shadow: 0 0 20px var(--c1), 0 0 60px rgba(var(--c1-rgb),0.4)`（禁止 5 层以上堆叠）
 - 核心数据：100-140px，🔴 必须 JetBrains Mono 等宽字体（数字用中文字体显示是失败）
 - 副标题：36-48px | 标签：20-28px | 辅助：16-20px #888-#999
