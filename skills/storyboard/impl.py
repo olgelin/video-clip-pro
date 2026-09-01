@@ -270,11 +270,11 @@ class Storyboard(SkillBase):
                     sc = s.get("shot_scale", "")
                     if orientation == "landscape":
                         if sc == "inset":
-                            s["person_layout"] = "rail_left" if side == "L" else "rail_right"
+                            s["person_layout"] = "left-rail" if side == "L" else "right-rail"
                         else:
-                            s["person_layout"] = "corner_bl" if side == "L" else "corner_br"
+                            s["person_layout"] = "corner-bl" if side == "L" else "corner-br"
                     else:
-                        s["person_layout"] = "corner_bl" if side == "L" else "corner_br"
+                        s["person_layout"] = "corner-bl" if side == "L" else "corner-br"
         except Exception:
             pass
         return scenes
