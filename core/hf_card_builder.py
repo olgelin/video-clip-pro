@@ -376,7 +376,7 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
                             pip_motion += f'tl.to("#avatar-video",{{left:{_x_s},top:{_y_s},width:{_w_s},height:{_h_s},opacity:0.5,duration:0.5,ease:"power3.inOut"}},{_yield_t});'
                             pip_motion += f'tl.to("#avatar-video",{{left:{_z["x"]},top:{_z["y"]},width:{_z["w"]},height:{_z["h"]},opacity:1,duration:0.5,ease:"power3.inOut"}},{_restore_t});'
             pip_motion += f'tl.to("#avatar-video",{{scale:1.005,duration:2.2,repeat:3,yoyo:true,ease:"sine.inOut"}},{hero_dur + 1.5});'
-            avatar_shadow_css = "#avatar-video{box-shadow:0 26px 52px rgba(0,0,0,0.6),0 10px 20px rgba(0,0,0,0.45);}"
+            avatar_shadow_css = "#avatar-video{box-shadow:0 26px 52px rgba(0,0,0,0.6),0 10px 20px rgba(0,0,0,0.45);border:1px solid rgba(255,255,255,0.14);}"
             _aspect = "1" if orientation == "portrait" else "3/4"
             _init_size = 100  # 占位，avatar 用 person_zone 绝对像素定位
             _zr = _zone["w"] // 2 if orientation == "portrait" else 16

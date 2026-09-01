@@ -292,6 +292,7 @@ quote_hero、compare、timeline_event 最容易漏——但它们也需要 KPI �
 
 ## 基础动效规范
 
+- 🔴 **配音驱动视觉**：元素的弹出时机跟随口播节奏，不是均匀铺开——开场 0-0.5s 只出标题，口播说到哪个数据、哪个数据才弹出（delay 对应口播提到它的时刻）。禁止所有元素同时弹出 = 像 PPT。
 - 入场：tl.from/tl.fromTo，stagger 0.12-0.15s，层次感
 - 缓动：内容 power3.out/back.out(1.7) | 呼吸 sine.inOut | 粒子/扫光 none
 - 呼吸动画 2-3 个：tl.to repeat:3 yoyo:true
