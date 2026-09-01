@@ -219,15 +219,9 @@ class Storyboard(SkillBase):
         return scenes
 
     def _shot_scale(self, i: int, total: int, beat: str) -> str:
-        """🔴 画面景别（满/小交替）：full=全屏满版(冲击)，inset=缩小的小画面(缩放+移动动画)。
-        开场必满、高潮(中间场)必满、其余满/小交替。连续两个 full 让眼睛疲劳，靠 inset 喘口气。"""
-        if i == 0:
-            return "full"
-        if total >= 4 and i == total // 2:
-            return "full"
-        if i % 2 == 0:
-            return "full"
-        return "inset"
+        """🔴 画面景别（满/小严格交替）：full=全屏满版(冲击)，inset=缩小的小画面(缩放+移动动画)。
+        开场满(i=0)，之后 full/inset 交替，保证整条视频有全屏与小画面的节奏变化，绝不连续两个满版。"""
+        return "full" if i % 2 == 0 else "inset"
 
     def _semantic_split_merge(self, ranges: list, provider=None) -> list:
         """语义分镜：LLM 读全文切话题/信息点/转折点，按分组合并 ranges。
