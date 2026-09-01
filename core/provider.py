@@ -28,7 +28,7 @@ TASK_MODELS = {
     "design_system": {"primary": "deepseek-v4-pro", "fallback": [], "max_tokens": 2000},
     # 🔴 avatar 系列（话题→口播稿→配音→数字人）
     "speech_processor": {"primary": "deepseek-v4-pro", "fallback": [], "max_tokens": 4000},
-    "script_writer": {"primary": "deepseek-v4-pro", "fallback": [], "max_tokens": 4000},
+    "script_writer": {"primary": "deepseek-v4-pro", "fallback": [], "max_tokens": 8000},
     "topic_scout": {"primary": "deepseek-v4-pro", "fallback": [], "max_tokens": 3000},
     "topic_selector": {"primary": "deepseek-v4-pro", "fallback": [], "max_tokens": 2000},
 }
@@ -198,6 +198,9 @@ class Provider:
                         # V34 fix: 只取 content，绝不 fallback reasoning_content（思考过程不是答案，会导致 JSON 解析失败）
                         raw = (msg.get("content") or "").strip()
                         if not raw:
+                            # 🔴 reasoning 模型偶发思考占满 max_tokens 导致 content 空 → 重试同一 key
+                            print(f"  [Provider] {model} 空 content，重试")
+                            time.sleep(2)
                             continue
                         self._last_model=model
                         self._cost.reconcile(task,True,len(raw),model)
