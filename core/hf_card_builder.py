@@ -318,7 +318,7 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
             _hero_h = int(_hero_w * 4 / 3)
             if orientation == "portrait":
                 _hero_x = (fw - _hero_w) // 2   # 水平居中
-                _hero_y = fh - _hero_h - 40      # 贴底，内容在上
+                _hero_y = fh - _hero_h - 180     # 贴底但留 180px 给底部字幕（字幕 bottom=130px），内容在上
             else:
                 _hero_x = fw - _hero_w - 40      # 贴右，内容在左
                 _hero_y = (fh - _hero_h) // 2    # 垂直居中
