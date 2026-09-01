@@ -218,7 +218,7 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
         _split_czone = None
         if layout_mode == "avatar" and orientation == "landscape":
             from skills.hf_build_avatar.person_zone import person_layout_for_visual_type as _plvt, content_zone as _cz
-            _split_czone = _cz(_plvt(seg.get("visual_type", ""), orientation), orientation)
+            _split_czone = _cz(seg.get("person_layout") or _plvt(seg.get("visual_type", ""), orientation), orientation)
         # ── PIP模式：全屏场景，不用卡片模板 ──
         if layout_mode in ("pip", "avatar"):
             cw, ch = (_split_czone["w"], _split_czone["h"]) if _split_czone else (fw, fh)
@@ -294,7 +294,7 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
             # 🔴 v41 语义换位：每个 beat 按 visual_type 决定人物位置（金句/对比/时间线→左下/右分栏，其余→右下角标）
             _zones = []
             for _seg in ranges:
-                _pl_seg = _pz_vt(_seg.get("visual_type", ""), orientation)
+                _pl_seg = _seg.get("person_layout") or _pz_vt(_seg.get("visual_type", ""), orientation)
                 _zones.append(_pz(_pl_seg, orientation))
             _zone = _zones[0]  # 第一个场景的位置（video 初始位置 + 满幅缩位目标）
             pos_name, pos_css = "avatar-rail", ""

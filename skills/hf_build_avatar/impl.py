@@ -63,14 +63,15 @@ class Hf_build_avatar(SkillBase):
 
             brief = self._dict_to_brief(scene, idx, n, prev_scene)
             prompt = scene_prompt_tpl
-            _pl = self._person_layout(orientation, scene.get('visual_type'))
+            # 🔴 数字人编排优先用 LLM 判断结果（storyboard 里 _direct_person_layouts 产出），失败回退硬编码
+            _pl = scene.get("person_layout") or self._person_layout(orientation, scene.get('visual_type'))
             reps = {
                 "visual_brief": brief,
                 "color_palette": json.dumps(palette, ensure_ascii=False, indent=2),
                 "layout_options": self._layout_menu(idx),
                 "threejs_menu": self._threejs_menu(orientation, _pl),
                 "motion_instructions": self._motion_nl(motion),
-                "opening_hint": self._opening_hint(idx),
+                "opening_hint": self._opening_hint(idx, orientation),
                 "canvas_hint": self._canvas_hint(orientation, _pl),
             }
             for k, v in reps.items():
@@ -121,6 +122,7 @@ class Hf_build_avatar(SkillBase):
                 "beat": "INFO",
                 "quote": scene.get("narration", ""),
                 "visual_type": scene.get("visual_type", ""),  # 🔴 v41 语义换位：传给 build 决定人物位置
+                "person_layout": scene.get("person_layout", ""),  # 🔴 LLM 编排的数字人摆位（大/小/左/右）
                 "_scene_html": html_content,
             })
         if not render_ranges:
@@ -250,10 +252,12 @@ class Hf_build_avatar(SkillBase):
                 lines.append(f"{t:.1f}s: 标签逐个弹出")
         return "\n".join(lines) if lines else "0s: 标题渐入"
 
-    def _opening_hint(self, idx: int) -> str:
-        if idx == 0:
-            return "🔴 开场——满幅数字人在底部（占下 1/3），你的内容全部排在上 2/3（标题大字110-130px + 1-2个标签慢飘入，不用KPI）。禁止把内容排到底部——底部是满幅数字人的位置，会被盖住。"
-        return ""
+    def _opening_hint(self, idx: int, orientation: str = "portrait") -> str:
+        if idx != 0:
+            return ""
+        if orientation == "landscape":
+            return "🔴 开场——满幅数字人在右侧竖条，你的内容全部排在左侧内容区（标题大字 + 1-2 个标签慢飘入，不用 KPI）。禁止把内容排到右侧——右侧是满幅数字人的位置，会被盖住。"
+        return "🔴 开场——满幅数字人在底部（占下 1/3），你的内容全部排在上 2/3（标题大字110-130px + 1-2个标签慢飘入，不用KPI）。禁止把内容排到底部——底部是满幅数字人的位置，会被盖住。"
 
     def _threejs_menu(self, orientation: str = "portrait", person_layout: str = "corner") -> str:
         fw, fh = (1920, 1080) if orientation == "landscape" else (1080, 1920)

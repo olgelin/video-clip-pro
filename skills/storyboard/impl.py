@@ -83,7 +83,8 @@ class Storyboard(SkillBase):
             return {"scenes": []}
 
         provider = context.get("provider")
-        scenes = self._build(ranges, provider=provider)
+        orientation = context.get("orientation", "portrait")
+        scenes = self._build(ranges, provider=provider, orientation=orientation)
         print(f"  Storyboard: {len(ranges)} segments → {len(scenes)} visual scenes")
         for s in scenes:
             ke = s.get("key_elements", [])
@@ -129,7 +130,7 @@ class Storyboard(SkillBase):
             acc += dur
         return ranges
 
-    def _build(self, ranges: list, provider=None) -> list:
+    def _build(self, ranges: list, provider=None, orientation: str = "portrait") -> list:
         """核心：语义分镜 + 推断 + 提取"""
         if not ranges:
             return []
@@ -216,6 +217,72 @@ class Storyboard(SkillBase):
             })
             acc += real_dur
 
+        # 🔴 数字人编排 LLM 判断（不代码锁死）：读场景语义，LLM 决定每个场景数字人摆位（大/小/左/右）
+        scenes = self._direct_person_layouts(scenes, orientation, provider)
+
+        return scenes
+
+    def _direct_person_layouts(self, scenes: list, orientation: str, provider) -> list:
+        """🔴 数字人编排 LLM 判断（不代码锁死）：读场景语义，让 LLM 决定每个场景数字人摆位。
+        横屏：rail_left/rail_right/corner_bl/corner_br（大分栏↔小角标的缩放变化）；
+        竖屏：corner_bl/corner_br（左右换位，开场满幅贴底由框架固定）。
+        LLM 失败 → fallback 到 person_layout_for_visual_type 硬编码映射。"""
+        from skills.hf_build_avatar.person_zone import person_layout_for_visual_type as _plvt
+
+        n = len(scenes)
+        # 先填 fallback（LLM 失败时兜底）
+        for s in scenes:
+            s["person_layout"] = _plvt(s.get("visual_type", ""), orientation)
+
+        if not provider or n < 2:
+            return scenes
+
+        if orientation == "landscape":
+            opts_desc = ("rail_right(右侧大竖条520,内容左1370区) / rail_left(左侧大竖条520,内容右1370区) / "
+                         "corner_br(右下角小图标,内容全屏1920) / corner_bl(左下角小图标,内容全屏1920)")
+            valid = {"rail_right", "rail_left", "corner_br", "corner_bl"}
+        else:
+            opts_desc = "corner_br(右下角小图标) / corner_bl(左下角小图标)"
+            valid = {"corner_br", "corner_bl"}
+
+        lines = []
+        for i, s in enumerate(scenes):
+            vt = s.get("visual_type", "")
+            sc = s.get("shot_scale", "")
+            nar = (s.get("narration", "") or "").strip()[:24]
+            lines.append(f"[{i}] 视觉类型:{vt} 景别:{sc} 内容:{nar}")
+        scene_list = "\n".join(lines)
+
+        prompt = (
+            f"你是数字人出镜导演。下面是一个{'横屏' if orientation == 'landscape' else '竖屏'}口播视频的 {n} 个场景"
+            f"（视觉类型+景别+内容要点）。为每个场景决定数字人摆位，让整条视频的数字人有「大↔小缩放 + 左右换位」的节奏，不呆板。\n\n"
+            f"{scene_list}\n\n"
+            f"可选摆位：{opts_desc}\n\n"
+            f"要求：\n"
+            f"1. 数字人要有大(rail竖条)↔小(corner角标)的缩放变化，不能全是一个\n"
+            f"2. 内容要全屏铺开的场景(数据冲击/金句大字/满版景别full)→数字人缩corner角标,内容全屏,画面大气\n"
+            f"3. 相邻场景数字人左右/大小尽量不同(换位)\n"
+            f"4. 开场场景用大摆位(rail竖条),有存在感\n\n"
+            f"只输出 JSON：{{\"layouts\": [\"...\", ...]}}，长度={n}，按场景顺序，每个值必须是上面选项之一，不要解释。"
+        )
+
+        try:
+            raw = provider.call("storyboard_split", prompt,
+                                system="你是数字人出镜导演。只输出 JSON 数组，不要解释。",
+                                max_tokens=300)
+            if not raw:
+                return scenes
+            import json as _json, re as _re
+            m = _re.search(r'\[[^\]]*\]', raw, _re.DOTALL)
+            if not m:
+                return scenes
+            layouts = _json.loads(m.group(0))
+            if isinstance(layouts, list) and len(layouts) == n:
+                for i, lay in enumerate(layouts):
+                    if lay in valid:
+                        scenes[i]["person_layout"] = lay
+        except Exception:
+            pass
         return scenes
 
     def _shot_scale(self, i: int, total: int, beat: str) -> str:
