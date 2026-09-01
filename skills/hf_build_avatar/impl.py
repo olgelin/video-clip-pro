@@ -194,6 +194,9 @@ class Hf_build_avatar(SkillBase):
         ch = d.get("choreography", {})
         if ch:
             parts.append(f"动画动词：标题 {ch.get('title','')}，内容 {ch.get('content','')}")
+        ss = d.get("shot_scale", "")
+        if ss:
+            parts.append(f"🔴 画面景别（MUST 遵守，见 scene_system 的「画面景别」段）：{ss}")
         return "\n".join(parts)
 
     def _person_layout(self, orientation: str, visual_type: str = "") -> str:

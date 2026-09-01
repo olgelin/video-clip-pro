@@ -204,6 +204,7 @@ class Storyboard(SkillBase):
                 "narration": narration, "visual_type": vt, "concept": concept,
                 "mood": mood, "key_elements": ke, "animation_style": anim,
                 "chart_type": chart_type,
+                "shot_scale": self._shot_scale(i, len(merged), beat),
                 # ── 抄自 video-factory：语义映射（对齐 vf 的 LLM 语义产出，不是机械轮换）──
                 "depth_layers": DEPTH_LAYERS_BY_TYPE.get(vt, DEPTH_VARIANTS[i % len(DEPTH_VARIANTS)]),
                 "density_target": 8,
@@ -216,6 +217,17 @@ class Storyboard(SkillBase):
             acc += real_dur
 
         return scenes
+
+    def _shot_scale(self, i: int, total: int, beat: str) -> str:
+        """🔴 画面景别（满/小交替）：full=全屏满版(冲击)，inset=缩小的小画面(缩放+移动动画)。
+        开场必满、高潮(中间场)必满、其余满/小交替。连续两个 full 让眼睛疲劳，靠 inset 喘口气。"""
+        if i == 0:
+            return "full"
+        if total >= 4 and i == total // 2:
+            return "full"
+        if i % 2 == 0:
+            return "full"
+        return "inset"
 
     def _semantic_split_merge(self, ranges: list, provider=None) -> list:
         """语义分镜：LLM 读全文切话题/信息点/转折点，按分组合并 ranges。
