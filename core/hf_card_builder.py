@@ -301,16 +301,30 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
             frame_name, frame_css = "minimal-line", PIP_FRAMES["minimal-line"]
             # 前景粒子层（z17，人物窗口之上）+ 环境呼吸 + 数字人呼吸（repeat 有限，符合 determinism 规则）
             import random as _rnd3
-            # 🔴 粒子覆盖所有数字人位置的并集区域（v41 换位后粒子仍环绕数字人，不悬空）
-            _min_x = min(z["x"] for z in _zones); _min_y = min(z["y"] for z in _zones)
-            _max_x = max(z["x"] + z["w"] for z in _zones); _max_y = max(z["y"] + z["h"] for z in _zones)
-            _pad_x = int((_max_x - _min_x) * 0.15); _pad_y = int((_max_y - _min_y) * 0.15)
+            # 🔴 粒子环绕数字人：竖屏覆盖所有位置并集；横屏分栏时集中环绕每个人物竖条（不铺满全屏干扰内容阅读）
             _fg = []
-            for _i in range(36):
-                _fs = _rnd3.choice([4, 5, 6, 7, 8])
-                _px = max(0, _min_x - _pad_x + _rnd3.randint(0, (_max_x - _min_x) + 2 * _pad_x))
-                _py = max(0, _min_y - _pad_y + _rnd3.randint(0, (_max_y - _min_y) + 2 * _pad_y))
-                _fg.append(f'<span class="fg-p" style="left:{_px}px;top:{_py}px;width:{_fs}px;height:{_fs}px;"></span>')
+            if orientation == "landscape":
+                _seen_z = {}
+                for _z in _zones:
+                    _key = (_z["x"], _z["y"], _z["w"], _z["h"])
+                    if _key not in _seen_z:
+                        _seen_z[_key] = _z
+                for _z in _seen_z.values():
+                    _pad_x = int(_z["w"] * 0.4); _pad_y = int(_z["h"] * 0.08)
+                    for _i in range(18):
+                        _fs = _rnd3.choice([4, 5, 6, 7, 8])
+                        _px = max(0, _z["x"] - _pad_x + _rnd3.randint(0, _z["w"] + 2 * _pad_x))
+                        _py = max(0, _z["y"] - _pad_y + _rnd3.randint(0, _z["h"] + 2 * _pad_y))
+                        _fg.append(f'<span class="fg-p" style="left:{_px}px;top:{_py}px;width:{_fs}px;height:{_fs}px;"></span>')
+            else:
+                _min_x = min(z["x"] for z in _zones); _min_y = min(z["y"] for z in _zones)
+                _max_x = max(z["x"] + z["w"] for z in _zones); _max_y = max(z["y"] + z["h"] for z in _zones)
+                _pad_x = int((_max_x - _min_x) * 0.15); _pad_y = int((_max_y - _min_y) * 0.15)
+                for _i in range(36):
+                    _fs = _rnd3.choice([4, 5, 6, 7, 8])
+                    _px = max(0, _min_x - _pad_x + _rnd3.randint(0, (_max_x - _min_x) + 2 * _pad_x))
+                    _py = max(0, _min_y - _pad_y + _rnd3.randint(0, (_max_y - _min_y) + 2 * _pad_y))
+                    _fg.append(f'<span class="fg-p" style="left:{_px}px;top:{_py}px;width:{_fs}px;height:{_fs}px;"></span>')
             fg_particles_html = f'<div class="fg-particles" id="fg-particles">{"".join(_fg)}</div>'
             pip_motion = ''
             pip_motion += 'tl.fromTo("#env-vignette",{opacity:0.55},{opacity:1,duration:8,repeat:3,yoyo:true,ease:"sine.inOut"},0);'
