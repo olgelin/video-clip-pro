@@ -259,10 +259,11 @@ class Storyboard(SkillBase):
             f"{scene_list}\n\n"
             f"可选摆位：{opts_desc}\n\n"
             f"要求：\n"
-            f"1. 数字人要有大(rail竖条)↔小(corner角标)的缩放变化，不能全是一个\n"
-            f"2. 内容要全屏铺开的场景(数据冲击/金句大字/满版景别full)→数字人缩corner角标,内容全屏,画面大气\n"
-            f"3. 相邻场景数字人左右/大小尽量不同(换位)\n"
-            f"4. 开场场景用大摆位(rail竖条),有存在感\n\n"
+            f"1. 🔴 大(rail竖条)↔小(corner角标)必须交替：整条视频 rail 和 corner 大致各占一半，禁止「开场一个 rail，后面全 corner」\n"
+            f"2. 🔴 左右换位：相邻场景数字人左右尽量不同（rail_left↔rail_right，corner_bl↔corner_br），避免连续多个场景挤在同一侧同一角\n"
+            f"3. 景别配合：full(满版景别)→数字人缩 corner 角标让内容全屏大气；inset(缩小景别)→数字人 rail 大竖条分栏\n"
+            f"4. 开场场景用 rail 大竖条（有存在感）\n"
+            f"5. 金句/时间线/对比等叙事感场景可用 rail 大竖条（数字人像讲解员）；数据/仪表盘等信息密集场景缩 corner 让内容铺开\n\n"
             f"只输出 JSON：{{\"layouts\": [\"...\", ...]}}，长度={n}，按场景顺序，每个值必须是上面选项之一，不要解释。"
         )
 
