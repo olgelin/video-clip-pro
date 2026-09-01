@@ -106,31 +106,22 @@
 
 每场景 ≥2 种颜色，核心数据高亮色。
 
-## 🃏 卡片系统（信息卡/数据卡统一规范）
+## 🃏 卡片技法菜单（信息卡/数据卡）
 
-🔴 所有卡片（KPI 卡片、数据卡片、对比卡片、列表项）必须遵守统一风格，不能每张卡片各玩各的。
+🔴 卡片要有精致质感，但**禁止套模板**——从下面技法里按语义选 2-4 个自由组合，每张卡片组合不同、不千篇一律：
 
-**标准精致卡片模板**（直接套用，改颜色和数值即可——四角 L 形角标 + 顶部高光线 + 毛玻璃 + 内发光 = 精致卡片的标配）：
+1. **四角 L 形角标**：四角小 L 形发光括号（2px border 拼）
+2. **顶部高光线**：卡片顶部 1px 渐变发光线条
+3. **毛玻璃**：`backdrop-filter:blur(20px) saturate(180%)` + 半透明深色背景
+4. **内发光**：`box-shadow:0 0 0 1px rgba(主色,0.06) inset` 主色微光
+5. **渐变边框**：主色→青色渐变描边
+6. **光斑扫过**：亮点沿边框/表面扫过（GSAP 循环）
 
-```html
-<div style="position:relative;background:rgba(15,15,46,0.6);backdrop-filter:blur(20px) saturate(180%);border:1px solid rgba(108,140,255,0.25);border-radius:16px;padding:20px 24px;box-shadow:0 8px 32px rgba(0,0,0,0.45),0 0 0 1px rgba(108,140,255,0.06) inset;overflow:hidden;">
-  <div style="position:absolute;top:0;left:10%;right:10%;height:1px;background:linear-gradient(90deg,transparent,rgba(0,212,255,0.55),transparent);"></div>
-  <div style="position:absolute;top:8px;left:8px;width:14px;height:14px;border-top:2px solid rgba(108,140,255,0.65);border-left:2px solid rgba(108,140,255,0.65);border-radius:3px 0 0 0;"></div>
-  <div style="position:absolute;top:8px;right:8px;width:14px;height:14px;border-top:2px solid rgba(108,140,255,0.65);border-right:2px solid rgba(108,140,255,0.65);border-radius:0 3px 0 0;"></div>
-  <div style="position:absolute;bottom:8px;left:8px;width:14px;height:14px;border-bottom:2px solid rgba(108,140,255,0.65);border-left:2px solid rgba(108,140,255,0.65);border-radius:0 0 0 3px;"></div>
-  <div style="position:absolute;bottom:8px;right:8px;width:14px;height:14px;border-bottom:2px solid rgba(108,140,255,0.65);border-right:2px solid rgba(108,140,255,0.65);border-radius:0 0 3px 0;"></div>
-  <div style="font-size:13px;color:#8a93b0;letter-spacing:2px;">标签</div>
-  <div style="font-size:44px;font-weight:800;color:#fff;font-family:'JetBrains Mono',monospace;margin:6px 0;text-shadow:0 0 16px rgba(108,140,255,0.35);">数值</div>
-  <div style="font-size:14px;color:#6b7280;">说明</div>
-</div>
-```
-
-**卡片精致度铁律**：
-- **四角 L 形角标**（科技感）+ **顶部高光线**（1px 渐变）+ **毛玻璃背景** + **内发光** = 精致卡片的四件套。四件套缺一个都显得廉价。
-- **统一外观**：同一场景内所有卡片用同一套视觉语言——同样圆角(16px)、同样边框色、同样背景透明度。禁止一张毛玻璃一张纯色一张描边混搭。
-- **统一三层**：卡片内信息三层齐全——标签(12-14px 小字/大写/低饱和) → 数值(36-64px 大字/JetBrains Mono) → 说明(14-16px 灰字)。三层齐才是完整卡片。
+🔴 卡片统一规范（不变的部分）：
+- **统一外观**：同一场景内所有卡片用同一套视觉语言——同样圆角(16px)、同样边框色、同样背景透明度。
+- **统一三层**：标签(12-14px 小字/大写/低饱和) → 数值(36-64px 大字/JetBrains Mono) → 说明(14-16px 灰字)。三层齐才是完整卡片。
 - **边框带色**：卡片边框 = 主色 `rgba(主色,0.25)`，不是白/灰边框。
-- **发光克制**：数值发光 `text-shadow:0 0 16px rgba(主色,0.35)` 最多 1 层，禁止 3 层发光堆叠。
+- **发光克制**：数值发光 `text-shadow:0 0 16px rgba(主色,0.35)` 最多 1 层。
 - **间距对齐**：卡片间 gap 16-24px，flex/grid 对齐，禁止乱堆乱叠。
 
 ## 🖥️ 横屏分栏排版（画布 = 内容区时）
@@ -239,7 +230,7 @@ quote_hero、compare、timeline_event 最容易漏——但它们也需要 KPI �
 
 - [ ] Three.js canvas + script（选 1 种技法）
 - [ ] 主标题 h1 + 标签卡片(≥3个) + 数据可视化(≥1个)
-- [ ] 🔴 卡片套用标准模板（四角 L 形角标 + 顶部高光线 + 毛玻璃 + 内发光四件套，缺一不可）
+- [ ] 🔴 卡片用了 2-4 个精致技法（四角角标/高光线/毛玻璃/内发光/渐变边框/光斑扫过 自由组合，禁止套模板千篇一律）
 - [ ] chart_type 非 null → 已画图表（bar/line/pie/kpi_grid）
 - [ ] camera_motion → 已实现镜头运动（dolly/pan/zoom）
 - [ ] 入场动画 ≥8 个（每个元素 ≥3 属性同时变）
