@@ -143,17 +143,47 @@ class Duix(SkillBase):
                 raise _DuixStuck("合成超时 30min")
 
     def _restart_container(self) -> bool:
-        """docker restart Duix 容器，等它恢复（curl 8383/docs 直到响应）。"""
+        """重启 Duix 容器；若 Docker 引擎挂，先启动 Docker Desktop 再重启。"""
+        # 1. 先尝试 docker restart（容器级卡死）
         try:
             r = subprocess.run(["docker", "restart", DUIX_CONTAINER],
-                               capture_output=True, text=True, timeout=60)
+                               capture_output=True, text=True, timeout=120)
             out = (r.stdout or "").strip() or (r.stderr or "").strip()
-            print(f"  [duix] 重启容器: {out}")
+            if r.returncode == 0:
+                print(f"  [duix] 重启容器: {out}")
+                return self._wait_container_ready()
+            print(f"  [duix] ⚠️ docker restart 返回 {r.returncode}: {out[:200]}")
+        except subprocess.TimeoutExpired:
+            print("  [duix] ⚠️ docker restart 超时(120s)，疑似引擎挂")
         except Exception as e:
             print(f"  [duix] ⚠️ docker restart 失败: {e}")
-            return False
-        # 等容器恢复（最多 120s）
-        for _ in range(60):
+
+        # 2. 引擎挂 → 启动 Docker Desktop，等引擎恢复，再 restart 容器
+        print("  [duix] 🔄 Docker 引擎疑似挂，启动 Docker Desktop...")
+        try:
+            subprocess.run(["powershell.exe", "-Command",
+                            "Start-Process 'C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe'"],
+                           capture_output=True, text=True, timeout=30)
+        except Exception as e:
+            print(f"  [duix] ⚠️ 启动 Docker Desktop 失败: {e}")
+        # 等引擎恢复（最多 180s）
+        for _ in range(18):
+            time.sleep(10)
+            try:
+                r = subprocess.run(["docker", "ps"], capture_output=True, text=True, timeout=15)
+                if r.returncode == 0:
+                    print("  [duix] ✅ Docker 引擎已恢复，重启容器")
+                    subprocess.run(["docker", "restart", DUIX_CONTAINER],
+                                   capture_output=True, text=True, timeout=120)
+                    return self._wait_container_ready()
+            except Exception:
+                pass
+        print("  [duix] ❌ Docker 引擎恢复超时")
+        return False
+
+    def _wait_container_ready(self, timeout_s: int = 120) -> bool:
+        """等 Duix 容器恢复（curl 8383/docs 直到响应）。"""
+        for _ in range(timeout_s // 2):
             try:
                 requests.get(f"{DUIX_BASE}/docs", timeout=5)
                 print("  [duix] ✅ 容器已恢复")
