@@ -182,7 +182,11 @@ quote_hero、compare、timeline_event 最容易漏——但它们也需要 KPI �
 - **compare**：左右分裂 + 分割线 + 差值标注 + 隐喻物体
 - **flow**：垂直/横向节点链 + 粒子连接 + 进度条
 - **list_alert**：3-5 项卡片 + 项间连接 + 关键项高亮
-- **timeline_event**：主体元素 + 时间标记 + 数据条
+- **timeline_event**：主体元素 + 时间标记 + 数据条。🔴 时间轴必须"慢慢画出来"，不是一次性显示：
+  - 轴线从左到右 stroke-dasharray 逐步延伸（0.8-1.2s，power2.inOut）
+  - 节点逐个点亮（stagger 0.3s，每个节点 scale 0→1 + 发光 + 年份浮现）
+  - 每个节点的标签在节点点亮后 0.2s 才浮现
+  - 当前节点持续 pulse 呼吸（repeat:3 yoyo）
 - **hud**：中心主题 + 圆环/仪表 + 标签 pills + 中景装饰层
 
 ## 🔥 拒绝套壳——每场景必须差异化
@@ -322,7 +326,11 @@ quote_hero、compare、timeline_event 最容易漏——但它们也需要 KPI �
 
 ## 基础动效规范
 
-- 🔴 **配音驱动视觉**：元素的弹出时机跟随口播节奏，不是均匀铺开——开场 0-0.5s 只出标题，口播说到哪个数据、哪个数据才弹出（delay 对应口播提到它的时刻）。禁止所有元素同时弹出 = 像 PPT。
+- 🔴 **配音驱动视觉（元素慢慢出来，不是一起弹）**：每个元素有自己的出场时刻，跟口播节奏逐个出现，禁止所有元素同时弹出 = 像 PPT。标准节奏：
+  - 0-0.6s：只出主标题（逐字渐入，stagger 0.04s）
+  - 0.6-2s：标签 pill 逐个弹出（stagger 0.15s，每个 back.out）
+  - 之后：口播说到哪个数据，那个数字才 countUp（从 0 数到目标 1-1.5s）；说到哪个观点，那个卡片/图表才遮罩揭示/生长
+  - 最后一个元素在第 3-4s 才出现，别前 1 秒全铺完
 - 入场：tl.from/tl.fromTo，stagger 0.12-0.15s，层次感
 - 缓动：内容 power3.out/back.out(1.7) | 呼吸 sine.inOut | 粒子/扫光 none
 - 呼吸动画 2-3 个：tl.to repeat:3 yoyo:true
@@ -338,6 +346,12 @@ quote_hero、compare、timeline_event 最容易漏——但它们也需要 KPI �
 6. **禁线性缓动**：入场 back.out(1.7)/power3.out，呼吸 sine.inOut。禁止 linear/none/power1。
 
 🔴 **数据具象化（每场景至少 3 种，抄自 video-factory）**：数字冲击(scale:2.5→1+发光脉动) / 数字 countUp(GSAP 从 0 数到目标) / 进度条(width:0%→目标+百分比) / 趋势箭头(↑↓+百分比) / 迷你图表(5-7 bar 或 SVG 折线) / 对比条(A vs B+差值)。
+
+🔴 **数据"慢慢数出来"，不是直接显示**：
+- 大数字：必须 GSAP countUp 从 0 数到目标（duration 1-1.5s），不是静态数字
+- 进度条：width 从 0% 生长到目标（duration 1s power2.inOut），不是直接满
+- 趋势线/折线：SVG stroke-dasharray 从 0 绘制（像画画，duration 1-1.5s），不是直接显示
+- 柱状图：每根柱子 scaleY 0→1 生长（stagger 0.12s）
 
 🔴 **色彩饱和度铁律（禁灰蒙蒙）**：主色饱和度 ≥60%。核心数据必须高亮色(金#FFD700/青#00D4FF/紫#A855F7)，禁止灰色。卡片边框带颜色 rgba(主色,0.3)，禁止白/灰边框。
 
