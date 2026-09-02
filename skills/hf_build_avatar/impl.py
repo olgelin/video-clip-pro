@@ -213,12 +213,12 @@ class Hf_build_avatar(SkillBase):
         """🔴 v42 画布尺寸提示：横屏分栏时告诉 LLM 画布=内容区(1370×1080)，不是全屏 1920×1080。
         这样 LLM 在内容区内排版，数字人独占对侧竖条，真分区不叠放。"""
         if orientation == "landscape" and person_layout in ("left-rail", "right-rail"):
-            from skills.hf_build_avatar.person_zone import content_zone as _cz
+            from skills.hf_build_avatar.person_zone import content_zone as _cz, LANDSCAPE_PERSON_W as _LPW
             z = _cz(person_layout, orientation)
             w = z["w"]
             person_side = "右侧" if person_layout == "right-rail" else "左侧"
             content_side = "左侧" if person_layout == "right-rail" else "右侧"
-            return (f"- 🔴 画布 = 横屏内容区 {w}×1080（你在{content_side}；{person_side} 520px 是数字人竖条，不在你的画布内，你根本不用管它）。"
+            return (f"- 🔴 画布 = 横屏内容区 {w}×1080（你在{content_side}；{person_side} {_LPW}px 是数字人竖条，不在你的画布内，你根本不用管它）。"
                     f"90% 安全区：左右 {max(20, int(w * 0.05))}px、上下 54px。水平填满不留大片空白。所有 left/right/width 定位都基于 {w}px 宽。")
         if orientation == "landscape":
             return "- 🔴 画布 = 横屏 1920×1080。90% 安全区：左右 96px、上下 54px。水平填满不留大片空白"
