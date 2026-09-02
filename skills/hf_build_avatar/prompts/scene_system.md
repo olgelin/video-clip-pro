@@ -331,7 +331,7 @@ quote_hero、compare、timeline_event 最容易漏——但它们也需要 KPI �
 - 🔴 **配音驱动视觉（元素慢慢出来，不是一起弹）**：每个元素有自己的出场时刻，跟口播节奏逐个出现，禁止所有元素同时弹出 = 像 PPT。标准节奏：
   - 0-0.6s：只出主标题（逐字渐入，stagger 0.04s）
   - 0.6-2s：标签 pill 逐个弹出（stagger 0.15s，每个 back.out）
-  - 之后：口播说到哪个数据，那个数字才 countUp（从 0 数到目标 1-1.5s）；说到哪个观点，那个卡片/图表才遮罩揭示/生长
+  - 之后：口播说到哪个数据，那个数字才 scale 弹入（scale 2.5→1 + 发光脉动）；说到哪个观点，那个卡片/图表才遮罩揭示/生长
   - 最后一个元素在第 3-4s 才出现，别前 1 秒全铺完
 - 入场：tl.from/tl.fromTo，stagger 0.12-0.15s，层次感
 - 缓动：内容 power3.out/back.out(1.7) | 呼吸 sine.inOut | 粒子/扫光 none
@@ -347,13 +347,13 @@ quote_hero、compare、timeline_event 最容易漏——但它们也需要 KPI �
 5. **静态元素呼吸**：所有静态元素加 scale 1.0→1.015→1.0 呼吸（duration 3-4s, repeat:3, yoyo:true, sine.inOut）。
 6. **禁线性缓动**：入场 back.out(1.7)/power3.out，呼吸 sine.inOut。禁止 linear/none/power1。
 
-🔴 **数据具象化（每场景至少 3 种，抄自 video-factory）**：数字冲击(scale:2.5→1+发光脉动) / 数字 countUp(GSAP 从 0 数到目标) / 进度条(width:0%→目标+百分比) / 趋势箭头(↑↓+百分比) / 迷你图表(5-7 bar 或 SVG 折线) / 对比条(A vs B+差值)。
+🔴 **数据具象化（每场景至少 3 种，抄自 video-factory）**：数字冲击(scale:2.5→1+发光脉动) / 进度条(width:0%→目标+百分比) / 趋势箭头(↑↓+百分比) / 迷你图表(5-7 bar 或 SVG 折线) / 对比条(A vs B+差值)。
 
-🔴 **数据"慢慢数出来"，不是直接显示**：
-- 大数字：必须 GSAP countUp 从 0 数到目标（duration 1-1.5s），不是静态数字
-- 进度条：width 从 0% 生长到目标（duration 1s power2.inOut），不是直接满
-- 趋势线/折线：SVG stroke-dasharray 从 0 绘制（像画画，duration 1-1.5s），不是直接显示
-- 柱状图：每根柱子 scaleY 0→1 生长（stagger 0.12s）
+🔴 **数据"慢慢出来"，但数字必须写真实值（静态），禁止 countUp**：
+- 大数字：直接写真实数字（如"2000万""-87%""8亿"），用 scale 弹入（scale 2.5→1）+ 发光脉动。🔴 禁止 countUp 从 0 数——渲染引擎是 seek 驱动（跳转到时间点截图），countUp 依赖 onUpdate 回调，seek 时不触发，数字会永远停在 0，画面全变 0。数字必须一步到位写真实值
+- 进度条：width 从 0% 生长到目标（duration 1s power2.inOut）—— 安全（width 是 CSS 属性动画，seek 正确插值）
+- 趋势线/折线：SVG stroke-dasharray 从 0 绘制（像画画，duration 1-1.5s）—— 安全
+- 柱状图：每根柱子 scaleY 0→1 生长（stagger 0.12s）—— 安全
 
 🔴 **色彩饱和度铁律（禁灰蒙蒙）**：主色饱和度 ≥60%。核心数据必须高亮色(金#FFD700/青#00D4FF/紫#A855F7)，禁止灰色。卡片边框带颜色 rgba(主色,0.3)，禁止白/灰边框。
 
