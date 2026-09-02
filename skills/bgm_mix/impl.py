@@ -30,6 +30,11 @@ class Bgm_mix(SkillBase):
         video_path = Path(context.get("final_polished", "")).resolve()
         edl = context.get("edl", {})
         ranges = edl.get("ranges", [])
+        # 🔴 avatar-short/seed 无剪切无 edl，用 storyboard 的场景时间戳做 ducking
+        if not ranges:
+            scenes = context.get("scenes", [])
+            ranges = [{"start": s.get("final_start", 0), "end": s.get("final_end", 0)}
+                      for s in scenes if s.get("final_end")]
 
         if not video_path.is_file() or not ranges:
             print("      [bgm_mix] No video or segments, skipping")
@@ -78,7 +83,12 @@ class Bgm_mix(SkillBase):
         words = context.get("words", [])
         transcript = " ".join(w.get("text", "") for w in words) if words else ""
         if not transcript:
-            transcript = context.get("text", "")
+            # 🔴 avatar-short/seed 无 words，用 script_data 的 voiceover_sections
+            script = context.get("script_data", {})
+            sections = script.get("voiceover_sections", []) if isinstance(script, dict) else []
+            transcript = " ".join(s.get("content", "") for s in sections)
+        if not transcript:
+            transcript = context.get("text", "") or context.get("topic", "")
 
         # Write transcript to temp file for ACE-Step --lyrics
         lyrics_file = output_dir / "_bgm_lyrics.txt"
@@ -125,6 +135,10 @@ class Bgm_mix(SkillBase):
         """Build ACE-Step music caption from content analysis."""
         edl = context.get("edl", {})
         ranges = edl.get("ranges", [])
+        # 🔴 avatar-short/seed 无 edl，用 scenes 的 beat 推断情绪
+        if not ranges:
+            scenes = context.get("scenes", [])
+            ranges = [{"beat": s.get("beat", "")} for s in scenes]
         beats = set(r.get("beat", "").upper() for r in ranges)
 
         # Map narrative beats to music mood
