@@ -247,10 +247,13 @@ class Storyboard(SkillBase):
         prompt = (
             f"你是数字人出镜导演。下面是一个{'横屏' if orientation == 'landscape' else '竖屏'}口播视频的 {n} 个场景"
             f"（视觉类型+景别+内容要点）。数字人「大小」已由景别定好（full满版→缩角落小图标，inset缩小→大竖条分栏），"
-            f"你只需判断每个场景数字人靠「左(L)还是右(R)」，让换位自然有节奏。\n\n"
+            f"你只需判断每个场景数字人靠「左(L)/右(R)/隐藏(H)」，让换位自然有节奏。\n\n"
             f"{scene_list}\n\n"
-            f"要求：相邻场景数字人左右尽量不同（换位），避免连续多个场景挤在同一侧。\n\n"
-            f"只输出 JSON：{{\"sides\": [\"L\", \"R\", ...]}}，长度={n}，按场景顺序，每个值是 L 或 R，不要解释。"
+            f"要求：\n"
+            f"1. 相邻场景数字人左右尽量不同（换位），避免连续多个场景挤在同一侧\n"
+            f"2. 高潮数据冲击/金句升华/需要内容全屏震撼的场景，用隐藏(H)——数字人完全不出镜，纯内容画面\n"
+            f"3. 隐藏(H)不要超过一半场景，数字人大部分时间还是在画面里讲解\n\n"
+            f"只输出 JSON：{{\"sides\": [\"L\", \"R\", \"H\", ...]}}，长度={n}，按场景顺序，每个值是 L/R/H，不要解释。"
         )
 
         try:
@@ -266,15 +269,19 @@ class Storyboard(SkillBase):
             sides = _json.loads(m.group(0))
             if isinstance(sides, list) and len(sides) == n:
                 for i, s in enumerate(scenes):
-                    side = "L" if str(sides[i]).upper() in ("L", "LEFT", "左") else "R"
+                    sv = str(sides[i]).upper()
                     sc = s.get("shot_scale", "")
-                    if orientation == "landscape":
-                        if sc == "inset":
-                            s["person_layout"] = "left-rail" if side == "L" else "right-rail"
+                    if sv in ("H", "HIDDEN", "隐藏", "X", "无", "无数字人"):
+                        s["person_layout"] = "hidden"
+                    else:
+                        side = "L" if sv in ("L", "LEFT", "左") else "R"
+                        if orientation == "landscape":
+                            if sc == "inset":
+                                s["person_layout"] = "left-rail" if side == "L" else "right-rail"
+                            else:
+                                s["person_layout"] = "corner-bl" if side == "L" else "corner-br"
                         else:
                             s["person_layout"] = "corner-bl" if side == "L" else "corner-br"
-                    else:
-                        s["person_layout"] = "corner-bl" if side == "L" else "corner-br"
         except Exception:
             pass
         return scenes

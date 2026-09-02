@@ -54,6 +54,14 @@ def person_zone(layout: str, orientation: str = "portrait") -> dict:
         x = fw - w
         y = 0
 
+    elif layout == "hidden":
+        # 🔴 A: 数字人移出画面（纯内容场景，人物与内容轮流当主角）。
+        #    尺寸用小角标，位置移出右边缘外（被 overflow hidden 裁剪，不可见）。内容全屏。
+        w = int(fw * (0.22 if is_portrait else 0.12))
+        h = w if is_portrait else int(w * 4 / 3)
+        x = fw + 60
+        y = fh - h - 40
+
     else:
         return person_zone("corner", orientation)
 
