@@ -487,8 +487,9 @@ class Storyboard(SkillBase):
         elements.append({"type": "title", "text": title[:8]})
 
         # Numbers only — no tags (Chinese NLP without jieba is unreliable)
-        nums = _re.findall(r'(\d+[%％]?)', text)
-        for n in nums[:2]:
+        # 🔴 提取完整数字（带单位），"300万"→"300万"、"下降80%"→"80%"、"1/10"→"1/10"、"10倍"→"10倍"
+        nums = _re.findall(r'(\d+(?:\.\d+)?(?:万|亿|千万|百万|倍|[%％]|/\d+)?)', text)
+        for n in nums[:3]:
             elements.append({"type": "number", "text": n})
 
         return elements[:6]
