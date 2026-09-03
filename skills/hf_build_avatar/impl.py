@@ -225,11 +225,11 @@ class Hf_build_avatar(SkillBase):
             person_side = "右侧" if person_layout == "right-rail" else "左侧"
             content_side = "左侧" if person_layout == "right-rail" else "右侧"
             return (f"- 🔴 画布 = 横屏内容区 {w}×1080（你在{content_side}；{person_side} {_LPW}px 是数字人竖条，不在你的画布内，你根本不用管它）。"
-                    f"90% 安全区：左右 {max(20, int(w * 0.05))}px、上下 54px。水平填满不留大片空白。所有 left/right/width 定位都基于 {w}px 宽。")
+                    f"安全区：左右 {max(20, int(w * 0.05))}px、顶部 54px、**底部 150px（字幕区，绝对禁入）**。水平填满不留大片空白。所有 left/right/width 定位都基于 {w}px 宽。")
         if orientation == "landscape":
-            hint = "- 🔴 画布 = 横屏 1920×1080。90% 安全区：左右 96px、上下 54px。水平填满不留大片空白"
+            hint = ("- 🔴 画布 = 横屏 1920×1080。安全区：左右 96px、顶部 54px、**底部 150px（字幕区，绝对禁入，含注脚/标签/图例）**。水平填满不留大片空白")
         else:
-            hint = "- 🔴 画布 = 竖屏 1080×1920。90% 安全区：左右 54px、上下 96px。垂直填满不留大片空白"
+            hint = ("- 🔴 画布 = 竖屏 1080×1920。安全区：左右 54px、顶部 96px、**底部 180px（字幕区，绝对禁入，含注脚/标签/图例）**。垂直填满不留大片空白")
         # 🔴 角标场景：数字人小窗在角落，明确告诉 LLM 避让的具体像素范围（之前只说"画布=全屏"，LLM 把 2×2 卡片排满四角→遮挡）
         if person_layout in ("corner-bl", "corner-br"):
             z = _pz(person_layout, orientation)
