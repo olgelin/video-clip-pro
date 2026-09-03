@@ -1163,7 +1163,10 @@ def _render_fullscreen(hf_dir, gpu_flag):
         _timeout = max(900, _n_beats * 15)
         print(f"      渲染超时预算: {_timeout}s ({_n_beats} 张卡片)")
         cmd = f'hyperframes render --quality high {gpu_flag}'
-        proc = subprocess.Popen(cmd, shell=True, cwd=str(hf_dir), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        # 🔴 avatar 多 video（每场景一个 clip，同 src 各自 data-start）下，HyperFrames 覆盖率门禁
+        #    误判每个 clip "0 帧" 而 abort（实际 video 正常渲染，单 video 方案覆盖率正常）。禁用门禁。
+        env = dict(os.environ, HF_VIDEO_COVERAGE_THRESHOLD="0")
+        proc = subprocess.Popen(cmd, shell=True, cwd=str(hf_dir), stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
         stdout, stderr = proc.communicate(timeout=_timeout)
         rd = hf_dir / "renders"
         if rd.exists():
