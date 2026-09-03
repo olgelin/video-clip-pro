@@ -493,7 +493,7 @@ def _make_caption(captions, start, dur, text, safe_width, orientation):
     # 在标点处拆，否则按字拆
     # 🔴 数字不可劈开："800万"禁止拆成"80"+"0万"
     def _numish(ch):
-        return ch.isdigit() or ch in '.%,万亿千百十点分之'
+        return ch.isdigit() or ch in '.%,万亿千百十点分之' or ch in '一二三四五六七八九零两'
     parts = []
     remaining = text
     while remaining:
