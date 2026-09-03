@@ -34,6 +34,8 @@ CAMERA_MOTIONS = [
 # ── 语义映射（对齐 vf 的 LLM 语义产出，不是机械轮换）──
 # vf 的 depth_layers/camera_motion/choreography 是 LLM 按场景语义产出的，
 # vcp 用确定性 Python 分镜，所以用 visual_type 做语义映射补上这个差异。
+VALID_TYPES = {"data_impact", "quote_hero", "compare", "flow", "list_alert", "timeline_event", "hud"}
+
 DEPTH_LAYERS_BY_TYPE = {
     "data_impact": {"bg": "gradient mesh + glow orbs", "mg": "data cards stack + KPI panels", "fg": "accent lines + spark particles"},
     "quote_hero": {"bg": "dark fill + radial glow", "mg": "quote panel + floating glyphs", "fg": "grain + light streaks"},
@@ -151,8 +153,9 @@ class Storyboard(SkillBase):
             is_first = (i == 0)
             is_last = (i == len(merged) - 1)
 
-            # Visual type from content + beat
-            vt = self._detect_type(narration, beat, is_first, is_last)
+            # Visual type: 🔴 LLM 语义判断优先（对齐 vf 的 LLM 语义分镜），关键词匹配做确定性兜底
+            llm_type = g.get("llm_type", "")
+            vt = llm_type if llm_type in VALID_TYPES else self._detect_type(narration, beat, is_first, is_last)
             # 🔴 避免和最近 2 个场景重复（竖屏场景少，隔一个重复也会显得单调）
             recent = {prev_vt, prev_prev_vt}
             if vt in recent:
@@ -304,12 +307,14 @@ class Storyboard(SkillBase):
 
         merged = []
         for group in groups:
-            # 统一解析：group 是 [a,b] 区间（与 _parse_split 一致）
+            # 统一解析：group 是 [a,b] 或 [a,b,"type"] 区间（与 _parse_split 一致）
             if isinstance(group, list) and len(group) >= 2:
-                a, b = int(group[0]), int(group[-1])
+                a, b = int(group[0]), int(group[1])
+                llm_type = group[2] if len(group) >= 3 and isinstance(group[2], str) else ""
                 indices = list(range(a, b + 1))
             elif isinstance(group, int):
                 indices = [group]
+                llm_type = ""
             else:
                 continue
             rs = [ranges[i] for i in indices]
@@ -323,6 +328,7 @@ class Storyboard(SkillBase):
                 "beat": beat,
                 "narration": "".join(r.get("trimmed", r.get("quote", "")) for r in rs),
                 "real_dur": sum(r["end"] - r["start"] for r in rs),
+                "llm_type": llm_type if llm_type in VALID_TYPES else "",
             })
         return merged
 
@@ -334,12 +340,14 @@ class Storyboard(SkillBase):
         full_text = "\n".join(lines)
         prompt = (
             f"以下是口播视频的 {n} 个连续片段（带索引和起止秒）：\n{full_text}\n\n"
-            "请按语义切分镜：读全文，识别话题切换、信息点、转折点，把连续片段分组为视觉场景。\n"
+            "请按语义切分镜：读全文，识别话题切换、信息点、转折点，把连续片段分组为视觉场景，并为每个场景选一个最贴切的视觉类型。\n"
             "规则：\n"
             "1. 每个场景是语义连贯的一段（一个话题/一个信息点/一个转折点）\n"
             "2. 场景数由内容自然决定，不设上限\n"
             "3. 所有片段必须被覆盖，不重不漏，按顺序\n"
-            f"4. 只输出 JSON：{{\"scenes\": [[起始索引, 结束索引], ...]}}，索引范围 0-{n-1}\n"
+            "4. 每个场景从下面 7 种视觉类型里选 1 个（相邻场景尽量不同类型，别连续用同一种）：\n"
+            "   data_impact=数据冲击(有具体数字/百分比/数据对比时) | quote_hero=金句大字(观点/总结升华时) | compare=对立对比(前后反差/转折对比时) | flow=流程推进(步骤/过程/层层递进时) | list_alert=要点警示(列举要点/风险/危害时) | timeline_event=时间推演(时间发展/趋势/未来时) | hud=科技界面(技术/系统/数据面板时)\n"
+            f"5. 只输出 JSON：{{\"scenes\": [[起始索引, 结束索引, \"类型\"], ...]}}，索引范围 0-{n-1}，类型是上面 7 个之一。\n"
         )
         try:
             raw = provider.call("storyboard_split", prompt,
