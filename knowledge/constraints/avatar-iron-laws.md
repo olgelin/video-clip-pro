@@ -65,6 +65,14 @@
 - 🔴 **关键帧必须密集（≤1s）**：Duix 原始视频关键帧间隔 8.33s，HyperFrames 报"sparse keyframes → seek failure/frame freezing"。Duix 生成后必须 ffmpeg 重编码（`-g 30 -keyint_min 30` = 每 1s 一个关键帧）。
 - ✅ 实测：2-4 个 video 同 src final.mp4 分段 seek（data-start + data-media-start 都设）渲染成功、覆盖率 100%，**无需切片**。最小测试（仅 video+audio）全通过，问题只在完整 pipeline 结构里复现。
 
+## 7.6 sub-composition 必须 `<template>` 包装（动画静态的根因）
+
+- 🔴 **HyperFrames 的 sub-composition（data-composition-src 加载的 beat-N.html）必须用 `<template>` 包住全部内容**，`<style>` 和 `<script>` 也必须在 template 内。runtime 只克隆 `<template>` 内容，`<head>` 里的东西（含 style）被丢弃。
+- 🔴 **症状**：无 template 时，渲染器捕获"静态初始帧"——视频全长度但动画不播、Three.js 粒子不显示、元素样式丢失。`lint`/`validate`/`inspect` 都查不出来（单文件孤立检查通过），只有实际渲染才暴露。
+- 🔴 **avatar 的 beat-N.html 之前无 template**（`<!DOCTYPE><head><style>...</style></head><body><div>...`），导致画面"静态"。修复：`<template><style>...</style>` + scene_html(GSAP/Three.js 都在内) + `</template>`。
+- ✅ 最小测试验证：sub-composition 加 template 后，GSAP 方块动画 2s→6s 位置 x=366→1300，动画正常播放。
+- 检查方法：`grep "<template>" compositions/beat-*.html` 每个都应有 `<template>`。
+
 ## 8. 字幕 = 词级转录对齐配音（不是整段均匀拆分）
 
 - 🔴 VoxCPM2 只返回**段落级** scene_durations，没有词级/句级时间戳。
