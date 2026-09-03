@@ -357,44 +357,40 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
                 _hero_h = fh
                 _hero_x = fw - _hero_w           # 贴右，内容在左
                 _hero_y = 0
-            pip_motion += f'tl.set("#avatar-video",{{left:{_hero_x},top:{_hero_y},width:{_hero_w},height:{_hero_h}}},0);'
-            pip_motion += f'tl.to("#avatar-video",{{left:{_zone["x"]},top:{_zone["y"]},width:{_zone["w"]},height:{_zone["h"]},duration:1.2,ease:"power3.inOut"}},{hero_dur});'
-            # 🔴 v41 语义换位：每个 beat 边界做位置切换动画（位置变了才切）。错峰：提前 0.3s 开始，
-            #    让数字人先动、新内容后进，避免"换位 + 内容进场"同时发生（三段序的简化版）。
-            for _i in range(1, len(_zones)):
-                _sw_t = round(seg_offsets[_i] - 0.3, 2)
-                _prev = _zones[_i - 1]; _cur = _zones[_i]
-                # 🔴 hidden 场景：opacity:0 双保险（淡出 + 移出画布），canvas 合成对"移出画布"处理不可靠
-                _pl_cur = ranges[_i].get("person_layout") or _pz_vt(ranges[_i].get("visual_type", ""), orientation)
-                _op = "0" if _pl_cur == "hidden" else "1"
-                if (_prev["x"], _prev["y"], _prev["w"], _prev["h"]) != (_cur["x"], _cur["y"], _cur["w"], _cur["h"]) or _op == "0":
-                    pip_motion += f'tl.to("#avatar-video",{{left:{_cur["x"]},top:{_cur["y"]},width:{_cur["w"]},height:{_cur["h"]},opacity:{_op},duration:0.8,ease:"power3.inOut"}},{_sw_t});'
-            # 🔴 v41 让位：data_impact 场景数字人临时缩小+变暗退后，让大数字满屏（场景中段让位，末尾恢复）
-            # 🔴 v42 横屏分栏真分区：内容区固定 1370，数字人缩小不增空间反而让 520 人物区留白，横屏跳过让位
-            if orientation == "portrait":
-                for _i in range(len(_zones)):
-                    if ranges[_i].get("visual_type", "") == "data_impact":
-                        _yd_start = seg_offsets[_i]
-                        _yd_dur = ranges[_i]["end"] - ranges[_i]["start"]
-                        # 🔴 让位必须在满幅缩位完成后（hero_dur+1.5），否则第一个场景让位会在满幅期间提前缩小数字人
-                        _yield_t = round(max(_yd_start + 2.0, hero_dur + 1.5), 2)
-                        _restore_t = round(_yd_start + _yd_dur - 1.2, 2)
-                        if _yield_t < _restore_t:
-                            _z = _zones[_i]
-                            _w_s = int(_z["w"] * 0.62); _h_s = int(_z["h"] * 0.62)
-                            _x_s = _z["x"] + (_z["w"] - _w_s) // 2
-                            _y_s = _z["y"] + (_z["h"] - _h_s) // 2
-                            pip_motion += f'tl.to("#avatar-video",{{left:{_x_s},top:{_y_s},width:{_w_s},height:{_h_s},opacity:0.5,duration:0.5,ease:"power3.inOut"}},{_yield_t});'
-                            pip_motion += f'tl.to("#avatar-video",{{left:{_z["x"]},top:{_z["y"]},width:{_z["w"]},height:{_z["h"]},opacity:1,duration:0.5,ease:"power3.inOut"}},{_restore_t});'
-            pip_motion += f'tl.to("#avatar-video",{{scale:1.005,duration:2.2,repeat:3,yoyo:true,ease:"sine.inOut"}},{hero_dur + 1.5});'
-            avatar_shadow_css = "#avatar-video{box-shadow:0 26px 52px rgba(0,0,0,0.6),0 10px 20px rgba(0,0,0,0.45);border:1px solid rgba(255,255,255,0.14);}"
-            _aspect = "1" if orientation == "portrait" else "3/4"
-            _init_size = 100  # 占位，avatar 用 person_zone 绝对像素定位
-            _zr = _zone["w"] // 2 if orientation == "portrait" else 16
-            # 🔴 数字人 video 是 host root 直接子元素（不包 div），框架才能 seek/解码；满幅缩位用 left/top/width/height
-            pip_video_block = (
-                f'<video id="avatar-video" class="clip" src="final.mp4" data-start="0" data-duration="{td_str}" data-track-index="0" muted playsinline '
-                f'style="position:absolute;left:{_zone["x"]}px;top:{_zone["y"]}px;width:{_zone["w"]}px;height:{_zone["h"]}px;object-fit:cover;z-index:15;border-radius:{_zr}px;"></video>')
+            # 🔴 v43 确定性换位 + 满幅缩位：每场景（或每段）一个固定位置 video，初始 CSS = person_zone。
+            #    根因：HyperFrames canvas 合成（drawImage）只读 video 的【初始 CSS 位置】，不读 GSAP 动画
+            #    （timeline seek）后的位置。所以 GSAP 换位/满幅缩位动画从 v40 整体渲染起【从未生效】，
+            #    数字人一直冻结在场景0的初始位置（历史上"换位生效"是视觉模型误判，见 636998b 被误 revert）。
+            #    解法：位置仍由 LLM 语义判断（person_layout→person_zone），但渲染用"每段一个 video、
+            #    初始 CSS 写死=该段位置 + data-start/data-duration 控制显示"，hidden 场景不放 video。
+            avatar_shadow_css = ".avatar-clip{box-shadow:0 26px 52px rgba(0,0,0,0.6),0 10px 20px rgba(0,0,0,0.45);border:1px solid rgba(255,255,255,0.14);}"
+            pip_video_block = ""
+            _vid_idx = 0
+            for _i, _z in enumerate(_zones):
+                _pl_i = ranges[_i].get("person_layout") or _pz_vt(ranges[_i].get("visual_type", ""), orientation)
+                if _pl_i == "hidden":
+                    continue
+                _seg_start = round(seg_offsets[_i], 2)
+                _seg_dur = round(ranges[_i]["end"] - ranges[_i]["start"], 2)
+                _v_zr = _z["w"] // 2 if orientation == "portrait" else 16
+                # 🔴 开场满幅→缩位（场景0内拆两段）：满幅段（0~hero_dur）+ 缩位段（hero_dur~结束），确定性硬切
+                if _i == 0 and hero_dur < _seg_dur:
+                    pip_video_block += (
+                        f'<video id="avatar-video-{_vid_idx}" class="clip avatar-clip" src="final.mp4" '
+                        f'data-start="{_seg_start}" data-duration="{round(hero_dur, 2)}" data-track-index="{_vid_idx}" muted playsinline '
+                        f'style="position:absolute;left:{_hero_x}px;top:{_hero_y}px;width:{_hero_w}px;height:{_hero_h}px;object-fit:cover;z-index:15;border-radius:{_v_zr}px;"></video>')
+                    _vid_idx += 1
+                    pip_video_block += (
+                        f'<video id="avatar-video-{_vid_idx}" class="clip avatar-clip" src="final.mp4" '
+                        f'data-start="{round(_seg_start + hero_dur, 2)}" data-duration="{round(_seg_dur - hero_dur, 2)}" data-track-index="{_vid_idx}" muted playsinline '
+                        f'style="position:absolute;left:{_z["x"]}px;top:{_z["y"]}px;width:{_z["w"]}px;height:{_z["h"]}px;object-fit:cover;z-index:15;border-radius:{_v_zr}px;"></video>')
+                    _vid_idx += 1
+                else:
+                    pip_video_block += (
+                        f'<video id="avatar-video-{_vid_idx}" class="clip avatar-clip" src="final.mp4" '
+                        f'data-start="{_seg_start}" data-duration="{_seg_dur}" data-track-index="{_vid_idx}" muted playsinline '
+                        f'style="position:absolute;left:{_z["x"]}px;top:{_z["y"]}px;width:{_z["w"]}px;height:{_z["h"]}px;object-fit:cover;z-index:15;border-radius:{_v_zr}px;"></video>')
+                    _vid_idx += 1
         else:
             # ── pip 原有：定时换位（垂直中部）──
             n_shifts = max(1, int(total_dur // shift_interval))
