@@ -236,8 +236,10 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
         gsap_script = _build_gsap_animation(beat_id, beat, exit_offset, is_highlight)
         threejs_bg = _threejs_card_bg(tc) if card_threejs_flag else ""
         if scene_html and len(scene_html) > 100:
-            # 完整场景（已含背景+内容+GSAP+__timelines），包 DOCTYPE 写 beat-N.html
-            full_html = '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><style>' + FONT_CSS + '*{margin:0;padding:0;box-sizing:border-box}body{overflow:hidden;background:transparent}</style></head><body>' + scene_html + '</body></html>'
+            # 完整场景（已含背景+内容+GSAP+__timelines），包 DOCTYPE + template 写 beat-N.html
+            # 🔴 HyperFrames sub-composition 契约：内容必须包在 <template> 里，<style>/<script> 也必须在 template 内
+            #    （否则 runtime 只克隆 template 内容，<head> 的 style 被丢弃 → 无样式无动画 = 静态）
+            full_html = '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"></head><body><template><style>' + FONT_CSS + '*{margin:0;padding:0;box-sizing:border-box}body{overflow:hidden;background:transparent}</style>' + scene_html + '</template></body></html>'
         elif llm_html and len(llm_html) > 100:
             gsap_exit = _build_gsap_animation(beat_id, beat, exit_offset, is_highlight)
             full_html = '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><style>'+FONT_CSS+MICRO_CSS+CARD_DECOR_CSS+'*{margin:0;padding:0;box-sizing:border-box}body{overflow:hidden;background:transparent;font-family:CJK,Inter,"Segoe UI",sans-serif}</style></head><body>'+card_html+gsap_exit+'</body></html>'
