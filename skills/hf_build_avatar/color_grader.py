@@ -1,48 +1,55 @@
-"""color_grader.py — mood→精确配色，纯代码查表，不调LLM"""
+"""color_grader.py — mood→精确配色，纯代码查表，不调LLM。
 
-# mood → 完整色板
+🔴 审美定版（用户）：蓝色科技风——蓝 #6C8CFF / 青 #00D4FF 主色，紫 #A855F7 / 金 #FFD700 点缀，
+   深色蓝紫渐变背景。不跳红/橙/绿。
+   情绪差异用「明暗 + 饱和度 + 主次比重」表达（负面更暗更紫、正面更亮更青），不换色相到红橙绿。
+"""
+
+# mood → 完整色板（全部锁定蓝/青/紫/金，禁止红橙绿）
 PALETTES = {
     "冷静理性": {
         "primary": "#6C8CFF", "secondary": "#00D4FF", "accent": "#FFD700",
         "gradient_start": "#060618", "gradient_mid": "#0A0C26", "gradient_end": "#0C1030",
         "particle": "rgba(108,140,255,0.6)", "glow": "rgba(0,212,255,0.3)",
-        "data_highlight": "#6C8CFF",
+        "data_highlight": "#00D4FF",
     },
     "冲突": {
-        "primary": "#FF4757", "secondary": "#FFD700", "accent": "#FF6B81",
+        # 负面 → 紫主 + 蓝次（更暗更压抑），金点缀，不用红
+        "primary": "#A855F7", "secondary": "#6C8CFF", "accent": "#FFD700",
         "gradient_start": "#060618", "gradient_mid": "#0A0C26", "gradient_end": "#0C1030",
-        "particle": "rgba(255,71,87,0.6)", "glow": "rgba(255,215,0,0.3)",
-        "data_highlight": "#FF4757",
+        "particle": "rgba(168,85,247,0.6)", "glow": "rgba(108,140,255,0.3)",
+        "data_highlight": "#A855F7",
     },
     "紧张不安": {
-        "primary": "#A855F7", "secondary": "#FF4757", "accent": "#FFD700",
+        "primary": "#A855F7", "secondary": "#00D4FF", "accent": "#FFD700",
         "gradient_start": "#060618", "gradient_mid": "#0A0C26", "gradient_end": "#0C1030",
-        "particle": "rgba(168,85,247,0.6)", "glow": "rgba(255,71,87,0.3)",
+        "particle": "rgba(168,85,247,0.6)", "glow": "rgba(0,212,255,0.3)",
         "data_highlight": "#A855F7",
     },
     "希望": {
-        "primary": "#FFD700", "secondary": "#6C8CFF", "accent": "#00D4FF",
+        "primary": "#00D4FF", "secondary": "#6C8CFF", "accent": "#FFD700",
         "gradient_start": "#060618", "gradient_mid": "#0C1020", "gradient_end": "#120C28",
-        "particle": "rgba(255,215,0,0.6)", "glow": "rgba(108,140,255,0.4)",
-        "data_highlight": "#FFD700",
+        "particle": "rgba(0,212,255,0.6)", "glow": "rgba(108,140,255,0.4)",
+        "data_highlight": "#00D4FF",
     },
     "希望升华": {
-        "primary": "#FFD700", "secondary": "#00D4FF", "accent": "#6C8CFF",
+        "primary": "#00D4FF", "secondary": "#A855F7", "accent": "#FFD700",
         "gradient_start": "#060618", "gradient_mid": "#0E0C22", "gradient_end": "#140C30",
-        "particle": "rgba(255,215,0,0.7)", "glow": "rgba(0,212,255,0.5)",
-        "data_highlight": "#FFD700",
+        "particle": "rgba(0,212,255,0.7)", "glow": "rgba(168,85,247,0.5)",
+        "data_highlight": "#00D4FF",
     },
     "愤怒冲突": {
-        "primary": "#FF3B30", "secondary": "#FF9500", "accent": "#FFD700",
+        # 最负面 → 深紫 + 暗蓝（最暗最压抑），金点睛，不用红橙
+        "primary": "#A855F7", "secondary": "#6C8CFF", "accent": "#FFD700",
         "gradient_start": "#060618", "gradient_mid": "#0A0C26", "gradient_end": "#0C1030",
-        "particle": "rgba(255,59,48,0.7)", "glow": "rgba(255,149,0,0.4)",
-        "data_highlight": "#FF3B30",
+        "particle": "rgba(168,85,247,0.7)", "glow": "rgba(108,140,255,0.4)",
+        "data_highlight": "#A855F7",
     },
     "压迫沉重": {
-        "primary": "#8E44AD", "secondary": "#2C3E50", "accent": "#A855F7",
+        "primary": "#A855F7", "secondary": "#6C8CFF", "accent": "#FFD700",
         "gradient_start": "#060618", "gradient_mid": "#0A0C26", "gradient_end": "#0C1030",
-        "particle": "rgba(142,68,173,0.5)", "glow": "rgba(44,62,80,0.2)",
-        "data_highlight": "#8E44AD",
+        "particle": "rgba(142,68,173,0.5)", "glow": "rgba(108,140,255,0.3)",
+        "data_highlight": "#A855F7",
     },
 }
 

@@ -364,8 +364,11 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
             for _i in range(1, len(_zones)):
                 _sw_t = round(seg_offsets[_i] - 0.3, 2)
                 _prev = _zones[_i - 1]; _cur = _zones[_i]
-                if (_prev["x"], _prev["y"], _prev["w"], _prev["h"]) != (_cur["x"], _cur["y"], _cur["w"], _cur["h"]):
-                    pip_motion += f'tl.to("#avatar-video",{{left:{_cur["x"]},top:{_cur["y"]},width:{_cur["w"]},height:{_cur["h"]},duration:0.8,ease:"power3.inOut"}},{_sw_t});'
+                # 🔴 hidden 场景：opacity:0 双保险（淡出 + 移出画布），canvas 合成对"移出画布"处理不可靠
+                _pl_cur = ranges[_i].get("person_layout") or _pz_vt(ranges[_i].get("visual_type", ""), orientation)
+                _op = "0" if _pl_cur == "hidden" else "1"
+                if (_prev["x"], _prev["y"], _prev["w"], _prev["h"]) != (_cur["x"], _cur["y"], _cur["w"], _cur["h"]) or _op == "0":
+                    pip_motion += f'tl.to("#avatar-video",{{left:{_cur["x"]},top:{_cur["y"]},width:{_cur["w"]},height:{_cur["h"]},opacity:{_op},duration:0.8,ease:"power3.inOut"}},{_sw_t});'
             # 🔴 v41 让位：data_impact 场景数字人临时缩小+变暗退后，让大数字满屏（场景中段让位，末尾恢复）
             # 🔴 v42 横屏分栏真分区：内容区固定 1370，数字人缩小不增空间反而让 520 人物区留白，横屏跳过让位
             if orientation == "portrait":
