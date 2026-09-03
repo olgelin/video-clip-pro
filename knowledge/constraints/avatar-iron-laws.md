@@ -79,6 +79,13 @@
 - 🔴 **修复**：`_fix_canvas_zindex` 兜底把 `<canvas>` 的 z-index 0→2（高于 main-content 的 1）；scene_system 约束 canvas z-index:2、背景渐变用 `rgba` 半透明。
 - 🔴 **症状识别**：抽帧像素差极小（<2）= 静态；但 beat-N.html 里有 `new THREE.WebGLRenderer` + `hf-seek`（Three.js 代码在）→ 说明不是代码缺失，是 z-index 遮挡。
 
+## 7.8 Three.js 动画必须确定性（累积下坠 desync 根因）
+
+- 🔴 **HyperFrames 逐帧 seek 渲染（乱序/并行），任何"累积状态"（`p[i*3+1]-=spd[i]`）都会 desync → 粒子静止**。vf 用 standalone 顺序播放所以累积能侥幸动，avatar 整体渲染必须确定性。
+- 🔴 **正确做法**：位置是时间 t 的纯函数 `y = y0[i] - spd[i]*t`（生成时存 `y0[i]`，rd(t) 里用 t 计算）。旋转用 `rotation.y=t*速度`（t 的纯函数），不要 `+=`。
+- 🔴 **速度单位**：确定性下坠的 spd 单位是"每秒"（`0.3+Math.random()*0.7`），不是"每帧"（累积下坠的 `0.06+...` 是每帧）。
+- 🔴 **determinism-rules 原文**："reaching for setTimeout/requestAnimationFrame/addEventListener to drive a visual → rebuild as a tween on the timeline"。hf-seek 事件驱动（addEventListener）本身就是反模式，正确是 GSAP timeline 或 t 的纯函数。
+
 ## 8. 字幕 = 词级转录对齐配音（不是整段均匀拆分）
 
 - 🔴 VoxCPM2 只返回**段落级** scene_durations，没有词级/句级时间戳。
