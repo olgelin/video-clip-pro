@@ -305,6 +305,24 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
                 _pl_seg = _seg.get("person_layout") or _pz_vt(_seg.get("visual_type", ""), orientation)
                 _zones.append(_pz(_pl_seg, orientation))
             _zone = _zones[0]  # 第一个场景的位置（video 初始位置 + 满幅缩位目标）
+            # 🔴 切片：把数字人视频按场景切成独立片段（HyperFrames 整体渲染不支持"同 src 多 video 分段 seek"，
+            #    多 video 同 src 各自 data-start 会提取 0 帧 + audio_processing_failed）。每场景一个独立 mp4，
+            #    各自 data-start=0，HyperFrames 能正常提取帧。hidden 场景不切片（不放 video）。
+            _clips_dir = hf_dir / "clips"; _clips_dir.mkdir(exist_ok=True)
+            _avatar_clips = []
+            for _i, _seg in enumerate(ranges):
+                _pl_i = _seg.get("person_layout") or _pz_vt(_seg.get("visual_type", ""), orientation)
+                if _pl_i == "hidden":
+                    _avatar_clips.append(None)
+                    continue
+                _clip_name = f"avatar_clip_{_i}.mp4"
+                _clip_path = _clips_dir / _clip_name
+                _clip_start = seg_offsets[_i]
+                _clip_dur = _seg["end"] - _seg["start"]
+                _r = subprocess.run(
+                    ["ffmpeg", "-y", "-ss", str(_clip_start), "-i", dst_v, "-t", str(_clip_dur),
+                     "-c", "copy", str(_clip_path)], capture_output=True, text=True, timeout=120)
+                _avatar_clips.append(_clip_name if _clip_path.exists() else None)
             pos_name, pos_css = "avatar-rail", ""
             frame_name, frame_css = "minimal-line", PIP_FRAMES["minimal-line"]
             # 前景粒子层（z17，人物窗口之上）+ 环境呼吸 + 数字人呼吸（repeat 有限，符合 determinism 规则）
@@ -370,14 +388,13 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
                 _pl_i = ranges[_i].get("person_layout") or _pz_vt(ranges[_i].get("visual_type", ""), orientation)
                 if _pl_i == "hidden":
                     continue
-                _seg_start = round(seg_offsets[_i], 2)
                 _seg_dur = round(ranges[_i]["end"] - ranges[_i]["start"], 2)
                 _v_zr = _z["w"] // 2 if orientation == "portrait" else 16
-                # 🔴 每场景一个固定位置 video（不拆满幅/缩位——多 video 拆段会触发 HyperFrames
-                #    覆盖率门禁误判"0 帧"，导致渲染 abort。满幅开场过渡放弃，直接每场景正确位置）
+                # 🔴 每场景一个独立切片 video（src=切片文件 + data-start=0），避开"同 src 分段 seek 提取 0 帧"的坑
+                _clip_src = _avatar_clips[_i] if _i < len(_avatar_clips) and _avatar_clips[_i] else "final.mp4"
                 pip_video_block += (
-                    f'<video id="avatar-video-{_vid_idx}" class="clip avatar-clip" src="final.mp4" '
-                    f'data-start="{_seg_start}" data-duration="{_seg_dur}" data-track-index="{_vid_idx}" muted playsinline '
+                    f'<video id="avatar-video-{_vid_idx}" class="clip avatar-clip" src="{_clip_src}" '
+                    f'data-start="0" data-duration="{_seg_dur}" data-track-index="{_vid_idx}" muted playsinline '
                     f'style="position:absolute;left:{_z["x"]}px;top:{_z["y"]}px;width:{_z["w"]}px;height:{_z["h"]}px;object-fit:cover;z-index:15;border-radius:{_v_zr}px;"></video>')
                 _vid_idx += 1
         else:
@@ -1163,10 +1180,7 @@ def _render_fullscreen(hf_dir, gpu_flag):
         _timeout = max(900, _n_beats * 15)
         print(f"      渲染超时预算: {_timeout}s ({_n_beats} 张卡片)")
         cmd = f'hyperframes render --quality high {gpu_flag}'
-        # 🔴 avatar 多 video（每场景一个 clip，同 src 各自 data-start）下，HyperFrames 覆盖率门禁
-        #    误判每个 clip "0 帧" 而 abort（实际 video 正常渲染，单 video 方案覆盖率正常）。禁用门禁。
-        env = dict(os.environ, HF_VIDEO_COVERAGE_THRESHOLD="0")
-        proc = subprocess.Popen(cmd, shell=True, cwd=str(hf_dir), stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
+        proc = subprocess.Popen(cmd, shell=True, cwd=str(hf_dir), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = proc.communicate(timeout=_timeout)
         rd = hf_dir / "renders"
         if rd.exists():
