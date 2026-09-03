@@ -489,10 +489,10 @@ def _make_caption(captions, start, dur, text, safe_width, orientation):
     max_font = 48 if orientation == "portrait" else 42
     bottom = 130 if orientation == "portrait" else 100
 
-    # V23: 长句拆多条字幕，每条 ≤14 字单行
+    # V23: 长句拆多条字幕，每条 ≤18 字单行（对齐 video-factory max_chars=18，减少词语劈开）
     if not text or not text.strip():
         return
-    if len(text) <= 14:
+    if len(text) <= 18:
         captions.append({"idx": len(captions), "start": round(start - 0.05, 2),
             "dur": max(0.4, dur), "text": text, "font_size": max_font, "bottom": bottom, "left_pct": 50})
         return
@@ -504,29 +504,34 @@ def _make_caption(captions, start, dur, text, safe_width, orientation):
     parts = []
     remaining = text
     while remaining:
-        if len(remaining) <= 14:
+        if len(remaining) <= 18:
             parts.append(remaining)
             break
-        # 在第 7-14 字之间找标点
-        cut = 14
-        for i in range(min(14, len(remaining))-1, 6, -1):
+        # 在第 8-18 字之间找标点
+        cut = 18
+        for i in range(min(18, len(remaining))-1, 7, -1):
             if remaining[i] in '，。、？！… ':
                 cut = i + 1
                 break
         else:
-            # 没标点，在第 10-14 字间找空格
-            cut = min(14, len(remaining))
+            # 没标点，在第 12-18 字间找空格
+            cut = min(18, len(remaining))
         # 🔴 cut 两侧都是数字/单位 → 向左移 cut，避免劈开数字
         while cut > 1 and _numish(remaining[cut-1]) and _numish(remaining[cut]):
             cut -= 1
         parts.append(remaining[:cut].strip())
         remaining = remaining[cut:].lstrip('，。、？！… ')
 
-    sub_dur = max(0.4, dur / len(parts))
+    # 🔴 按字符数分配时长（抄 video-factory _generate_srt_from_segments_v2）：
+    #    短句停留短、长句停留久，贴合配音语速。均匀分配会导致短句字幕停留太久/长句太短。
+    total_chars = sum(len(p) for p in parts)
+    acc = 0.0
     for pi, part in enumerate(parts):
         if not part: continue
-        captions.append({"idx": len(captions), "start": round(start + sub_dur * pi - 0.05, 2),
-            "dur": round(sub_dur, 2), "text": part, "font_size": max_font, "bottom": bottom, "left_pct": 50})
+        chunk_dur = max(0.4, dur * len(part) / max(total_chars, 1))
+        captions.append({"idx": len(captions), "start": round(start + acc - 0.05, 2),
+            "dur": round(chunk_dur, 2), "text": part, "font_size": max_font, "bottom": bottom, "left_pct": 50})
+        acc += chunk_dur
 
 def render_hyperframes(hf_dir):
     from core.gpu import detect_gpu
