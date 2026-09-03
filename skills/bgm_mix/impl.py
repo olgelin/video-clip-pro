@@ -79,20 +79,23 @@ class Bgm_mix(SkillBase):
             print("      [bgm_mix] ACE-Step not available, skipping BGM")
             return False
 
-        # Use transcript text as "lyrics" for content conditioning
-        words = context.get("words", [])
-        transcript = " ".join(w.get("text", "") for w in words) if words else ""
-        if not transcript:
-            # 🔴 avatar-short/seed 无 words，用 script_data 的 voiceover_sections
-            script = context.get("script_data", {})
-            sections = script.get("voiceover_sections", []) if isinstance(script, dict) else []
-            transcript = " ".join(s.get("content", "") for s in sections)
-        if not transcript:
-            transcript = context.get("text", "") or context.get("topic", "")
+        # 🔴 歌词来源：优先 lyrics_writer 写好的歌词（映射哲学，[Chorus]/[Verse] 结构），
+        # fallback 到口播稿原文（对齐 video-factory：先写歌词→再唱歌生成 BGM）
+        lyrics = context.get("lyrics", "")
+        if not lyrics:
+            words = context.get("words", [])
+            transcript = " ".join(w.get("text", "") for w in words) if words else ""
+            if not transcript:
+                script = context.get("script_data", {})
+                sections = script.get("voiceover_sections", []) if isinstance(script, dict) else []
+                transcript = " ".join(s.get("content", "") for s in sections)
+            if not transcript:
+                transcript = context.get("text", "") or context.get("topic", "")
+            lyrics = transcript
 
-        # Write transcript to temp file for ACE-Step --lyrics
+        # Write lyrics to temp file for ACE-Step --lyrics
         lyrics_file = output_dir / "_bgm_lyrics.txt"
-        lyrics_file.write_text(transcript[:2000], encoding="utf-8")
+        lyrics_file.write_text(lyrics[:2000], encoding="utf-8")
 
         # Build mood caption from EDL beats / topic
         caption = self._build_caption(context)

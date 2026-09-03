@@ -18,6 +18,14 @@ stages:
     timeout: 1800
     description: VoxCPM2 配音（复用 video-factory VoxCPM2 venv）→ step05_voice.wav
 
+  - name: lyrics_writer
+    skill: lyrics_writer
+    phase: 2.5
+    critical: false
+    retry: 1
+    timeout: 300
+    description: 口播稿 → 歌词（映射哲学：先挖本质→核心意象→写词，供 BGM 唱歌用）
+
   - name: duix
     skill: duix
     phase: 3
