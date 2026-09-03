@@ -105,6 +105,23 @@ class Duix(SkillBase):
         out_dir = Path(context.get("output_dir", "."))
         dst = out_dir / "avatar_video.mp4"
         shutil.copy2(src, dst)
+        # 🔴 HyperFrames 渲染要求关键帧密集（≤1s），否则多 video 分段 seek 会提取 0 帧 + audio_processing_failed。
+        #    Duix 原始视频关键帧稀疏（8s+ 间隔），必须重新编码（-g 30 = 每 1s 一个关键帧）。
+        _reenc = out_dir / "_avatar_reenc.mp4"
+        _ffmpeg = context.get("ffmpeg_bin", "ffmpeg")
+        try:
+            r = subprocess.run(
+                [_ffmpeg, "-y", "-i", str(dst), "-c:v", "libx264", "-preset", "medium",
+                 "-crf", "18", "-r", "30", "-g", "30", "-keyint_min", "30",
+                 "-movflags", "+faststart", "-c:a", "aac", "-b:a", "192k", str(_reenc)],
+                capture_output=True, text=True, timeout=600)
+            if _reenc.exists() and _reenc.stat().st_size > 1000:
+                _reenc.replace(dst)
+                print(f"  [duix] 🔧 关键帧重编码完成 (GOP=1s): {dst}")
+            else:
+                print(f"  [duix] ⚠️ 重编码失败，保留原始视频: {r.stderr[-200:] if r.stderr else ''}")
+        except Exception as e:
+            print(f"  [duix] ⚠️ 重编码异常，保留原始视频: {e}")
         context["avatar_video_path"] = str(dst)
         print(f"  [duix] 📁 数字人视频: {dst}")
         return context

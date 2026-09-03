@@ -305,24 +305,6 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
                 _pl_seg = _seg.get("person_layout") or _pz_vt(_seg.get("visual_type", ""), orientation)
                 _zones.append(_pz(_pl_seg, orientation))
             _zone = _zones[0]  # 第一个场景的位置（video 初始位置 + 满幅缩位目标）
-            # 🔴 切片：把数字人视频按场景切成独立片段（HyperFrames 整体渲染不支持"同 src 多 video 分段 seek"，
-            #    多 video 同 src 各自 data-start 会提取 0 帧 + audio_processing_failed）。每场景一个独立 mp4，
-            #    各自 data-start=0，HyperFrames 能正常提取帧。hidden 场景不切片（不放 video）。
-            _clips_dir = hf_dir / "clips"; _clips_dir.mkdir(exist_ok=True)
-            _avatar_clips = []
-            for _i, _seg in enumerate(ranges):
-                _pl_i = _seg.get("person_layout") or _pz_vt(_seg.get("visual_type", ""), orientation)
-                if _pl_i == "hidden":
-                    _avatar_clips.append(None)
-                    continue
-                _clip_name = f"avatar_clip_{_i}.mp4"
-                _clip_path = _clips_dir / _clip_name
-                _clip_start = seg_offsets[_i]
-                _clip_dur = _seg["end"] - _seg["start"]
-                _r = subprocess.run(
-                    ["ffmpeg", "-y", "-ss", str(_clip_start), "-i", dst_v, "-t", str(_clip_dur),
-                     "-c", "copy", str(_clip_path)], capture_output=True, text=True, timeout=120)
-                _avatar_clips.append(_clip_name if _clip_path.exists() else None)
             pos_name, pos_css = "avatar-rail", ""
             frame_name, frame_css = "minimal-line", PIP_FRAMES["minimal-line"]
             # 前景粒子层（z17，人物窗口之上）+ 环境呼吸 + 数字人呼吸（repeat 有限，符合 determinism 规则）
@@ -393,11 +375,10 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
                 _v_zr = _z["w"] // 2 if orientation == "portrait" else 16
                 # 🔴 HyperFrames clip 契约：data-start=合成时间轴秒数(非文件seek)，data-track-index 控制时间重叠。
                 #    多个 video 共享 track 0（同 track 不重叠即可），各自 data-start=seg_offsets[i] 顺序排列。
-                #    src 用切片文件(每场景独立 mp4, 从0开始=该场景内容)，避开"同src分段seek"提取0帧的坑。
-                _clip_src = _avatar_clips[_i] if _i < len(_avatar_clips) and _avatar_clips[_i] else "final.mp4"
+                #    同 src final.mp4 分段 seek 经实测可行（覆盖率100%），无需切片。
                 pip_video_block += (
-                    f'<video id="avatar-video-{_vid_idx}" class="clip avatar-clip" src="{_clip_src}" '
-                    f'data-start="{_seg_start}" data-duration="{_seg_dur}" data-track-index="0" muted playsinline '
+                    f'<video id="avatar-video-{_vid_idx}" class="clip avatar-clip" src="final.mp4" '
+                    f'data-start="{_seg_start}" data-duration="{_seg_dur}" data-media-start="{_seg_start}" data-track-index="0" muted playsinline '
                     f'style="position:absolute;left:{_z["x"]}px;top:{_z["y"]}px;width:{_z["w"]}px;height:{_z["h"]}px;object-fit:cover;z-index:15;border-radius:{_v_zr}px;"></video>')
                 _vid_idx += 1
         else:
