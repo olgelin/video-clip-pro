@@ -73,6 +73,12 @@
 - ✅ 最小测试验证：sub-composition 加 template 后，GSAP 方块动画 2s→6s 位置 x=366→1300，动画正常播放。
 - 检查方法：`grep "<template>" compositions/beat-*.html` 每个都应有 `<template>`。
 
+## 7.7 Three.js 粒子 z-index（背景遮挡根因）
+
+- 🔴 **方向2（背景 LLM 生成）后，LLM 会把不透明背景渐变放进 `main-content`（z-index:1），而 Three.js 的 `<canvas>` 是 z-index:0，在 main-content 之下 → 被背景盖住，粒子白画、画面静态**。
+- 🔴 **修复**：`_fix_canvas_zindex` 兜底把 `<canvas>` 的 z-index 0→2（高于 main-content 的 1）；scene_system 约束 canvas z-index:2、背景渐变用 `rgba` 半透明。
+- 🔴 **症状识别**：抽帧像素差极小（<2）= 静态；但 beat-N.html 里有 `new THREE.WebGLRenderer` + `hf-seek`（Three.js 代码在）→ 说明不是代码缺失，是 z-index 遮挡。
+
 ## 8. 字幕 = 词级转录对齐配音（不是整段均匀拆分）
 
 - 🔴 VoxCPM2 只返回**段落级** scene_durations，没有词级/句级时间戳。
