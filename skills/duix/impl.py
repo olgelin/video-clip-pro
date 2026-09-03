@@ -46,6 +46,14 @@ class Duix(SkillBase):
     name = "duix"
 
     def execute(self, context: dict) -> dict:
+        # 🔴 幂等：数字人视频已存在则跳过合成（断点续跑，长任务失败重跑不重新合成）
+        out_dir = Path(context.get("output_dir", "."))
+        _dst = out_dir / "avatar_video.mp4"
+        if _dst.exists() and _dst.stat().st_size > 1000:
+            print("  [duix] ⏭️ 数字人视频已存在，跳过合成")
+            context["avatar_video_path"] = str(_dst)
+            return context
+
         voice_path = context.get("voice_path", "")
         if not voice_path or not Path(voice_path).exists():
             print("  [duix] ❌ 找不到配音")
