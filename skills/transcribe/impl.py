@@ -7,6 +7,8 @@ from core.gpu import detect_gpu
 
 # CJK Unicode ranges
 _CJK_RE = re.compile(r'[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u3000-\u303f\uff00-\uffef]+')
+# 🔴 数字/单位连续性：数字及其单位是一个不可分割的整体（"12"+"00"+"万"→"1200万"）
+_NUM_RE = re.compile(r'^[\d.%,万亿千百十点分之]+$')
 
 def _merge_cjk_words(words, max_gap=0.25, max_chars=12):
     """Merge adjacent CJK characters into natural phrases.
@@ -25,9 +27,18 @@ def _merge_cjk_words(words, max_gap=0.25, max_chars=12):
     for w in words:
         text = w["text"].strip()
         is_cjk = bool(_CJK_RE.match(text))
+        is_num = bool(_NUM_RE.match(text))
         gap = w["start"] - buf_end if buf_count > 0 else 0
 
-        if is_cjk and buf_count > 0 and gap < max_gap and len(buf_text) + len(text) <= max_chars:
+        # 🔴 数字连续性：当前是数字/单位，且 buffer 末尾也是数字/单位 → 无条件合并（数字不可劈开）
+        if is_num and buf_count > 0 and _NUM_RE.match(buf_text[-1]):
+            buf_text += text
+            buf_end = w["end"]
+            buf_conf += w["confidence"]
+            buf_count += 1
+            continue
+
+        if (is_cjk or is_num) and buf_count > 0 and gap < max_gap and len(buf_text) + len(text) <= max_chars:
             # Merge into current phrase
             buf_text += text
             buf_end = w["end"]
