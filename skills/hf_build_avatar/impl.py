@@ -86,6 +86,9 @@ class Hf_build_avatar(SkillBase):
                                     orientation=orientation, person_layout=_pl)
                 scene["person_layout"] = _pl
                 html = stage.replace("<!-- LLM_CONTENT_INSERT -->", content_html)
+                # 🔴 移除 data-person-zone 占位框：它只是给 LLM 的避让提示（canvas_hint 里已文字说明），
+                # 不是最终内容——虚线框 z-index:40 高于数字人视频 z-index:15，会透出来像残留虚线。
+                html = re.sub(r'<div data-person-zone=[^>]*></div>', '', html)
                 (output_dir / f"beat-{idx}.html").write_text(html, encoding="utf-8")
                 html_files.append(str(output_dir / f"beat-{idx}.html"))
                 # 记录本场实际使用的 Three.js 技法，供下一场对比
