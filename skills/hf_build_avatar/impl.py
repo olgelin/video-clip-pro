@@ -134,7 +134,7 @@ class Hf_build_avatar(SkillBase):
         if not render_ranges:
             print("      ⚠ 渲染跳过：无 HTML 场景文件")
             return {}
-        render_edl = {"ranges": render_ranges}
+        render_edl = {"ranges": render_ranges, "topic": context.get("topic", "")}
         try:
             print(f"\n[渲染] HyperFrames 合成 {len(render_ranges)} 个全屏场景 (Avatar)...")
             hf_dir = build_hyperframes_composition(render_edl, words, project_root, video_path,

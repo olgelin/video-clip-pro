@@ -266,6 +266,14 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
                 ]
             card_style = f"position:absolute;{_pos_styles[idx % 3]};width:{cw}px;height:{ch}px;z-index:10;"
         beat_files.append((beat_id, offset, dur, card_style, cw, ch))
+    # 🔴 片尾 outro：avatar 加品牌片尾（对齐 video-factory，所有管道都有结尾画面）
+    if layout_mode == "avatar":
+        _outro_dur = 5.0
+        _outro_html = _build_outro_html(topic=(edl.get("topic") or ""), fw=fw, fh=fh)
+        (comp_dir / "beat-outro.html").write_text(_outro_html, encoding="utf-8")
+        beat_files.append(("beat-outro", round(total_dur, 2), _outro_dur,
+                           f"position:absolute;inset:0;width:{fw}px;height:{fh}px;z-index:10;", fw, fh))
+        total_dur += _outro_dur
     host_lines = []
     for bid, pos, dur_clean, style, cw, ch in beat_files:
         host_lines.append(f'<div id="{bid}" data-composition-id="{bid}" data-composition-src="compositions/{bid}.html" data-start="{round(pos,2)}" data-duration="{round(dur_clean,2)}" data-width="{cw}" data-height="{ch}" class="clip audio-pulse" style="{style}"></div>')
@@ -1071,6 +1079,85 @@ def _compose_pip(hf_dir, polished_path):
     except Exception as e:
         print(f"      PIP 叠加错误: {e}")
     return polished_path
+
+
+def _build_outro_html(topic="", fw=1920, fh=1080, brand_name="不闻AI", brand_title="癫狂吧世界"):
+    """片尾 HTML — 对齐 video-factory build_outro_html（3D透视网格+粒子雨+扫光+地平线辉光+品牌名+点击关注+本期话题卡片）。"""
+    topic_short = (topic or "本期话题")[:10]
+    html = f'''<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+</head>
+<body style="margin:0;padding:0;overflow:hidden;background:#060618;width:{fw}px;height:{fh}px;">
+<div id="scene" class="scene" data-composition-id="beat-outro" data-width="{fw}" data-height="{fh}" style="position:relative;width:{fw}px;height:{fh}px;overflow:hidden;background:linear-gradient(180deg,#060618,#0A0C26,#0C1030);">
+  <div class="bg-stage" style="position:absolute;top:0;left:0;width:100%;height:100%;perspective:1000px;">
+    <div class="grid-floor" style="position:absolute;top:42%;left:0;width:100%;height:58%;background:linear-gradient(180deg,rgba(108,140,255,0.06),rgba(108,140,255,0.02));transform:rotateX(60deg);transform-origin:top;"></div>
+  </div>
+  <div class="horizon-glow" style="position:absolute;top:40%;left:5%;width:90%;height:4px;background:linear-gradient(90deg,transparent,rgba(108,140,255,0.5),rgba(168,85,247,0.4),transparent);z-index:1;"></div>
+  <div class="ghost-text" style="position:absolute;top:30%;left:50%;transform:translate(-50%,-50%);font-size:180px;font-weight:900;color:rgba(108,140,255,0.04);z-index:0;white-space:nowrap;">{brand_name}</div>
+  <div class="radial-glow-blue" style="position:absolute;top:20%;left:30%;width:600px;height:600px;background:radial-gradient(circle,rgba(108,140,255,0.12),transparent 70%);z-index:0;"></div>
+  <div class="radial-glow-purple" style="position:absolute;top:20%;right:20%;width:500px;height:500px;background:radial-gradient(circle,rgba(168,85,247,0.1),transparent 70%);z-index:0;"></div>
+  <div id="light-scan" style="position:absolute;top:0;left:-200px;width:180px;height:100%;background:linear-gradient(90deg,transparent,rgba(108,140,255,0.08),transparent);z-index:2;"></div>
+  <div class="particles-near" style="position:absolute;top:0;left:0;width:100%;height:45%;z-index:1;">
+    <div style="position:absolute;left:10%;width:3px;height:120px;background:linear-gradient(180deg,transparent,rgba(108,140,255,0.6),transparent);"></div>
+    <div style="position:absolute;left:25%;width:2px;height:90px;background:linear-gradient(180deg,transparent,rgba(168,85,247,0.5),transparent);"></div>
+    <div style="position:absolute;left:40%;width:4px;height:140px;background:linear-gradient(180deg,transparent,rgba(0,212,255,0.5),transparent);"></div>
+    <div style="position:absolute;left:55%;width:2px;height:100px;background:linear-gradient(180deg,transparent,rgba(108,140,255,0.55),transparent);"></div>
+    <div style="position:absolute;left:70%;width:3px;height:130px;background:linear-gradient(180deg,transparent,rgba(168,85,247,0.5),transparent);"></div>
+    <div style="position:absolute;left:85%;width:2px;height:110px;background:linear-gradient(180deg,transparent,rgba(0,212,255,0.45),transparent);"></div>
+  </div>
+  <div class="particles-mid" style="position:absolute;top:0;left:0;width:100%;height:43%;z-index:1;">
+    <div style="position:absolute;left:15%;width:2px;height:70px;background:linear-gradient(180deg,transparent,rgba(108,140,255,0.35),transparent);"></div>
+    <div style="position:absolute;left:35%;width:3px;height:85px;background:linear-gradient(180deg,transparent,rgba(168,85,247,0.3),transparent);"></div>
+    <div style="position:absolute;left:50%;width:2px;height:60px;background:linear-gradient(180deg,transparent,rgba(0,212,255,0.3),transparent);"></div>
+    <div style="position:absolute;left:65%;width:3px;height:75px;background:linear-gradient(180deg,transparent,rgba(108,140,255,0.3),transparent);"></div>
+    <div style="position:absolute;left:80%;width:2px;height:65px;background:linear-gradient(180deg,transparent,rgba(168,85,247,0.28),transparent);"></div>
+  </div>
+  <div class="particles-far" style="position:absolute;top:0;left:0;width:100%;height:40%;z-index:0;">
+    <div style="position:absolute;left:8%;width:1px;height:40px;background:linear-gradient(180deg,transparent,rgba(108,140,255,0.2),transparent);"></div>
+    <div style="position:absolute;left:30%;width:2px;height:50px;background:linear-gradient(180deg,transparent,rgba(168,85,247,0.18),transparent);"></div>
+    <div style="position:absolute;left:52%;width:1px;height:35px;background:linear-gradient(180deg,transparent,rgba(0,212,255,0.18),transparent);"></div>
+    <div style="position:absolute;left:72%;width:2px;height:45px;background:linear-gradient(180deg,transparent,rgba(108,140,255,0.17),transparent);"></div>
+    <div style="position:absolute;left:90%;width:1px;height:38px;background:linear-gradient(180deg,transparent,rgba(168,85,247,0.15),transparent);"></div>
+  </div>
+  <div id="brand-name" style="position:absolute;top:36%;left:50%;transform:translate(-50%,0);font-size:90px;font-weight:900;color:#FFFFFF;text-shadow:0 0 40px rgba(108,140,255,0.7);letter-spacing:18px;z-index:3;">{brand_name}</div>
+  <div id="brand-title" style="position:absolute;top:50%;left:50%;transform:translate(-50%,0);font-size:100px;font-weight:900;background:linear-gradient(135deg,#6C8CFF,#A855F7,#00D4FF);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:12px;z-index:3;">{brand_title}</div>
+  <div id="cta-btn" style="position:absolute;top:66%;left:50%;transform:translate(-50%,0);padding:20px 70px;background:linear-gradient(135deg,#6C8CFF,#A855F7);border-radius:50px;font-size:30px;font-weight:700;color:#FFFFFF;letter-spacing:5px;box-shadow:0 0 40px rgba(108,140,255,0.5);z-index:3;">点击关注</div>
+  <div id="follow-hint" style="position:absolute;top:76%;left:50%;transform:translate(-50%,0);font-size:24px;color:rgba(255,255,255,0.5);z-index:3;">不错过每期精彩</div>
+  <div id="data-card-1" style="position:absolute;bottom:10%;left:15%;padding:16px 24px;background:rgba(255,255,255,0.04);border:1px solid rgba(108,140,255,0.25);border-radius:12px;z-index:3;">
+    <div style="font-size:14px;color:#888;margin-bottom:4px;">本期话题</div>
+    <div style="font-size:22px;font-weight:700;color:#6C8CFF;">{topic_short}</div>
+  </div>
+  <div id="data-card-2" style="position:absolute;bottom:10%;right:15%;padding:16px 24px;background:rgba(255,255,255,0.04);border:1px solid rgba(168,85,247,0.25);border-radius:12px;z-index:3;">
+    <div style="font-size:14px;color:#888;margin-bottom:4px;">下期预告</div>
+    <div style="font-size:22px;font-weight:700;color:#A855F7;">敬请期待</div>
+  </div>
+</div>
+<script>
+(function(){{
+  var tl = gsap.timeline({{paused:true}});
+  tl.from("#brand-name", {{opacity:0, y:-40, duration:0.6, ease:"power3.out"}}, 0);
+  tl.from("#brand-title", {{opacity:0, scale:0.85, duration:0.7, ease:"back.out(1.7)"}}, 0.15);
+  tl.from("#cta-btn", {{opacity:0, scale:0.7, duration:0.6, ease:"back.out(1.7)"}}, 0.5);
+  tl.from("#follow-hint", {{opacity:0, y:20, duration:0.5, ease:"power2.out"}}, 0.75);
+  tl.from("#data-card-1", {{opacity:0, x:-40, duration:0.5, ease:"power2.out"}}, 0.6);
+  tl.from("#data-card-2", {{opacity:0, x:40, duration:0.5, ease:"power2.out"}}, 0.6);
+  tl.to("#cta-btn", {{scale:1.06, duration:1.8, yoyo:true, repeat:1, ease:"sine.inOut"}}, 1.0);
+  tl.to("#light-scan", {{x:{fw}, duration:2.5, repeat:1, ease:"none"}}, 0);
+  tl.to(".particles-near div", {{y:600, opacity:0.1, duration:3, repeat:0, ease:"none"}}, 0);
+  tl.to(".particles-mid div", {{y:500, opacity:0.08, duration:4, repeat:0, ease:"none"}}, 0);
+  tl.to(".particles-far div", {{y:350, opacity:0.05, duration:5, repeat:0, ease:"none"}}, 0);
+  tl.to(".radial-glow-blue", {{opacity:0.4, duration:2, yoyo:true, repeat:1, ease:"sine.inOut"}}, 0);
+  tl.to(".radial-glow-purple", {{opacity:0.5, duration:2.5, yoyo:true, repeat:0, ease:"sine.inOut"}}, 0);
+  window.__timelines = window.__timelines || {{}};
+  window.__timelines["beat-outro"] = tl;
+  tl.play();
+}})();
+</script>
+</body>
+</html>'''
+    return html
 
 
 def _render_fullscreen(hf_dir, gpu_flag):
