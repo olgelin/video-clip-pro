@@ -166,8 +166,8 @@ class Duix(SkillBase):
                            capture_output=True, text=True, timeout=30)
         except Exception as e:
             print(f"  [duix] ⚠️ 启动 Docker Desktop 失败: {e}")
-        # 等引擎恢复（最多 180s）
-        for _ in range(18):
+        # 等引擎恢复（最多 300s，Docker Desktop 冷启动 + WSL2 后端可能要 3-4 分钟）
+        for _ in range(30):
             time.sleep(10)
             try:
                 r = subprocess.run(["docker", "ps"], capture_output=True, text=True, timeout=15)
@@ -175,10 +175,10 @@ class Duix(SkillBase):
                     print("  [duix] ✅ Docker 引擎已恢复，重启容器")
                     subprocess.run(["docker", "restart", DUIX_CONTAINER],
                                    capture_output=True, text=True, timeout=120)
-                    return self._wait_container_ready()
+                    return self._wait_container_ready(timeout_s=300)
             except Exception:
                 pass
-        print("  [duix] ❌ Docker 引擎恢复超时")
+        print("  [duix] ❌ Docker 引擎恢复超时(300s)")
         return False
 
     def _wait_container_ready(self, timeout_s: int = 120) -> bool:
