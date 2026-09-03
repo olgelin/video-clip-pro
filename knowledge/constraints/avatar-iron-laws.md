@@ -86,6 +86,12 @@
 - 🔴 **速度单位**：确定性下坠的 spd 单位是"每秒"（`0.3+Math.random()*0.7`），不是"每帧"（累积下坠的 `0.06+...` 是每帧）。
 - 🔴 **determinism-rules 原文**："reaching for setTimeout/requestAnimationFrame/addEventListener to drive a visual → rebuild as a tween on the timeline"。hf-seek 事件驱动（addEventListener）本身就是反模式，正确是 GSAP timeline 或 t 的纯函数。
 
+## 7.9 sub-composition 里 window 是代理，hf-seek 监听必须用 globalThis
+
+- 🔴 **sub-composition 的 script 里，`window` 是 HyperFrames 的代理对象，`window.addEventListener("hf-seek",...)` 抛 `TypeError: Illegal invocation`**（native 方法被解绑，this 不对）。导致 Three.js 的 hf-seek 监听注册失败 → 粒子不更新（静态）。
+- 🔴 **修复**：用 `globalThis.addEventListener("hf-seek",...)` 和 `globalThis.__hfThreeTime`（globalThis === 真实 window，绕过代理）。实测 `globalThis` 能收到 hf-seek 事件（SEEK:0.5），而 `window` 抛错、`document` 收不到 window 上的事件。
+- 🔴 **诊断方法**：sub-composition 里用 try-catch 包住 `window.addEventListener`，报 "Illegal invocation" 就是代理问题。standalone 的 window 是真实的（不抛错），只有 sub-composition 才踩这个坑——所以最小测试要用 sub-composition 结构复现。
+
 ## 8. 字幕 = 词级转录对齐配音（不是整段均匀拆分）
 
 - 🔴 VoxCPM2 只返回**段落级** scene_durations，没有词级/句级时间戳。
