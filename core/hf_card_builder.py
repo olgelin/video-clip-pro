@@ -272,7 +272,7 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
         _outro_html = _build_outro_html(topic=(edl.get("topic") or ""), fw=fw, fh=fh)
         (comp_dir / "beat-outro.html").write_text(_outro_html, encoding="utf-8")
         beat_files.append(("beat-outro", round(total_dur, 2), _outro_dur,
-                           f"position:absolute;inset:0;width:{fw}px;height:{fh}px;z-index:10;", fw, fh))
+                           f"position:absolute;inset:0;width:{fw}px;height:{fh}px;z-index:50;", fw, fh))
         total_dur += _outro_dur
     host_lines = []
     for bid, pos, dur_clean, style, cw, ch in beat_files:
