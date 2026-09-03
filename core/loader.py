@@ -1,4 +1,4 @@
-﻿"""loader.py — YAML-driven pipeline loader with phase/parallel execution"""
+"""loader.py — YAML-driven pipeline loader with phase/parallel execution"""
 from __future__ import annotations
 import json, threading, time, yaml, importlib, logging, traceback
 from pathlib import Path
