@@ -57,6 +57,14 @@
 - ⚠️ **历史误判教训**：① 曾以为"换位靠 GSAP 确定性生效"（错，是视觉模型误判，把内容元素当成了数字人换位）；② 曾 revert 正确的"每场景固定 video"方案（636998b），误判成"代码锁死"——实际上 person_layout 仍是 LLM 判断，只是渲染机制从 GSAP 改成确定性初始位置。**判断"是否锁死"要看"编排是否 LLM 决定"，不是看"渲染用不用动画"**。
 - 验证换位必须抽帧精确看"数字人在左/右、占屏比例"，不能只看"有没有人"——视觉模型会把内容元素误判成数字人。
 
+## 7.5 HyperFrames clip 契约（多 video 正确写法，照 hyperframes-core skill）
+
+- 🔴 **`data-start` = 合成时间轴的秒数**（从合成开始，即"这个 clip 在时间轴哪个位置显示"），**不是文件 seek**。曾误当文件 seek 用，导致多 video 帧提取 0 帧 + audio_processing_failed。
+- 🔴 **`data-media-start` = 文件内 seek**（跳过源文件前几秒）。多 video 各自播放不同场景片段时，`data-start` 和 `data-media-start` 都要设（都 = seg_offsets[i]），否则所有 video 都从文件 0s 播、内容错位。
+- 🔴 **`data-track-index` 控制时间重叠，不是视觉层级**：同 track 的两个 clip 不能时间重叠（lint 报错）；视觉前后用 CSS z-index。多 video 可共享 track 0（各自 data-start 顺序排列不重叠即可），不必递增 track。
+- 🔴 **关键帧必须密集（≤1s）**：Duix 原始视频关键帧间隔 8.33s，HyperFrames 报"sparse keyframes → seek failure/frame freezing"。Duix 生成后必须 ffmpeg 重编码（`-g 30 -keyint_min 30` = 每 1s 一个关键帧）。
+- ✅ 实测：2-4 个 video 同 src final.mp4 分段 seek（data-start + data-media-start 都设）渲染成功、覆盖率 100%，**无需切片**。最小测试（仅 video+audio）全通过，问题只在完整 pipeline 结构里复现。
+
 ## 8. 字幕 = 词级转录对齐配音（不是整段均匀拆分）
 
 - 🔴 VoxCPM2 只返回**段落级** scene_durations，没有词级/句级时间戳。
