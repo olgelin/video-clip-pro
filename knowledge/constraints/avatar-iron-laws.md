@@ -49,3 +49,17 @@
 - 所有动画 `tl.to/from/fromTo`（禁止独立 gsap）。
 - `repeat` 正整数 ≤5（禁止 -1）。
 - 元素慢慢出来：标题先出→标签→数据逐个弹，禁止所有元素同时弹 = PPT 感。
+
+## 7. 数字人换位 = GSAP 动画（LLM 编排），不是每场景写死 video
+
+- 🔴 换位靠 GSAP `tl.to("#avatar-video",{left/top/width/height}, seg_offsets[i]-0.3)` 位置动画，seek 驱动下**确定性生效**（不是偶发）。
+- 🔴 **禁止"每场景固定 position 的 video clip"**——那是代码锁死，用户明确否定（"不许编死，要 LLM 编排"）。
+- ⚠️ 曾误诊"换位偶发失效"：真相是 Duix 卡死 → avatar_video.mp4 没生成 → 画面数字人空白/异常，被当成"固定角落"。**数字人异常先查 Duix 是否成功，别怀疑换位动画**。
+- 换位时间点 `seg_offsets[i]-0.3`（场景边界前 0.3s 平滑过渡），满幅→缩位 `tl.set(0)+tl.to(5s)`。
+
+## 8. 字幕 = 词级转录对齐配音（不是整段均匀拆分）
+
+- 🔴 VoxCPM2 只返回**段落级** scene_durations，没有词级/句级时间戳。
+- 🔴 字幕必须对 step05_voice.wav 做 faster-whisper 词级转录（`voice_gen` 后加 `transcribe_voice` stage，phase 2.5），真实对齐配音语速。
+- 🔴 Whisper 把"1200万"转录成 "12"+"00"+"万" 三个 token，`_merge_cjk_words` 必须加**数字连续性合并**（`_NUM_RE`），否则字幕出现"12"+"00万"断裂。
+- 🔴 数字用中文读但 Whisper 转录成阿拉伯数字（"一千二百"→"1200"），合并后归一到阿拉伯数字，属正常。
