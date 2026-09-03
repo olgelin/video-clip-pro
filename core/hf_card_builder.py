@@ -373,24 +373,13 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
                 _seg_start = round(seg_offsets[_i], 2)
                 _seg_dur = round(ranges[_i]["end"] - ranges[_i]["start"], 2)
                 _v_zr = _z["w"] // 2 if orientation == "portrait" else 16
-                # 🔴 开场满幅→缩位（场景0内拆两段）：满幅段（0~hero_dur）+ 缩位段（hero_dur~结束），确定性硬切
-                if _i == 0 and hero_dur < _seg_dur:
-                    pip_video_block += (
-                        f'<video id="avatar-video-{_vid_idx}" class="clip avatar-clip" src="final.mp4" '
-                        f'data-start="{_seg_start}" data-duration="{round(hero_dur, 2)}" data-track-index="{_vid_idx}" muted playsinline '
-                        f'style="position:absolute;left:{_hero_x}px;top:{_hero_y}px;width:{_hero_w}px;height:{_hero_h}px;object-fit:cover;z-index:15;border-radius:{_v_zr}px;"></video>')
-                    _vid_idx += 1
-                    pip_video_block += (
-                        f'<video id="avatar-video-{_vid_idx}" class="clip avatar-clip" src="final.mp4" '
-                        f'data-start="{round(_seg_start + hero_dur, 2)}" data-duration="{round(_seg_dur - hero_dur, 2)}" data-track-index="{_vid_idx}" muted playsinline '
-                        f'style="position:absolute;left:{_z["x"]}px;top:{_z["y"]}px;width:{_z["w"]}px;height:{_z["h"]}px;object-fit:cover;z-index:15;border-radius:{_v_zr}px;"></video>')
-                    _vid_idx += 1
-                else:
-                    pip_video_block += (
-                        f'<video id="avatar-video-{_vid_idx}" class="clip avatar-clip" src="final.mp4" '
-                        f'data-start="{_seg_start}" data-duration="{_seg_dur}" data-track-index="{_vid_idx}" muted playsinline '
-                        f'style="position:absolute;left:{_z["x"]}px;top:{_z["y"]}px;width:{_z["w"]}px;height:{_z["h"]}px;object-fit:cover;z-index:15;border-radius:{_v_zr}px;"></video>')
-                    _vid_idx += 1
+                # 🔴 每场景一个固定位置 video（不拆满幅/缩位——多 video 拆段会触发 HyperFrames
+                #    覆盖率门禁误判"0 帧"，导致渲染 abort。满幅开场过渡放弃，直接每场景正确位置）
+                pip_video_block += (
+                    f'<video id="avatar-video-{_vid_idx}" class="clip avatar-clip" src="final.mp4" '
+                    f'data-start="{_seg_start}" data-duration="{_seg_dur}" data-track-index="{_vid_idx}" muted playsinline '
+                    f'style="position:absolute;left:{_z["x"]}px;top:{_z["y"]}px;width:{_z["w"]}px;height:{_z["h"]}px;object-fit:cover;z-index:15;border-radius:{_v_zr}px;"></video>')
+                _vid_idx += 1
         else:
             # ── pip 原有：定时换位（垂直中部）──
             n_shifts = max(1, int(total_dur // shift_interval))
