@@ -250,6 +250,12 @@ quote_hero、compare、timeline_event 最容易漏——但它们也需要 KPI �
 
 🔴 **背景也要"填满画面"**：背景层铺满整个画布，配合内容层一起把上下左右都填满，禁止四周留出纯黑色空白。
 
+🔴 **z-index 分层铁律（背景 vs Three.js vs 内容，违反=粒子被遮看不见）**：
+- 背景渐变层（最底）：`z-index:0`
+- Three.js 的 `<canvas>`（粒子层）：`z-index:2`（因为 main-content 是 `z-index:1`，canvas 必须比它高才能露出来；如果 canvas 和背景同为 0 会被背景盖住，粒子白画）
+- 内容层（标题/卡片/数据）：在 main-content 内 `z-index:1` 以上
+- 🔴 禁止把 `<canvas>` 写成 `z-index:0`（和背景同级会被背景盖住）、禁止背景渐变写成不透明的实色（用 `rgba` 半透明，否则盖住粒子）。
+
 ## 禁止项
 
 - `<style>` 块、`<br>`、`<img>`、DOCTYPE/html/head/body

@@ -100,7 +100,7 @@ class SceneBuilderBase(SkillBase):
             """🔴 兜底：LLM 有时只输出注释不输出 Three.js 实际代码（画面时好时坏的根因）。
             检测缺失（无 new THREE.WebGLRenderer / hf-seek）则清理残留空 canvas 并注入默认技法 A（粒子场聚散）。"""
             if "new THREE.WebGLRenderer" in html or "hf-seek" in html:
-                return self._fix_slow_rotation(html)
+                return self._fix_canvas_zindex(self._fix_slow_rotation(html))
             print("        ⚠ Three.js 缺失 → 注入默认粒子场聚散兜底")
             # 清理 LLM 残留的空 canvas（只有 <canvas> 标签没有对应 Three.js 代码）
             html = re.sub(r'<canvas[^>]*>', '', html)
@@ -149,6 +149,22 @@ class SceneBuilderBase(SkillBase):
                 v = float(m.group(1))
                 return f"rotation.y=t*{max(v, 0.4):g}"
             return re.sub(r'rotation\.y=t\*([0-9]*\.?[0-9]+)', repl, html)
+    def _fix_canvas_zindex(self, html: str) -> str:
+            """🔴 兜底：Three.js canvas 的 z-index 必须 ≥1（背景渐变层之上），否则 LLM 生成的
+            不透明背景渐变会盖住粒子 → 粒子白画、画面静态。检测 <canvas> 若 z-index:0 或无 z-index，
+            强制改成 z-index:1。"""
+            def _fix_canvas(m):
+                tag = m.group(0)
+                if 'z-index:' in tag:
+                    return re.sub(r'z-index:\s*0\b', 'z-index:2', tag)
+                # 无 z-index，在 style 里补
+                if 'style="' in tag:
+                    return tag.replace('style="', 'style="z-index:2;', 1)
+                if "style='" in tag:
+                    return tag.replace("style='", "style='z-index:2;", 1)
+                # 无 style，补一个
+                return tag[:-1] + ' style="z-index:2;">'
+            return re.sub(r'<canvas\b[^>]*>', _fix_canvas, html)
     def _layout_menu(self, idx: int) -> str:
             opts = [
                 "主标题居中大字，标签在下方弧形排列",
