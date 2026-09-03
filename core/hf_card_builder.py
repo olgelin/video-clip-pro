@@ -388,13 +388,16 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
                 _pl_i = ranges[_i].get("person_layout") or _pz_vt(ranges[_i].get("visual_type", ""), orientation)
                 if _pl_i == "hidden":
                     continue
+                _seg_start = round(seg_offsets[_i], 2)
                 _seg_dur = round(ranges[_i]["end"] - ranges[_i]["start"], 2)
                 _v_zr = _z["w"] // 2 if orientation == "portrait" else 16
-                # 🔴 每场景一个独立切片 video（src=切片文件 + data-start=0），避开"同 src 分段 seek 提取 0 帧"的坑
+                # 🔴 HyperFrames clip 契约：data-start=合成时间轴秒数(非文件seek)，data-track-index 控制时间重叠。
+                #    多个 video 共享 track 0（同 track 不重叠即可），各自 data-start=seg_offsets[i] 顺序排列。
+                #    src 用切片文件(每场景独立 mp4, 从0开始=该场景内容)，避开"同src分段seek"提取0帧的坑。
                 _clip_src = _avatar_clips[_i] if _i < len(_avatar_clips) and _avatar_clips[_i] else "final.mp4"
                 pip_video_block += (
                     f'<video id="avatar-video-{_vid_idx}" class="clip avatar-clip" src="{_clip_src}" '
-                    f'data-start="0" data-duration="{_seg_dur}" data-track-index="{_vid_idx}" muted playsinline '
+                    f'data-start="{_seg_start}" data-duration="{_seg_dur}" data-track-index="0" muted playsinline '
                     f'style="position:absolute;left:{_z["x"]}px;top:{_z["y"]}px;width:{_z["w"]}px;height:{_z["h"]}px;object-fit:cover;z-index:15;border-radius:{_v_zr}px;"></video>')
                 _vid_idx += 1
         else:
