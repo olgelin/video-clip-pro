@@ -71,6 +71,8 @@ def main():
     parser.add_argument("--debug", action="store_true", help="Keep intermediate files")
     parser.add_argument("--no-2x", action="store_true", dest="no_2x", help="Skip 2x upscale (save space)")
     parser.add_argument("--bgm", action="store_true", help="Add AI-generated background music with ducking")
+    parser.add_argument("--no-bgm", action="store_true", dest="no_bgm",
+                        help="Disable BGM（avatar-short/avatar-seed 默认开 BGM，用此关闭）")
     parser.add_argument("--mode", choices=["fullscreen", "pip", "avatar", "avatar-seed", "avatar-short"], default="fullscreen",
                        help="Layout mode: fullscreen(V23) / pip(画中画) / avatar-seed(碎碎念→数字人) / avatar-short(话题→数字人)")
     args = parser.parse_args()
@@ -133,7 +135,7 @@ def main():
         "whisper_model": args.whisper_model,
         "lang": args.lang,
         "provider": provider,
-        "enable_bgm": args.bgm,
+        "enable_bgm": args.bgm or (not args.no_bgm and is_avatar_topic),
         "layout_mode": args.mode,
         "no_2x": args.no_2x,
         "topic": args.topic or "",  # 🔴 avatar-seed/short 的文字输入

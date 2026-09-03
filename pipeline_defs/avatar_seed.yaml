@@ -66,6 +66,14 @@ stages:
     timeout: 300
     description: 成片视觉质检
 
+  - name: bgm_mix
+    skill: bgm_mix
+    phase: 6.5
+    critical: false
+    retry: 0
+    timeout: 900
+    description: BGM混音（ACE-Step生成+ducking，avatar默认开启）
+
   - name: upscale
     skill: upscale
     phase: 7
