@@ -491,6 +491,9 @@ def _make_caption(captions, start, dur, text, safe_width, orientation):
         return
 
     # 在标点处拆，否则按字拆
+    # 🔴 数字不可劈开："800万"禁止拆成"80"+"0万"
+    def _numish(ch):
+        return ch.isdigit() or ch in '.%,万亿千百十点分之'
     parts = []
     remaining = text
     while remaining:
@@ -506,6 +509,9 @@ def _make_caption(captions, start, dur, text, safe_width, orientation):
         else:
             # 没标点，在第 10-14 字间找空格
             cut = min(14, len(remaining))
+        # 🔴 cut 两侧都是数字/单位 → 向左移 cut，避免劈开数字
+        while cut > 1 and _numish(remaining[cut-1]) and _numish(remaining[cut]):
+            cut -= 1
         parts.append(remaining[:cut].strip())
         remaining = remaining[cut:].lstrip('，。、？！… ')
 
