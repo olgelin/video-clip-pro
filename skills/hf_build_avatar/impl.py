@@ -44,6 +44,9 @@ class Hf_build_avatar(SkillBase):
         scene_prompt_tpl = self.load_prompt("scene_system")
         output_dir = Path(context.get("output_dir", ".")) / "hf_build_avatar"
         output_dir.mkdir(parents=True, exist_ok=True)
+        # 🔴 清空旧的 beat-N.html 残留（--debug 下目录不清理，场景数变化时旧文件会污染渲染）
+        for _old in output_dir.glob("beat-*.html"):
+            _old.unlink(missing_ok=True)
         html_files = []
         prev_scene = None
 
