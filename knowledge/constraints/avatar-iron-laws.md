@@ -50,12 +50,12 @@
 - `repeat` 正整数 ≤5（禁止 -1）。
 - 元素慢慢出来：标题先出→标签→数据逐个弹，禁止所有元素同时弹 = PPT 感。
 
-## 7. 数字人换位 = GSAP 动画（LLM 编排），不是每场景写死 video
+## 7. 数字人换位 = 每段独立 video（LLM 编排位置 + 确定性渲染）
 
-- 🔴 换位靠 GSAP `tl.to("#avatar-video",{left/top/width/height}, seg_offsets[i]-0.3)` 位置动画，seek 驱动下**确定性生效**（不是偶发）。
-- 🔴 **禁止"每场景固定 position 的 video clip"**——那是代码锁死，用户明确否定（"不许编死，要 LLM 编排"）。
-- ⚠️ 曾误诊"换位偶发失效"：真相是 Duix 卡死 → avatar_video.mp4 没生成 → 画面数字人空白/异常，被当成"固定角落"。**数字人异常先查 Duix 是否成功，别怀疑换位动画**。
-- 换位时间点 `seg_offsets[i]-0.3`（场景边界前 0.3s 平滑过渡），满幅→缩位 `tl.set(0)+tl.to(5s)`。
+- 🔴 **根因（铁证实验）**：HyperFrames canvas 合成（drawImage）**只读 video 的初始 CSS 位置，不读 GSAP 动画（timeline seek）后的位置**。所以 GSAP 的 left/top/width/height 换位动画在整体渲染下**从未生效**——数字人一直冻结在场景 0 的初始位置。
+- 🔴 **解法**：位置仍由 LLM 语义判断（person_layout→person_zone，不锁死编排），但渲染用**每段一个 video、初始 CSS 写死=该段位置 + data-start/data-duration 控制显示**。开场场景 0 拆「满幅段 + 缩位段」两个 video，hidden 场景不放 video。
+- ⚠️ **历史误判教训**：① 曾以为"换位靠 GSAP 确定性生效"（错，是视觉模型误判，把内容元素当成了数字人换位）；② 曾 revert 正确的"每场景固定 video"方案（636998b），误判成"代码锁死"——实际上 person_layout 仍是 LLM 判断，只是渲染机制从 GSAP 改成确定性初始位置。**判断"是否锁死"要看"编排是否 LLM 决定"，不是看"渲染用不用动画"**。
+- 验证换位必须抽帧精确看"数字人在左/右、占屏比例"，不能只看"有没有人"——视觉模型会把内容元素误判成数字人。
 
 ## 8. 字幕 = 词级转录对齐配音（不是整段均匀拆分）
 
