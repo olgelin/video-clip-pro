@@ -212,8 +212,8 @@ class Hf_build_avatar(SkillBase):
     def _canvas_hint(self, orientation: str, person_layout: str) -> str:
         """🔴 v42 画布尺寸提示：横屏分栏时告诉 LLM 画布=内容区(1370×1080)，不是全屏 1920×1080。
         这样 LLM 在内容区内排版，数字人独占对侧竖条，真分区不叠放。"""
+        from skills.hf_build_avatar.person_zone import person_zone as _pz, content_zone as _cz, LANDSCAPE_PERSON_W as _LPW
         if orientation == "landscape" and person_layout in ("left-rail", "right-rail"):
-            from skills.hf_build_avatar.person_zone import content_zone as _cz, LANDSCAPE_PERSON_W as _LPW
             z = _cz(person_layout, orientation)
             w = z["w"]
             person_side = "右侧" if person_layout == "right-rail" else "左侧"
@@ -221,8 +221,16 @@ class Hf_build_avatar(SkillBase):
             return (f"- 🔴 画布 = 横屏内容区 {w}×1080（你在{content_side}；{person_side} {_LPW}px 是数字人竖条，不在你的画布内，你根本不用管它）。"
                     f"90% 安全区：左右 {max(20, int(w * 0.05))}px、上下 54px。水平填满不留大片空白。所有 left/right/width 定位都基于 {w}px 宽。")
         if orientation == "landscape":
-            return "- 🔴 画布 = 横屏 1920×1080。90% 安全区：左右 96px、上下 54px。水平填满不留大片空白"
-        return "- 🔴 画布 = 竖屏 1080×1920。90% 安全区：左右 54px、上下 96px。垂直填满不留大片空白"
+            hint = "- 🔴 画布 = 横屏 1920×1080。90% 安全区：左右 96px、上下 54px。水平填满不留大片空白"
+        else:
+            hint = "- 🔴 画布 = 竖屏 1080×1920。90% 安全区：左右 54px、上下 96px。垂直填满不留大片空白"
+        # 🔴 角标场景：数字人小窗在角落，明确告诉 LLM 避让的具体像素范围（之前只说"画布=全屏"，LLM 把 2×2 卡片排满四角→遮挡）
+        if person_layout in ("corner-bl", "corner-br"):
+            z = _pz(person_layout, orientation)
+            corner = "左下角" if person_layout == "corner-bl" else "右下角"
+            hint += (f"\n- 🔴 {corner}（约 x:{z['x']}-{z['x']+z['w']}、y:{z['y']}-{z['y']+z['h']}）是数字人角标小窗，"
+                     f"你的卡片/数据/文字**必须避开{corner}这一块**——别把任何内容排到{corner}，那里留给数字人。")
+        return hint
 
     def _layout_menu(self, idx: int) -> str:
         opts = [
