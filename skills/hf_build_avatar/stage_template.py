@@ -154,16 +154,12 @@ def build_stage(scene_idx: int, dur: float, palette: dict, motion: dict,
         except Exception:
             person_zone_html = ""
 
+    # 🔴 方向2：背景交给 LLM 生成（照 vf 背景规范）。框架只提供最小骨架：
+    #    container(兜底深色底) + Three.js 内联 + LLM 内容插入点 + 人物占位框 + GSAP 统一 timeline。
+    #    网格/光晕/辉光/ghost水印/粒子雨/扫光 全部由 LLM 在 scene_system.md 背景规范下生成。
     return f"""<div data-composition-id="beat-{scene_idx}" data-width="{fw}" data-height="{fh}" style="position:absolute;inset:0;z-index:10;overflow:hidden;background:linear-gradient(180deg,{gs},{gm},{ge});font-family:'PingFang SC','Microsoft YaHei',sans-serif;">
 {three_block}
-{grid_3d}
-{glow}
-{horizon}
-{ghost_text}
 <!-- LLM_CONTENT_INSERT -->
-{rain_html}
-{scan}
 {person_zone_html}
-<div style="position:absolute;inset:0;z-index:45;pointer-events:none;background:radial-gradient(ellipse 75% 65% at 50% 45%,transparent 55%,rgba(0,0,0,0.38) 100%);"></div>
 </div>
 {gsap_block}"""
