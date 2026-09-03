@@ -18,6 +18,14 @@ stages:
     timeout: 1800
     description: VoxCPM2 配音 → step05_voice.wav
 
+  - name: transcribe_voice
+    skill: transcribe
+    phase: 2.5
+    critical: false
+    retry: 1
+    timeout: 600
+    description: Whisper 词级转录配音 → words（字幕真实对齐配音语速，替代整段均匀拆分）
+
   - name: duix
     skill: duix
     phase: 3

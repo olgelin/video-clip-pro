@@ -66,7 +66,8 @@ class Transcribe(SkillBase):
     name = "transcribe"
 
     def execute(self, context: dict) -> dict:
-        video_path = Path(context["video_path"])
+        # 🔴 兼容转录配音：avatar 管道转录 step05_voice.wav（字幕对齐配音），其他管道转录视频
+        video_path = Path(context.get("voice_path") or context["video_path"])
         model_name = context.get("whisper_model", "large-v3")  # 🔴 large-v3 时间戳精度远超 small，减少剪辑偏差/字幕不同步
         lang = context.get("lang", "zh")
         gpu = detect_gpu()
