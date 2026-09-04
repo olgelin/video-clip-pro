@@ -92,6 +92,13 @@
 - 🔴 **修复**：用 `globalThis.addEventListener("hf-seek",...)` 和 `globalThis.__hfThreeTime`（globalThis === 真实 window，绕过代理）。实测 `globalThis` 能收到 hf-seek 事件（SEEK:0.5），而 `window` 抛错、`document` 收不到 window 上的事件。
 - 🔴 **诊断方法**：sub-composition 里用 try-catch 包住 `window.addEventListener`，报 "Illegal invocation" 就是代理问题。standalone 的 window 是真实的（不抛错），只有 sub-composition 才踩这个坑——所以最小测试要用 sub-composition 结构复现。
 
+## 7.10 Three.js 库必须内联在 host（hf-seek 不触发的最终根因）
+
+- 🔴 **hf-seek 事件由 HyperFrames 的 "three" adapter 在 seek 时 dispatch，但 "three" adapter 的 discover 检测 `window.THREE?.DefaultLoadingManager`——只有 host（真实 window）有 THREE 才启用 adapter**。若 Three.js 库只内联在 beat sub-composition（host 无 THREE），adapter 不启用 → seek 不 dispatch hf-seek → 粒子收不到事件 → rd 不执行 → 粒子静态。
+- 🔴 **症状区分**：beat-N.html standalone 渲染粒子动（像素差 ~15），整体渲染（sub-composition 加载）静（<1）→ 就是 host 缺 Three.js。这是区分"Three.js 代码对不对"和"hf-seek 驱动对不对"的关键测试。
+- 🔴 **修复**：`build_hyperframes_composition` 的 host index.html 里内联 `three.min.js`（之前注释写"Load GSAP + Three.js"但实际只内联了 gsap，漏了 Three.js）。
+- 🔴 **完整链路（4 个叠加根因）**：①beat-N.html 无 `<template>` 包装（内容/动画静态）→ ②canvas z-index 0 被背景遮挡（粒子不可见）→ ③window.addEventListener 抛 Illegal invocation（改用 globalThis）+ 累积下坠 desync（改确定性 y0-spd*t）→ ④host 缺 Three.js（hf-seek 不触发）。四个全修粒子才动。
+
 ## 8. 字幕 = 词级转录对齐配音（不是整段均匀拆分）
 
 - 🔴 VoxCPM2 只返回**段落级** scene_durations，没有词级/句级时间戳。
