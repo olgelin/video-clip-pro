@@ -97,7 +97,20 @@
 - 🔴 **hf-seek 事件由 HyperFrames 的 "three" adapter 在 seek 时 dispatch，但 "three" adapter 的 discover 检测 `window.THREE?.DefaultLoadingManager`——只有 host（真实 window）有 THREE 才启用 adapter**。若 Three.js 库只内联在 beat sub-composition（host 无 THREE），adapter 不启用 → seek 不 dispatch hf-seek → 粒子收不到事件 → rd 不执行 → 粒子静态。
 - 🔴 **症状区分**：beat-N.html standalone 渲染粒子动（像素差 ~15），整体渲染（sub-composition 加载）静（<1）→ 就是 host 缺 Three.js。这是区分"Three.js 代码对不对"和"hf-seek 驱动对不对"的关键测试。
 - 🔴 **修复**：`build_hyperframes_composition` 的 host index.html 里内联 `three.min.js`（之前注释写"Load GSAP + Three.js"但实际只内联了 gsap，漏了 Three.js）。
-- 🔴 **完整链路（4 个叠加根因）**：①beat-N.html 无 `<template>` 包装（内容/动画静态）→ ②canvas z-index 0 被背景遮挡（粒子不可见）→ ③window.addEventListener 抛 Illegal invocation（改用 globalThis）+ 累积下坠 desync（改确定性 y0-spd*t）→ ④host 缺 Three.js（hf-seek 不触发）。四个全修粒子才动。
+- 🔴 **完整链路（6 个叠加根因）**：①beat-N.html 无 `<template>` 包装（内容/动画静态）→ ②canvas z-index 0 被背景遮挡（粒子不可见）→ ③window.addEventListener 抛 Illegal invocation（改用 globalThis）+ 累积下坠 desync（改确定性 y0-spd*t）→ ④host 缺 Three.js（hf-seek 不触发）→ ⑤多 beat 顶层 const 冲突 → ⑥var tl 截断漏闭合 </script>。六个全修粒子才动（交叉验证暴露 ⑤⑥）。
+
+## 7.11 多 sub-composition 顶层 const 冲突（粒子静态根因 5）
+
+- 🔴 **多个 beat 的粒子 script 顶层 `const c` / `const s` / `const N` / `const g` + `function rd` 在 HyperFrames inline 到 host 后共享全局词法环境**，第二个场景执行到 `const c` 抛 `SyntaxError: Identifier 'c' has already been declared` → 整个 script 块不执行 → 粒子静态 + `window.__timelines` 注册失败（poll 报 "not registered"）。
+- 🔴 **铁证**：node vm 模拟共享全局词法环境执行两个 script 块 → `SyntaxError: Identifier 'c' has already been declared`。
+- 🔴 **修复**：`_wrap_particle_iife`（scene_base.py）把含 `new THREE.WebGLRenderer` 的 `<script>` 包成 IIFE `(function(){...})()`，const 变函数作用域。已包过的（`(function` 开头）跳过防双重包装。框架的 three.min.js/gsap.min.js 开头是 `/*!` 注释不匹配，不会被误包。
+
+## 7.12 LLM 的 var tl 截断漏闭合 </script>（粒子静态根因 6，最隐蔽）
+
+- 🔴 **LLM 偶发生成 `var tl=new TimelineMax()`（GSAP 2.x 旧 API）+ 超长深链选择器 `tl.from("#main-content > div > div > ...几百个 div...")`，陷入重复循环后截断**，导致：①语句不完整（缺 `",{...});`）②`</script>` 漏写 ③且这段 script 是 LLM content 的**最后一个元素**（后面就是 EOF，没有 `</script>`）。
+- 🔴 **为什么旧 `_rm_gsap` 漏了**：`re.sub(r'<script[^>]*>.*?</script>', ...)` 匹配这段 script 时，`.*?</script>` 找不到 `</script>`（后面是 EOF，GSAP 库是框架注入的、不在 LLM content 里）→ 匹配失败 → script 残留 → script 标签不配对（5 开 4 闭）→ HyperFrames 拼接执行报 `[Browser:PAGEERROR] Invalid or unexpected token` → 所有 timeline 注册失败。
+- 🔴 **误判陷阱**：用"还原的 content（含框架 GSAP 库的 `</script>`）"测试会误判 `_rm_gsap` 能移除——因为框架库的 `</script>` 恰好让 `.*?` 匹配成功。真实 LLM content 里那段 script 后面是 EOF，`_rm_gsap` 匹配失败。**必须用"script 后面 EOF 无 </script>"的真实结构测试**。
+- 🔴 **修复（双保险）**：①`_rm_gsap` 判断加 `new Timeline(Max|Lite)`/`new Tween(Max|Lite)`/`TimelineMax\b`（识别 GSAP 2.x 旧 API）；②终极兜底 `re.sub(r'<script[^>]*>(?:(?!</script>|<script[^>]*>).)*$', '', html)` 清掉残留的孤立 `<script>`（有开无闭直到 EOF）。③prompt 治本（scene_system.md）：禁止 `new TimelineMax`、禁止深链选择器（最多 1 层 `>`）、禁止内联 GSAP 库、强调 `</script>` 闭合。
 
 ## 8. 字幕 = 词级转录对齐配音（不是整段均匀拆分）
 
