@@ -97,7 +97,7 @@
 - 🔴 **hf-seek 事件由 HyperFrames 的 "three" adapter 在 seek 时 dispatch，但 "three" adapter 的 discover 检测 `window.THREE?.DefaultLoadingManager`——只有 host（真实 window）有 THREE 才启用 adapter**。若 Three.js 库只内联在 beat sub-composition（host 无 THREE），adapter 不启用 → seek 不 dispatch hf-seek → 粒子收不到事件 → rd 不执行 → 粒子静态。
 - 🔴 **症状区分**：beat-N.html standalone 渲染粒子动（像素差 ~15），整体渲染（sub-composition 加载）静（<1）→ 就是 host 缺 Three.js。这是区分"Three.js 代码对不对"和"hf-seek 驱动对不对"的关键测试。
 - 🔴 **修复**：`build_hyperframes_composition` 的 host index.html 里内联 `three.min.js`（之前注释写"Load GSAP + Three.js"但实际只内联了 gsap，漏了 Three.js）。
-- 🔴 **完整链路（6 个叠加根因）**：①beat-N.html 无 `<template>` 包装（内容/动画静态）→ ②canvas z-index 0 被背景遮挡（粒子不可见）→ ③window.addEventListener 抛 Illegal invocation（改用 globalThis）+ 累积下坠 desync（改确定性 y0-spd*t）→ ④host 缺 Three.js（hf-seek 不触发）→ ⑤多 beat 顶层 const 冲突 → ⑥var tl 截断漏闭合 </script>。六个全修粒子才动（交叉验证暴露 ⑤⑥）。
+- 🔴 **完整链路（7 个叠加根因）**：①beat-N.html 无 `<template>` 包装（内容/动画静态）→ ②canvas z-index 0 被背景遮挡（粒子不可见）→ ③window.addEventListener 抛 Illegal invocation（改用 globalThis）+ 累积下坠 desync（改确定性 y0-spd*t）→ ④host 缺 Three.js（hf-seek 不触发）→ ⑤多 beat 顶层 const 冲突 → ⑥var tl 截断漏闭合 </script> → ⑦hf-seek 被 __player.renderSeek 短路（粒子偶发静）。七个全修粒子才稳定动（交叉验证暴露 ⑤⑥⑦）。
 
 ## 7.11 多 sub-composition 顶层 const 冲突（粒子静态根因 5）
 
@@ -111,6 +111,14 @@
 - 🔴 **为什么旧 `_rm_gsap` 漏了**：`re.sub(r'<script[^>]*>.*?</script>', ...)` 匹配这段 script 时，`.*?</script>` 找不到 `</script>`（后面是 EOF，GSAP 库是框架注入的、不在 LLM content 里）→ 匹配失败 → script 残留 → script 标签不配对（5 开 4 闭）→ HyperFrames 拼接执行报 `[Browser:PAGEERROR] Invalid or unexpected token` → 所有 timeline 注册失败。
 - 🔴 **误判陷阱**：用"还原的 content（含框架 GSAP 库的 `</script>`）"测试会误判 `_rm_gsap` 能移除——因为框架库的 `</script>` 恰好让 `.*?` 匹配成功。真实 LLM content 里那段 script 后面是 EOF，`_rm_gsap` 匹配失败。**必须用"script 后面 EOF 无 </script>"的真实结构测试**。
 - 🔴 **修复（双保险）**：①`_rm_gsap` 判断加 `new Timeline(Max|Lite)`/`new Tween(Max|Lite)`/`TimelineMax\b`（识别 GSAP 2.x 旧 API）；②终极兜底 `re.sub(r'<script[^>]*>(?:(?!</script>|<script[^>]*>).)*$', '', html)` 清掉残留的孤立 `<script>`（有开无闭直到 EOF）。③prompt 治本（scene_system.md）：禁止 `new TimelineMax`、禁止深链选择器（最多 1 层 `>`）、禁止内联 GSAP 库、强调 `</script>` 闭合。
+
+## 7.13 hf-seek 被 __player.renderSeek 短路（粒子偶发静根因 7）
+
+- 🔴 **HyperFrames 有数字人 video（host 里 `<video class="avatar-clip">`）时，runtime 初始化 `__player.renderSeek`，`seekAllAdaptersInBrowser` 里 `runtimeSeeked=true` → `if (!runtimeSeeked)` 为 false → `window.dispatchEvent(new CustomEvent("hf-seek",...))` **不执行** → 粒子 `globalThis.addEventListener("hf-seek",e=>rd(...))` 收不到事件 → rd 不被调用 → 粒子静**。
+- 🔴 **关键代码（cli.js `seekAllAdaptersInBrowser`）**：`if (typeof w3.__player?.renderSeek === "function") runtimeSeeked = tryCall(...); ... if (!runtimeSeeked) window.dispatchEvent(hf-seek)`。但 **GSAP timeline 的 seek 是 `Object.values(w3.__timelines).forEach(tl=>tl.totalTime(tt3))` 在 `if(!runtimeSeeked)` 之外，无条件执行**。
+- 🔴 **偶发性铁证**：话题1 重新渲染 s0/s2/s4 动、s1/s3 静；话题2 第一次全静；话题2 --debug 重渲染 s2/s4/s6 动。同一份代码 + 同一技法（bg3d）结果不同 = `__player.renderSeek` 初始化时序竞争（seek 发生在 player 初始化前则 hf-seek 正常 dispatch 粒子动，之后则被短路粒子静）。
+- 🔴 **修复**：`_wrap_particle_iife` 包 IIFE 时追加 GSAP timeline 驱动——`(function(){var _tl=gsap.timeline({paused:true});_tl.to({},{duration:3600,ease:"none",onUpdate:function(){rd(_tl.time())}});globalThis.__timelines["_particle_<canvasId>"]=_tl;})()`。GSAP seek 无条件执行 → onUpdate 驱动 rd → 粒子必动。hf-seek 保留作 fallback（无 video 的 hidden 场景仍走 hf-seek）。
+- 🔴 **注意**：`rd` 用全局合成时间（`_tl.time()` = tt3），和 hf-seek 的 `e.detail.time` 一致，行为不变。
 
 ## 8. 字幕 = 词级转录对齐配音（不是整段均匀拆分）
 
