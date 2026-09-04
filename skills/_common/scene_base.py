@@ -143,12 +143,16 @@ class SceneBuilderBase(SkillBase):
                 key = cid.group(1) if cid else "p"
                 # 🔴 方块粒子根治：给 PointsMaterial 注入圆形纹理 map（无 map 渲染成方块）
                 inner = self._inject_round_texture(inner)
-                # 🔴 根因⑦（hf-seek 短路）：HyperFrames 有数字人 video 时，__player.renderSeek 存在 →
-                #   seekAllAdaptersInBrowser 里 runtimeSeeked=true → hf-seek 事件不 dispatch → 粒子 rd 不执行（偶发静）。
-                #   但 GSAP timeline 的 seek 是无条件的（Object.values(__timelines).forEach 在 if(!runtimeSeeked) 之外），
-                #   所以追加一个 GSAP timeline，用 onUpdate 驱动 rd，绕过 hf-seek 短路。hf-seek 保留作 fallback。
+                # 🔴 根因⑦根治（hf-seek 短路）：有数字人 video 时 __player.renderSeek 存在 →
+                #   runtimeSeeked=true → hf-seek 不 dispatch。GSAP 空 tween 的 onUpdate 在 node 测过触发、
+                #   但实际渲染仍静（timeline registry proxy 链路不可靠）。
+                #   最可靠：__hfThreeTime（seekAllAdaptersInBrowser 第318行无条件设置）+ __hfThreeRender（第339行无条件调用）。
+                #   用 __hfThreeRender 链式累积驱动 rd，不依赖 hf-seek / timeline registry。GSAP+hf-seek 保留作双保险。
                 drive = (
-                    f';(function(){{var _tl=gsap.timeline({{paused:true}});'
+                    f';(function(){{'
+                    f'var _pr=globalThis.__hfThreeRender;'
+                    f'globalThis.__hfThreeRender=function(){{if(_pr)_pr();rd(globalThis.__hfThreeTime||0)}};'
+                    f'var _tl=gsap.timeline({{paused:true}});'
                     f'_tl.to({{}},{{duration:3600,ease:"none",onUpdate:function(){{rd(_tl.time())}}}});'
                     f'globalThis.__timelines=globalThis.__timelines||{{}};'
                     f'globalThis.__timelines["_particle_{key}"]=_tl;'
