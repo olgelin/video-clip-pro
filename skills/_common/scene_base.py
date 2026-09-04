@@ -11,6 +11,33 @@ from core.base import SkillBase
 class SceneBuilderBase(SkillBase):
     """LLM 场景生成公共基类（call_scene/clean_scene/threejs 技法/校验）。"""
 
+    def _load_shared(self, name: str, subdir: str = "prompts") -> str:
+        """🔴 加载 _common 共享文件（prompts/threejs_menu.md、templates/default_threejs.html 等）。
+        四条管线（avatar/pip/fullscreen）共享同一份 prompt/模板，改一处全局生效，根治复制粘贴重复。"""
+        from pathlib import Path
+        p = Path(__file__).parent / subdir / name
+        return p.read_text(encoding="utf-8") if p.exists() else ""
+
+    def _threejs_menu(self, orientation: str = "portrait", person_layout: str = None) -> str:
+        """🔴 技法菜单（共享 prompt + 动态尺寸替换）。统一 avatar/pip 的技法菜单，
+        用新版：globalThis + 确定性下坠 y0-spd*t + 快粒子（0.3-1.0）+ 圆形纹理。"""
+        fw, fh = (1920, 1080) if orientation == "landscape" else (1080, 1920)
+        menu = self._load_shared("threejs_menu.md")
+        if not menu:
+            return ""
+        # 🔴 横屏分栏（avatar 特有）：Three.js canvas 用内容区尺寸，不是全屏
+        if orientation == "landscape" and person_layout in ("left-rail", "right-rail"):
+            try:
+                from skills.hf_build_avatar.person_zone import content_zone as _cz
+                fw = _cz(person_layout, orientation)["w"]
+            except Exception:
+                pass
+        # 动态尺寸替换
+        menu = menu.replace("setSize(1080,1920,false)", f"setSize({fw},{fh},false)")
+        menu = menu.replace("1080/1920", f"{fw}/{fh}")
+        menu = menu.replace("Vector2(1080,1920)", f"Vector2({fw},{fh})")
+        return menu
+
     def _call_scene(self, provider, prompt: str) -> str | None:
             for attempt in range(3):
                 raw = provider.call("scene_content", prompt,
@@ -80,10 +107,12 @@ class SceneBuilderBase(SkillBase):
                 print(f"    attempt 1/3: {', '.join(self._validate(content))}")
             return None
     def _default_threejs(self, orientation: str) -> str:
+            """🔴 兜底粒子（共享模板 + {FW}/{FH} 动态替换）。"""
             fw, fh = (1920, 1080) if orientation == "landscape" else (1080, 1920)
-            # 蓝紫渐变粒子（对齐场景审美），N=3000，与 bg3d 技法一致的电影感
-            return f"""<canvas id="pt3d" style="position:absolute;inset:0;z-index:0;"></canvas>
-    <script>const c=document.getElementById("pt3d"),r=new THREE.WebGLRenderer({{canvas:c,alpha:true,antialias:true}});r.setPixelRatio(1);r.setSize({fw},{fh},false);const s=new THREE.Scene(),cam=new THREE.PerspectiveCamera(35,{fw}/{fh},.1,100);cam.position.set(0,0,10);const N=3000,ps=new Float32Array(N*3),cs=new Float32Array(N*3),A=4;const C1=new THREE.Color("#6C8CFF"),C2=new THREE.Color("#A855F7");for(let i=0;i<N;i++){{ps[i*3]=(Math.random()-.5)*14;ps[i*3+1]=(Math.random()-.5)*18;ps[i*3+2]=(Math.random()-.5)*6;const t=Math.random(),cc=C1.clone().lerp(C2,t);cs[i*3]=cc.r;cs[i*3+1]=cc.g;cs[i*3+2]=cc.b}}const g=new THREE.BufferGeometry();g.setAttribute("position",new THREE.BufferAttribute(ps,3));g.setAttribute("color",new THREE.BufferAttribute(cs,3));const pts=new THREE.Points(g,new THREE.PointsMaterial({{size:.06,vertexColors:true,blending:THREE.AdditiveBlending,depthWrite:false,transparent:true,opacity:.75}}));s.add(pts);function rd(t){{pts.rotation.y=t*.45;pts.rotation.x=Math.sin(t*.9)*.12;r.render(s,cam)}}globalThis.addEventListener("hf-seek",e=>rd(e.detail.time));rd(globalThis.__hfThreeTime||0);</script>"""
+            tpl = self._load_shared("default_threejs.html", "templates")
+            if not tpl:
+                return ""
+            return tpl.replace("{FW}", str(fw)).replace("{FH}", str(fh))
     def _detect_threejs_tech(self, html: str) -> str:
             """从生成的 HTML 检测实际使用的 Three.js 技法（canvas id）"""
             tech_map = {
@@ -251,14 +280,10 @@ class SceneBuilderBase(SkillBase):
                 return tag[:-1] + ' style="z-index:2;">'
             return re.sub(r'<canvas\b[^>]*>', _fix_canvas, html)
     def _layout_menu(self, idx: int) -> str:
-            opts = [
-                "主标题居中大字，标签在下方弧形排列",
-                "主标题左对齐，标签以卡片堆叠在右侧",
-                "主标题在顶部 25%，数据元素在中央大区域",
-                "主标题在底部 65%，粒子从上方涌入标题",
-                "主标题右对齐 70%位置，标签在左列纵向排列",
-                "主标题顶部大字+副标题在下，标签横向底部排列",
-            ]
+            """🔴 布局菜单（共享 prompt 加载）。"""
+            opts = [l.strip() for l in self._load_shared("layout_menu.md").split("\n") if l.strip()]
+            if not opts:
+                return "建议方向（可以偏离）: 主标题居中大字"
             return f"建议方向（可以偏离）: {opts[idx % len(opts)]}\n{' | '.join(opts)}"
     def _motion_nl(self, motion: dict) -> str:
             lines = []
