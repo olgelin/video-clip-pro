@@ -1089,7 +1089,9 @@ def _compose_pip(hf_dir, polished_path):
 
 def _build_outro_html(topic="", fw=1920, fh=1080, brand_name="不闻AI", brand_title="癫狂吧世界"):
     """片尾 HTML — 对齐 video-factory build_outro_html（3D透视网格+粒子雨+扫光+地平线辉光+品牌名+点击关注+本期话题卡片）。"""
-    topic_short = (topic or "本期话题")[:10]
+    topic_short = (topic or "本期话题")[:20]
+    if topic and len(topic) > 20:
+        topic_short += "…"
     html = f'''<!DOCTYPE html>
 <html>
 <head>

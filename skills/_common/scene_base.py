@@ -104,7 +104,27 @@ class SceneBuilderBase(SkillBase):
             print("        ⚠ Three.js 缺失 → 注入默认粒子场聚散兜底")
             # 清理 LLM 残留的空 canvas（只有 <canvas> 标签没有对应 Three.js 代码）
             html = re.sub(r'<canvas[^>]*>', '', html)
-            return html + self._default_threejs(orientation)
+            return html + self._inject_round_texture(self._default_threejs(orientation))
+
+    def _inject_round_texture(self, body: str) -> str:
+        """🔴 根治方块粒子：Three.js PointsMaterial 无 map 时渲染成正方形（gl_PointCoord 不裁剪），
+        视觉上是突兀的方块噪点，与星空主题不匹配。vf 的成功做法是圆形柔光点。
+        这里给 PointsMaterial 注入径向渐变圆形纹理 map，让粒子变成柔和的圆形光晕。"""
+        if "new THREE.PointsMaterial" not in body or "map:_roundTex" in body:
+            return body
+        round_tex = (
+            'const _roundTex=(()=>{const _c=document.createElement("canvas");'
+            '_c.width=_c.height=64;const _x=_c.getContext("2d");'
+            'const _g=_x.createRadialGradient(32,32,0,32,32,32);'
+            '_g.addColorStop(0,"rgba(255,255,255,1)");'
+            '_g.addColorStop(0.2,"rgba(255,255,255,0.9)");'
+            '_g.addColorStop(0.55,"rgba(255,255,255,0.35)");'
+            '_g.addColorStop(1,"rgba(255,255,255,0)");'
+            '_x.fillStyle=_g;_x.fillRect(0,0,64,64);'
+            'return new THREE.CanvasTexture(_c)})();'
+        )
+        body = re.sub(r'new\s+THREE\.PointsMaterial\(\{', 'new THREE.PointsMaterial({map:_roundTex,', body)
+        return round_tex + body
 
     def _wrap_particle_iife(self, html: str) -> str:
             """🔴 兜底（根治粒子静态 + timeline 注册失败）：多个 sub-composition 的粒子 script
@@ -119,6 +139,8 @@ class SceneBuilderBase(SkillBase):
                     return m.group(0)
                 cid = re.search(r'getElementById\("([^"]+)"\)', inner)
                 key = cid.group(1) if cid else "p"
+                # 🔴 方块粒子根治：给 PointsMaterial 注入圆形纹理 map（无 map 渲染成方块）
+                inner = self._inject_round_texture(inner)
                 # 🔴 根因⑦（hf-seek 短路）：HyperFrames 有数字人 video 时，__player.renderSeek 存在 →
                 #   seekAllAdaptersInBrowser 里 runtimeSeeked=true → hf-seek 事件不 dispatch → 粒子 rd 不执行（偶发静）。
                 #   但 GSAP timeline 的 seek 是无条件的（Object.values(__timelines).forEach 在 if(!runtimeSeeked) 之外），

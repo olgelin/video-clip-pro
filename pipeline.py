@@ -184,7 +184,7 @@ def main():
 
 def _cleanup_output(output_dir: Path):
     """极简化：只保留 final_polished.mp4 + final_polished_2x.mp4，删除所有中间产物。"""
-    keep_files = {"final_polished.mp4", "final_polished_2x.mp4"}
+    keep_files = {"final_polished.mp4", "final_polished_2x.mp4", "bgm.wav", "lyrics.txt"}
     # 中间产物目录（全部可重建）
     subdirs = ["checkpoints", "hyperframes", "hf_build_pip", "hf_build", "segments", "renders"]
     for sub in subdirs:
