@@ -190,6 +190,23 @@ class SceneBuilderBase(SkillBase):
                         s = s[:m.start(1)] + f"{max(0.1, dur - 0.5):.1f}" + s[m.end(1):]
                     clamped.append(s)
                 statements = clamped
+            # 🔴 去重重复的 from 入场动画（LLM 偶发生成相同 selector 的重复 from，
+            #    如 .metric-card 0.8s 和 1.0s 两条完全一样 → 元素"入场→消失→再入场"闪烁）。
+            #    相同 selector 的 from 动画，时间戳相隔 <1s 判定为重复，保留最早一条。
+            _from_seen = {}
+            _deduped = []
+            for s in statements:
+                if s.strip().startswith('tl.from'):
+                    m_sel = re.search(r'tl\.from\("?([#.\w\- ]+?)"?\s*,\s*\{', s)
+                    m_ts = re.search(r',\s*([\d.]+)\s*\)\s*;?\s*$', s)
+                    if m_sel and m_ts:
+                        sel = m_sel.group(1)
+                        t = float(m_ts.group(1))
+                        if sel in _from_seen and (t - _from_seen[sel]) < 1.0:
+                            continue  # 重复入场（<1s），丢弃
+                        _from_seen[sel] = t
+                _deduped.append(s)
+            statements = _deduped
             llm_motion = "\n".join(statements)
 
             def _rm_gsap(m):
