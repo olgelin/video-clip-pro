@@ -97,7 +97,7 @@
 - 🔴 **hf-seek 事件由 HyperFrames 的 "three" adapter 在 seek 时 dispatch，但 "three" adapter 的 discover 检测 `window.THREE?.DefaultLoadingManager`——只有 host（真实 window）有 THREE 才启用 adapter**。若 Three.js 库只内联在 beat sub-composition（host 无 THREE），adapter 不启用 → seek 不 dispatch hf-seek → 粒子收不到事件 → rd 不执行 → 粒子静态。
 - 🔴 **症状区分**：beat-N.html standalone 渲染粒子动（像素差 ~15），整体渲染（sub-composition 加载）静（<1）→ 就是 host 缺 Three.js。这是区分"Three.js 代码对不对"和"hf-seek 驱动对不对"的关键测试。
 - 🔴 **修复**：`build_hyperframes_composition` 的 host index.html 里内联 `three.min.js`（之前注释写"Load GSAP + Three.js"但实际只内联了 gsap，漏了 Three.js）。
-- 🔴 **完整链路（7 个叠加根因）**：①beat-N.html 无 `<template>` 包装（内容/动画静态）→ ②canvas z-index 0 被背景遮挡（粒子不可见）→ ③window.addEventListener 抛 Illegal invocation（改用 globalThis）+ 累积下坠 desync（改确定性 y0-spd*t）→ ④host 缺 Three.js（hf-seek 不触发）→ ⑤多 beat 顶层 const 冲突 → ⑥var tl 截断漏闭合 </script> → ⑦hf-seek 被 __player.renderSeek 短路（粒子偶发静）。七个全修粒子才稳定动（交叉验证暴露 ⑤⑥⑦）。
+- 🔴 **完整链路（8 个叠加根因）**：①beat-N.html 无 `<template>` 包装（内容/动画静态）→ ②canvas z-index 0 被背景遮挡（粒子不可见）→ ③window.addEventListener 抛 Illegal invocation（改用 globalThis）+ 累积下坠 desync（改确定性 y0-spd*t）→ ④host 缺 Three.js（hf-seek 不触发）→ ⑤多 beat 顶层 const 冲突 → ⑥var tl 截断漏闭合 </script> → ⑦hf-seek 被 __player.renderSeek 短路（粒子偶发静）→ ⑧PointsMaterial 无 map 渲染成方块（粒子形状突兀）。八个全修粒子才稳定动+形状圆润（交叉验证暴露 ⑤⑥⑦⑧）。
 
 ## 7.11 多 sub-composition 顶层 const 冲突（粒子静态根因 5）
 
@@ -119,6 +119,12 @@
 - 🔴 **偶发性铁证**：话题1 重新渲染 s0/s2/s4 动、s1/s3 静；话题2 第一次全静；话题2 --debug 重渲染 s2/s4/s6 动。同一份代码 + 同一技法（bg3d）结果不同 = `__player.renderSeek` 初始化时序竞争（seek 发生在 player 初始化前则 hf-seek 正常 dispatch 粒子动，之后则被短路粒子静）。
 - 🔴 **修复**：`_wrap_particle_iife` 包 IIFE 时追加 GSAP timeline 驱动——`(function(){var _tl=gsap.timeline({paused:true});_tl.to({},{duration:3600,ease:"none",onUpdate:function(){rd(_tl.time())}});globalThis.__timelines["_particle_<canvasId>"]=_tl;})()`。GSAP seek 无条件执行 → onUpdate 驱动 rd → 粒子必动。hf-seek 保留作 fallback（无 video 的 hidden 场景仍走 hf-seek）。
 - 🔴 **注意**：`rd` 用全局合成时间（`_tl.time()` = tt3），和 hf-seek 的 `e.detail.time` 一致，行为不变。
+
+## 7.14 PointsMaterial 无 map 渲染成方块（粒子形状突兀根因 8）
+
+- 🔴 **Three.js `PointsMaterial` 无 `map` 纹理时，fragment shader 不裁剪 `gl_PointCoord`，点渲染成正方形**（不是圆形光点）。vf 的粒子 size 小（0.03~0.08）方块不明显，avatar 三层粒子第三层 `size:.5` 大方块非常突兀（vision 铁证："大量规整正方形粒子，像数字噪点，与星空主题不匹配"）。
+- 🔴 **修复**：`_inject_round_texture`（scene_base.py）给每个 `PointsMaterial({...})` 注入 `map:_roundTex`（canvas 径向渐变圆形纹理），粒子变柔和圆形光晕。`_wrap_particle_iife` 和 `_default_threejs` 两处都调用，幂等（已注入则跳过）。
+- 🔴 **附带修复（本轮同批）**：①outro 话题卡片 `topic[:10]` 截断尴尬（长话题"为什么年轻人越来越不愿意结婚"切到"越"字）→ 改 `[:20]`+省略号；②`_cleanup_output` 漏删 `bgm.wav`/`lyrics.txt` → 加入 keep_files 保留；③BGM 时长随机 → vf acestep cli.py 第三次 fallback 从 `audio_duration=-1` 改显式 duration。
 
 ## 8. 字幕 = 词级转录对齐配音（不是整段均匀拆分）
 
