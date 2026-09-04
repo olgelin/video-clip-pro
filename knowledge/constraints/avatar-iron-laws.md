@@ -121,6 +121,7 @@
 - 🔴 **注意**：`rd` 用全局合成时间（`_tl.time()` = tt3），和 hf-seek 的 `e.detail.time` 一致，行为不变。
 - 🔴 **遗漏真凶（2026-09-04 复发）**：`_default_threejs`（LLM 没生成 Three.js 时的兜底粒子，canvas id=pt3d）只有 hf-seek 没有 GSAP timeline 驱动 → 有数字人 video 时兜底粒子静（四角全 0.00 完全冻结）。之前只给 `_wrap_particle_iife`（LLM 生成粒子）加 GSAP 驱动，漏了兜底粒子。修复：`_ensure_threejs` 兜底路径 `_default_threejs` 输出也走 `_wrap_particle_iife`。
 - 🔴 **验证判据（别误判）**：四角+中心**全 0.00** = 粒子脚本问题（完全冻结，bug）；只有角落弱但中心/其他角有运动 = 透视/分布特性（正常）。上次把"场景3 全 0.00 冻结"误判成"透视特性"没抓到，就是没看中心 diff。
+- 🔴 **根治方案（2026-09-04 二次复发）**：GSAP 空 tween 的 onUpdate 在 node 实测触发，但实际渲染仍静（timeline registry proxy 链路不可靠）。改用 **`__hfThreeRender` 链式累积 + `__hfThreeTime`** 驱动：`seekAllAdaptersInBrowser` 里 `w3.__hfThreeTime=tt3`（第318行）和 `w3.__hfThreeRender?.()`（第339行）都在 `if(!runtimeSeeked)` 之外**无条件执行**，不依赖 hf-seek / timeline registry。每个粒子 script 注入 `var _pr=globalThis.__hfThreeRender;globalThis.__hfThreeRender=function(){if(_pr)_pr();rd(globalThis.__hfThreeTime||0)}`（链式累积，多粒子各自驱动）。GSAP+hf-seek 保留作双保险。
 
 ## 7.14 PointsMaterial 无 map 渲染成方块（粒子形状突兀根因 8）
 
