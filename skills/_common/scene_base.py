@@ -104,7 +104,9 @@ class SceneBuilderBase(SkillBase):
             print("        ⚠ Three.js 缺失 → 注入默认粒子场聚散兜底")
             # 清理 LLM 残留的空 canvas（只有 <canvas> 标签没有对应 Three.js 代码）
             html = re.sub(r'<canvas[^>]*>', '', html)
-            return html + self._inject_round_texture(self._default_threejs(orientation))
+            # 🔴 根因⑦遗漏：默认兜底粒子也要走 _wrap_particle_iife（GSAP timeline 驱动），
+            #    否则只有 hf-seek 驱动，有数字人 video 时 hf-seek 被短路 → 默认粒子静（偶发静真凶）。
+            return html + self._wrap_particle_iife(self._default_threejs(orientation))
 
     def _inject_round_texture(self, body: str) -> str:
         """🔴 根治方块粒子：Three.js PointsMaterial 无 map 时渲染成正方形（gl_PointCoord 不裁剪），
