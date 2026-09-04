@@ -42,6 +42,27 @@ def hex_to_rgb(hx: str) -> tuple:
     return tuple(int(hx[i:i+2], 16) for i in (0, 2, 4))
 
 
+def _dedup_motion(motion_code: str) -> str:
+    """🔴 去重相同 selector 的 from 入场动画（相隔 <1s）。
+    根因：框架层 motion_director 和 LLM 各自生成标题/卡片入场动画，两条重复叠加 → 闪烁。"""
+    import re
+    lines = motion_code.split('\n')
+    from_seen = {}
+    deduped = []
+    for line in lines:
+        if line.strip().startswith('tl.from'):
+            m_sel = re.search(r'tl\.from\("?([#.\w\- >]+?)"?\s*,\s*\{', line)
+            m_ts = re.search(r',\s*([\d.]+)\s*\)\s*;?\s*$', line)
+            if m_sel and m_ts:
+                sel = m_sel.group(1).strip()
+                t = float(m_ts.group(1))
+                if sel in from_seen and (t - from_seen[sel]) < 1.0:
+                    continue
+                from_seen[sel] = t
+        deduped.append(line)
+    return '\n'.join(deduped)
+
+
 def build_stage(scene_idx: int, dur: float, palette: dict, motion: dict,
                 ghost: str, quote: str, llm_motion: str = "",
                 orientation: str = "portrait") -> str:
@@ -126,6 +147,9 @@ def build_stage(scene_idx: int, dur: float, palette: dict, motion: dict,
     # 🔴 P0：LLM 的动画语句合并进统一 timeline（HyperFrames 只 seek "beat-N" 一个 key）
     if llm_motion:
         motion_code += llm_motion + "\n"
+
+    # 🔴 去重：框架层 motion + LLM 动画合并后，统一去重重复的 from 入场动画（<1s）
+    motion_code = _dedup_motion(motion_code)
 
     gsap_block = _GSAP_FIXED.format(gsap_local=_load_gsap_local(), motion_code=motion_code, scene_idx=scene_idx)
     three_block = _load_three_local()
