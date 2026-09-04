@@ -124,7 +124,7 @@
 
 - 🔴 **Three.js `PointsMaterial` 无 `map` 纹理时，fragment shader 不裁剪 `gl_PointCoord`，点渲染成正方形**（不是圆形光点）。vf 的粒子 size 小（0.03~0.08）方块不明显，avatar 三层粒子第三层 `size:.5` 大方块非常突兀（vision 铁证："大量规整正方形粒子，像数字噪点，与星空主题不匹配"）。
 - 🔴 **修复**：`_inject_round_texture`（scene_base.py）给每个 `PointsMaterial({...})` 注入 `map:_roundTex`（canvas 径向渐变圆形纹理），粒子变柔和圆形光晕。`_wrap_particle_iife` 和 `_default_threejs` 两处都调用，幂等（已注入则跳过）。
-- 🔴 **附带修复（本轮同批）**：①outro 话题卡片 `topic[:10]` 截断尴尬（长话题"为什么年轻人越来越不愿意结婚"切到"越"字）→ 改 `[:20]`+省略号；②`_cleanup_output` 漏删 `bgm.wav`/`lyrics.txt` → 加入 keep_files 保留；③BGM 时长随机 → vf acestep cli.py 第三次 fallback 从 `audio_duration=-1` 改显式 duration。
+- 🔴 **附带修复（本轮同批）**：①outro 话题卡片 `topic[:10]` 截断尴尬（长话题"为什么年轻人越来越不愿意结婚"切到"越"字）→ 改 `[:20]`+省略号；②`_cleanup_output` 漏删 `bgm.wav`/`lyrics.txt` → 加入 keep_files 保留；③BGM 时长对齐 VF：`_calc_bgm_duration` 按歌词长度线性映射+随机抖动 ±3s（区间 [视频时长, +12s]，不锁死固定值）；④BGM caption 情绪对齐 VF：storyboard 的 scenes 只存 `mood`（中文情绪"冲击 悬念/冷静 理性/…"）不存 `beat`，旧 `_build_caption` 用 `s.get("beat")` 拿到空串 → mood_map 查不到 → caption 永远兜底"cinematic, engaging"；改用 `mood` 字段映射英文 music mood。
 
 ## 8. 字幕 = 词级转录对齐配音（不是整段均匀拆分）
 
