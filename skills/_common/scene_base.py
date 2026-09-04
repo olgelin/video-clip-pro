@@ -104,7 +104,7 @@ class SceneBuilderBase(SkillBase):
             print("        ⚠ Three.js 缺失 → 注入默认粒子场聚散兜底")
             # 清理 LLM 残留的空 canvas（只有 <canvas> 标签没有对应 Three.js 代码）
             html = re.sub(r'<canvas[^>]*>', '', html)
-            # 🔴 根因⑦遗漏：默认兜底粒子也要走 _wrap_particle_iife（GSAP timeline 驱动），
+            # 🔴 默认兜底粒子也走 _wrap_particle_iife（源头修复 hf-seek → __hfThreeRender 驱动），
             #    否则只有 hf-seek 驱动，有数字人 video 时 hf-seek 被短路 → 默认粒子静（偶发静真凶）。
             return html + self._wrap_particle_iife(self._default_threejs(orientation))
 
@@ -139,29 +139,32 @@ class SceneBuilderBase(SkillBase):
                 inner = m.group(1)
                 if inner.lstrip().startswith('(function'):
                     return m.group(0)
-                cid = re.search(r'getElementById\("([^"]+)"\)', inner)
-                key = cid.group(1) if cid else "p"
                 # 🔴 方块粒子根治：给 PointsMaterial 注入圆形纹理 map（无 map 渲染成方块）
                 inner = self._inject_round_texture(inner)
-                # 🔴 根因⑦根治（hf-seek 短路）：有数字人 video 时 __player.renderSeek 存在 →
-                #   runtimeSeeked=true → hf-seek 不 dispatch。GSAP 空 tween 的 onUpdate 在 node 测过触发、
-                #   但实际渲染仍静（timeline registry proxy 链路不可靠）。
-                #   最可靠：__hfThreeTime（seekAllAdaptersInBrowser 第318行无条件设置）+ __hfThreeRender（第339行无条件调用）。
-                #   用 __hfThreeRender 链式累积驱动 rd，不依赖 hf-seek / timeline registry。GSAP+hf-seek 保留作双保险。
-                drive = (
-                    f';(function(){{'
-                    f'var _pr=globalThis.__hfThreeRender;'
-                    f'globalThis.__hfThreeRender=function(){{if(_pr)_pr();rd(globalThis.__hfThreeTime||0)}};'
-                    f'var _tl=gsap.timeline({{paused:true}});'
-                    f'_tl.to({{}},{{duration:3600,ease:"none",onUpdate:function(){{rd(_tl.time())}}}});'
-                    f'globalThis.__timelines=globalThis.__timelines||{{}};'
-                    f'globalThis.__timelines["_particle_{key}"]=_tl;'
-                    f'}})();'
-                )
-                return f'<script>(function(){{{inner}{drive}}})();</script>'
+                # 🔴 源头修复（根治粒子静）：移除无效 hf-seek 驱动，注入 __hfThreeRender 钩子。
+                #    hf-seek 有数字人 video 时被 HyperFrames 短路 → 粒子静；
+                #    __hfThreeRender 是每帧 seek 后无条件调用的渲染钩子，最可靠。
+                #    菜单已给正确驱动时（含 __hfThreeRender）跳过，不再强加 GSAP/__timelines 三重保险。
+                inner = self._fix_particle_drive(inner)
+                return f'<script>(function(){{{inner}}})();</script>'
             return re.sub(
                 r'<script>\s*((?:const|var|let)\b(?:(?!</script>).)*?new THREE\.WebGLRenderer(?:(?!</script>).)*?)</script>',
                 _wrap, html, flags=re.DOTALL)
+    def _fix_particle_drive(self, inner: str) -> str:
+            """🔴 源头修复（根治粒子静）：hf-seek 有数字人 video 时被 HyperFrames 短路
+            （__player.renderSeek 存在 → runtimeSeeked=true → 不 dispatch hf-seek）→ 粒子静。
+            __hfThreeRender 是 HyperFrames 每帧 seek 后无条件调用的渲染钩子（cli.js 第339行），
+            不依赖 hf-seek / timeline registry，是"一开始就做好"的可靠驱动。
+            移除 hf-seek 驱动；若已含 __hfThreeRender（菜单源头给的）则跳过，否则注入链式累积。"""
+            # 移除无效的 hf-seek 事件驱动（兼容 globalThis/window 前缀 + 一层嵌套括号）
+            inner = re.sub(
+                r'(?:globalThis|window)\.addEventListener\(["\']hf-seek["\']\s*,\s*(?:[^()]*|\([^()]*\))*\)\s*;?',
+                '', inner)
+            if "__hfThreeRender" in inner:
+                return inner
+            inner += (';(function(){var _p=globalThis.__hfThreeRender;'
+                      'globalThis.__hfThreeRender=function(){if(_p)_p();rd(globalThis.__hfThreeTime||0)}})();')
+            return inner
     def _extract_llm_motion(self, content: str, dur: float = 5.0):
             """提取 LLM 的 GSAP 动画语句，返回 (纯HTML结构, 动画语句字符串)
             只移除含 var tl 的 GSAP script，保留 importmap + Three.js module script。

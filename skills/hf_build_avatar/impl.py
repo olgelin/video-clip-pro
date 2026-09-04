@@ -282,6 +282,14 @@ F. 粒子+Bloom辉光(电影感最强):
         menu = menu.replace("setSize(1080,1920,false)", f"setSize({fw},{fh},false)")
         menu = menu.replace("1080/1920", f"{fw}/{fh}")
         menu = menu.replace("Vector2(1080,1920)", f"Vector2({fw},{fh})")
+        # 🔴 源头修复（根治粒子静）：菜单示例驱动从 hf-seek 改成 __hfThreeRender 钩子。
+        #    hf-seek 有数字人 video 时被 HyperFrames 短路（不 dispatch）→ 粒子静止。
+        #    __hfThreeRender 是 HyperFrames 每帧 seek 后无条件调用的渲染钩子，最可靠。
+        #    LLM 照抄菜单 = 直接写出正确驱动，创意（粒子分布/颜色/流动）完全自由。
+        menu = menu.replace(
+            'globalThis.addEventListener("hf-seek",e=>rd(e.detail.time));rd(globalThis.__hfThreeTime||0);',
+            '(function(){var _p=globalThis.__hfThreeRender;globalThis.__hfThreeRender=function(){if(_p)_p();rd(globalThis.__hfThreeTime||0)}})();'
+        )
         return menu
 
 
