@@ -121,7 +121,7 @@
 - 🔴 **注意**：`rd` 用全局合成时间（`_tl.time()` = tt3），和 hf-seek 的 `e.detail.time` 一致，行为不变。
 - 🔴 **遗漏真凶（2026-09-04 复发）**：`_default_threejs`（LLM 没生成 Three.js 时的兜底粒子，canvas id=pt3d）只有 hf-seek 没有 GSAP timeline 驱动 → 有数字人 video 时兜底粒子静（四角全 0.00 完全冻结）。之前只给 `_wrap_particle_iife`（LLM 生成粒子）加 GSAP 驱动，漏了兜底粒子。修复：`_ensure_threejs` 兜底路径 `_default_threejs` 输出也走 `_wrap_particle_iife`。
 - 🔴 **验证判据（别误判）**：四角+中心**全 0.00** = 粒子脚本问题（完全冻结，bug）；只有角落弱但中心/其他角有运动 = 透视/分布特性（正常）。上次把"场景3 全 0.00 冻结"误判成"透视特性"没抓到，就是没看中心 diff。
-- 🔴 **根治方案（2026-09-05 定版，源头修复）**：真正的源头是**给 LLM 的技法菜单 `_threejs_menu`** 里 6 个粒子示例全写的 `hf-seek` 驱动，LLM 照抄菜单就抄出会被短路掉的驱动。最终方案两步：①**菜单示例驱动直接改 `__hfThreeRender` 链式累积**（`(function(){var _p=globalThis.__hfThreeRender;globalThis.__hfThreeRender=function(){if(_p)_p();rd(globalThis.__hfThreeTime||0)}})();`），LLM 照抄即正确；②框架层 `_fix_particle_drive` 只做"移除残留 hf-seek + 注入 __hfThreeRender"（单一驱动，**不再叠 GSAP/__timelines 三重保险**）。`__hfThreeRender`/`__hfThreeTime` 是 cli.js 第318/339行**无条件执行**的钩子，是"一开始就做好"的可靠驱动，且不限制 LLM 创意（粒子分布/颜色/流动完全自由）。验证判据：**四角+中心全 0.00 = 真冻结**；但"右上角帧差 0%"要先用 vision 确认那里到底有没有粒子（粒子分布稀疏时角上没粒子是正常的，不是静）。
+- 🔴 **根治方案（2026-09-05 定版，实测结论）**：最可靠驱动 = **GSAP timeline + `__timelines` 注册**。cli.js `seekAllAdaptersInBrowser` 第291-301行**无条件** `tl.totalTime(tt3,false)` 触发 onUpdate → rd，不依赖 hf-seek（被数字人短路）也不依赖 `__hfThreeRender`。框架层 `_fix_particle_drive` 追加 `;(function(){var _tl=gsap.timeline({paused:true});_tl.to({},{duration:3600,ease:"none",onUpdate:function(){rd(_tl.time())}});globalThis.__timelines["_particle_<canvasId>"]=_tl;})();`。⚠️ **教训**：`__hfThreeRender` 单一钩子曾误判为"最可靠"（源码第339行无条件执行 ≠ 实际驱动可靠），实测它让粒子动画退化（固态电池 0-32%、部分场景 0%），而 GSAP timeline+__timelines 才是真可靠（不愿意结婚 13-47%）。"源码看起来无条件执行" ≠ "实际能驱动粒子"，必须实测帧差对比两种驱动。
 
 ## 7.14 PointsMaterial 无 map 渲染成方块（粒子形状突兀根因 8）
 
