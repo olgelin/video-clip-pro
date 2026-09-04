@@ -117,7 +117,20 @@ class SceneBuilderBase(SkillBase):
                 inner = m.group(1)
                 if inner.lstrip().startswith('(function'):
                     return m.group(0)
-                return f'<script>(function(){{{inner}}})();</script>'
+                cid = re.search(r'getElementById\("([^"]+)"\)', inner)
+                key = cid.group(1) if cid else "p"
+                # 🔴 根因⑦（hf-seek 短路）：HyperFrames 有数字人 video 时，__player.renderSeek 存在 →
+                #   seekAllAdaptersInBrowser 里 runtimeSeeked=true → hf-seek 事件不 dispatch → 粒子 rd 不执行（偶发静）。
+                #   但 GSAP timeline 的 seek 是无条件的（Object.values(__timelines).forEach 在 if(!runtimeSeeked) 之外），
+                #   所以追加一个 GSAP timeline，用 onUpdate 驱动 rd，绕过 hf-seek 短路。hf-seek 保留作 fallback。
+                drive = (
+                    f';(function(){{var _tl=gsap.timeline({{paused:true}});'
+                    f'_tl.to({{}},{{duration:3600,ease:"none",onUpdate:function(){{rd(_tl.time())}}}});'
+                    f'globalThis.__timelines=globalThis.__timelines||{{}};'
+                    f'globalThis.__timelines["_particle_{key}"]=_tl;'
+                    f'}})();'
+                )
+                return f'<script>(function(){{{inner}{drive}}})();</script>'
             return re.sub(
                 r'<script>\s*((?:const|var|let)\b(?:(?!</script>).)*?new THREE\.WebGLRenderer(?:(?!</script>).)*?)</script>',
                 _wrap, html, flags=re.DOTALL)
