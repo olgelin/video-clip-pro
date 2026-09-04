@@ -100,11 +100,27 @@ class SceneBuilderBase(SkillBase):
             """🔴 兜底：LLM 有时只输出注释不输出 Three.js 实际代码（画面时好时坏的根因）。
             检测缺失（无 new THREE.WebGLRenderer / hf-seek）则清理残留空 canvas 并注入默认技法 A（粒子场聚散）。"""
             if "new THREE.WebGLRenderer" in html or "hf-seek" in html:
-                return self._fix_canvas_zindex(self._fix_slow_rotation(html))
+                return self._fix_canvas_zindex(self._fix_slow_rotation(self._wrap_particle_iife(html)))
             print("        ⚠ Three.js 缺失 → 注入默认粒子场聚散兜底")
             # 清理 LLM 残留的空 canvas（只有 <canvas> 标签没有对应 Three.js 代码）
             html = re.sub(r'<canvas[^>]*>', '', html)
             return html + self._default_threejs(orientation)
+
+    def _wrap_particle_iife(self, html: str) -> str:
+            """🔴 兜底（根治粒子静态 + timeline 注册失败）：多个 sub-composition 的粒子 script
+            顶层 const（const c / const s / const N / const g）在 HyperFrames inline 到 host 后
+            共享全局词法环境 → 第二个场景抛 `SyntaxError: Identifier 'c' has already been declared`
+            → 整个 script 块不执行 → 粒子静态 + window.__timelines 注册失败（poll 报 not registered）。
+            修复：把含 new THREE.WebGLRenderer 的 <script> 内容包成 IIFE，const 变成函数作用域，
+            不再跨 sub-composition 冲突。已包过 IIFE 的（(function 开头）跳过，避免双重包装。"""
+            def _wrap(m):
+                inner = m.group(1)
+                if inner.lstrip().startswith('(function'):
+                    return m.group(0)
+                return f'<script>(function(){{{inner}}})();</script>'
+            return re.sub(
+                r'<script>\s*((?:const|var|let)\b(?:(?!</script>).)*?new THREE\.WebGLRenderer(?:(?!</script>).)*?)</script>',
+                _wrap, html, flags=re.DOTALL)
     def _extract_llm_motion(self, content: str, dur: float = 5.0):
             """提取 LLM 的 GSAP 动画语句，返回 (纯HTML结构, 动画语句字符串)
             只移除含 var tl 的 GSAP script，保留 importmap + Three.js module script。
@@ -132,12 +148,18 @@ class SceneBuilderBase(SkillBase):
 
             def _rm_gsap(m):
                 block = m.group(0)
-                if 'var tl' in block:
+                # 🔴 GSAP 2.x 旧 API（TimelineMax/TimelineLite/TweenMax/TweenLite）也一并移除：
+                #    LLM 偶发用 new TimelineMax() 而非 gsap.timeline()，或内联 GSAP 库
+                if 'var tl' in block or re.search(r'new\s+Timeline(Max|Lite)|new\s+Tween(Max|Lite)|TimelineMax\b', block):
                     return ''  # 移除 GSAP script（timeline 由框架统一生成）
                 if 'importmap' in block:
                     return ''  # 🔴 移除 importmap（Three.js 已由框架内联为全局 THREE）
                 return block
             html = re.sub(r'<script[^>]*>.*?</script>', _rm_gsap, content, flags=re.DOTALL)
+            # 🔴 终极兜底：LLM 超长选择器截断会漏写 </script>（残留孤立 <script> 有开无闭），
+            #    导致 script 标签不配对 → HyperFrames 拼接执行报 "Invalid or unexpected token"。
+            #    这里强制清掉残留的孤立 <script>（匹配到下一个 <script> 或 EOF 都没闭合的）。
+            html = re.sub(r'<script[^>]*>(?:(?!</script>|<script[^>]*>).)*$', '', html, flags=re.DOTALL)
             # 🔴 兜底：移除 module script 里的 import 语句（LLM 可能残留），用全局 THREE
             html = re.sub(r'import\s*\*\s*as\s+THREE\s+from\s*["\']three["\'];?', '', html)
             html = re.sub(r'import\s*\{[^}]*\}\s*from\s*["\']three[^"\']*["\'];?', '', html)

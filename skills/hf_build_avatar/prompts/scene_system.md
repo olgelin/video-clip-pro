@@ -84,7 +84,12 @@
 <!-- 标签卡片 + 数据可视化 + GSAP script -->
 ```
 
-脚本规范：`var tl` 第一行、每句 `;` 结尾、repeat ≤ 5 次。不输出 DOCTYPE / `<html>` / `<head>` / `<body>` / GSAP CDN / `window.__timelines`。`</script>` 必须闭合。
+脚本规范（🔴 违反任意一条整段作废）：
+- `var tl=gsap.timeline({paused:true})` 第一行。🔴 禁止 `new TimelineMax()` / `new TimelineLite()` / `new TweenMax()` / `new TweenLite()` 等 GSAP 2.x 旧写法——GSAP 库由框架统一注入，你**禁止内联任何 GSAP 库压缩代码**（`/*! GSAP ...` 开头的一整坨），你只写 `tl.from`/`tl.to` 语句本身。
+- 每句 `;` 结尾、repeat ≤ 5 次。
+- 🔴 选择器必须简短：用 class 或 id 直接定位（如 `.tag-card`、`#main-title`），**禁止** `#main-content > div > div > div ...` 这种一层套一层的深链选择器（最多写 1 层 `>`）。
+- 不输出 DOCTYPE / `<html>` / `<head>` / `<body>` / GSAP CDN / `window.__timelines`。
+- 🔴 `</script>` 必须闭合，禁止 script 标签互相嵌套，禁止漏写 `</script>`。
 
 ## 🔴 人物区避让（数字人同层排版，最重要）
 
