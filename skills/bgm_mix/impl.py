@@ -136,33 +136,40 @@ class Bgm_mix(SkillBase):
         return False
 
     def _build_caption(self, context: dict) -> str:
-        """Build ACE-Step music caption from content analysis."""
-        edl = context.get("edl", {})
-        ranges = edl.get("ranges", [])
-        # 🔴 avatar-short/seed 无 edl，用 scenes 的 beat 推断情绪
-        if not ranges:
-            scenes = context.get("scenes", [])
-            ranges = [{"beat": s.get("beat", "")} for s in scenes]
-        beats = set(r.get("beat", "").upper() for r in ranges)
-
-        # Map narrative beats to music mood
+        """对齐 VF：按场景 mood（中文情绪）映射 music mood。scenes 无 beat 字段（storyboard 只存 mood），
+        之前用 s.get("beat") 拿到空串 → caption 永远兜底。改用 mood 字段。"""
+        scenes = context.get("scenes", [])
+        # 中文 mood → 英文 music mood（语义对齐 vf 的 MOOD_MAP）
         mood_map = {
-            "HOOK": "energetic, attention-grabbing",
-            "CONTEXT": "building, informative",
-            "PROBLEM": "tense, dramatic",
-            "CONFLICT": "intense, driving",
-            "STRUGGLE": "emotional, determined",
-            "BREAKTHROUGH": "uplifting, hopeful",
-            "RESOLUTION": "triumphant, inspirational",
-            "SPOTLIGHT": "focused, clear",
-            "ALERT": "urgent, alert",
-            "PROCESS": "steady, methodical",
+            "冲击 悬念": "energetic, attention-grabbing",
+            "冷静 理性": "building, informative",
+            "紧张 对立": "tense, dramatic",
+            "冲突 焦虑": "emotional, determined",
+            "开阔 希望": "triumphant, inspirational",
         }
         moods = []
-        for b in beats:
-            if b in mood_map:
-                moods.append(mood_map[b])
-
+        seen = set()
+        for s in scenes:
+            m = s.get("mood", "")
+            if m in mood_map and m not in seen:
+                seen.add(m)
+                moods.append(mood_map[m])
+        # 兜底：fullscreen/pip 模式用 edl ranges 的 narrative beat 映射
+        if not moods:
+            edl = context.get("edl", {})
+            ranges = edl.get("ranges", [])
+            if ranges:
+                beat_map = {
+                    "HOOK": "energetic, attention-grabbing",
+                    "CONTEXT": "building, informative",
+                    "PROBLEM": "tense, dramatic",
+                    "STRUGGLE": "emotional, determined",
+                    "RESOLUTION": "triumphant, inspirational",
+                }
+                beats = set(r.get("beat", "").upper() for r in ranges)
+                for b in beats:
+                    if b in beat_map and beat_map[b] not in moods:
+                        moods.append(beat_map[b])
         base = ", ".join(moods[:3]) if moods else "cinematic, engaging"
         return f"{base}, instrumental, 100-120 BPM, background music for narration"
 
