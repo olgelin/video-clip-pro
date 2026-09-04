@@ -443,7 +443,17 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
     else:
         gsap_tag = '<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>'
         print("      GSAP from CDN (may fail in headless)")
-    index_html = '\n'.join(['<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"/>',f'<meta name="viewport" content="width={fw},height={fh}"/>','<title>Edited Video</title>',gsap_tag,f'<style>{FONT_CSS}{pip_css_block}{main_style}{avatar_shadow_css}</style></head><body>',f'<div id="root" data-composition-id="main" data-start="0" data-layout="{layout_mode}" data-width="{fw}" data-height="{fh}" data-duration="{td_str}">',pip_video_block,f'<audio id="src-a" src="final.mp4" data-start="0" data-duration="{td_str}" data-track-index="10"></audio>','<div class="bg-glow"></div>',('<div class="env-vignette" id="env-vignette"></div><div class="env-scan" id="env-scan"></div>' if is_avatar else ''),fg_particles_html,host_block,'</div>','<div class="unified-timeline"><div class="unified-timeline-fill" id="main-timeline"></div></div>',f'<script>window.__timelines=window.__timelines||{{}};const tl=gsap.timeline({{paused:true}});tl.to("#main-timeline",{{width:"100%",duration:{td_str},ease:"linear"}},0);{pip_motion}window.__timelines["main"]=tl;</script>',THREEP_SCRIPT,AUDIO_SYNC_SCRIPT,'</body></html>'])
+    # 🔴 Three.js 库必须内联在 host（不是 beat sub-composition），否则 host 的 window.THREE 不存在
+    #    → HyperFrames 的 "three" adapter discover 检测不到 THREE → seek 不 dispatch hf-seek
+    #    → sub-composition 里的 Three.js 粒子收不到 hf-seek 事件 → 粒子静止（根因）
+    three_asset = _assets / "three.min.js"
+    if three_asset.exists():
+        three_js = three_asset.read_text(encoding="utf-8")
+        three_tag = f'<script>{three_js}</script>'
+        print("      Three.js embedded locally (host)")
+    else:
+        three_tag = ""
+    index_html = '\n'.join(['<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"/>',f'<meta name="viewport" content="width={fw},height={fh}"/>','<title>Edited Video</title>',gsap_tag,three_tag,f'<style>{FONT_CSS}{pip_css_block}{main_style}{avatar_shadow_css}</style></head><body>',f'<div id="root" data-composition-id="main" data-start="0" data-layout="{layout_mode}" data-width="{fw}" data-height="{fh}" data-duration="{td_str}">',pip_video_block,f'<audio id="src-a" src="final.mp4" data-start="0" data-duration="{td_str}" data-track-index="10"></audio>','<div class="bg-glow"></div>',('<div class="env-vignette" id="env-vignette"></div><div class="env-scan" id="env-scan"></div>' if is_avatar else ''),fg_particles_html,host_block,'</div>','<div class="unified-timeline"><div class="unified-timeline-fill" id="main-timeline"></div></div>',f'<script>window.__timelines=window.__timelines||{{}};const tl=gsap.timeline({{paused:true}});tl.to("#main-timeline",{{width:"100%",duration:{td_str},ease:"linear"}},0);{pip_motion}window.__timelines["main"]=tl;</script>',THREEP_SCRIPT,AUDIO_SYNC_SCRIPT,'</body></html>'])
     (hf_dir / "index.html").write_text(index_html, encoding="utf-8")
     print("      HyperFrames project:", str(hf_dir / "index.html"))
     print("      Beats:", len(beat_files), "sub-compositions,", len(captions), "caption words")
