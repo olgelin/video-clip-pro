@@ -151,19 +151,21 @@ class SceneBuilderBase(SkillBase):
                 r'<script>\s*((?:const|var|let)\b(?:(?!</script>).)*?new THREE\.WebGLRenderer(?:(?!</script>).)*?)</script>',
                 _wrap, html, flags=re.DOTALL)
     def _fix_particle_drive(self, inner: str) -> str:
-            """🔴 源头修复（根治粒子静）：hf-seek 有数字人 video 时被 HyperFrames 短路
-            （__player.renderSeek 存在 → runtimeSeeked=true → 不 dispatch hf-seek）→ 粒子静。
-            __hfThreeRender 是 HyperFrames 每帧 seek 后无条件调用的渲染钩子（cli.js 第339行），
-            不依赖 hf-seek / timeline registry，是"一开始就做好"的可靠驱动。
-            移除 hf-seek 驱动；若已含 __hfThreeRender（菜单源头给的）则跳过，否则注入链式累积。"""
-            # 移除无效的 hf-seek 事件驱动（兼容 globalThis/window 前缀 + 一层嵌套括号）
-            inner = re.sub(
-                r'(?:globalThis|window)\.addEventListener\(["\']hf-seek["\']\s*,\s*(?:[^()]*|\([^()]*\))*\)\s*;?',
-                '', inner)
-            if "__hfThreeRender" in inner:
+            """🔴 粒子驱动（定版，实测结论）：hf-seek 有数字人 video 时被 HyperFrames 短路
+            （__player.renderSeek 存在 → runtimeSeeked=true → 不 dispatch）；__hfThreeRender 单一钩子
+            实测也不可靠（粒子动画弱、部分场景 0%）。**最可靠 = GSAP timeline + __timelines 注册**：
+            cli.js `seekAllAdaptersInBrowser` 第291-301行无条件 `tl.totalTime(tt3,false)` 触发 onUpdate → rd，
+            不依赖 hf-seek / __hfThreeRender。追加 GSAP timeline 驱动（key=canvas id），hf-seek 保留作无数字人场景额外保险。"""
+            cid = re.search(r'getElementById\("([^"]+)"\)', inner)
+            key = cid.group(1) if cid else "p"
+            # 已有 GSAP timeline 驱动则跳过（避免重复注册）
+            if "__timelines" in inner and f"_particle_{key}" in inner:
                 return inner
-            inner += (';(function(){var _p=globalThis.__hfThreeRender;'
-                      'globalThis.__hfThreeRender=function(){if(_p)_p();rd(globalThis.__hfThreeTime||0)}})();')
+            inner += (f';(function(){{var _tl=gsap.timeline({{paused:true}});'
+                      f'_tl.to({{}},{{duration:3600,ease:"none",onUpdate:function(){{rd(_tl.time())}}}});'
+                      f'globalThis.__timelines=globalThis.__timelines||{{}};'
+                      f'globalThis.__timelines["_particle_{key}"]=_tl;'
+                      f'}})();')
             return inner
     def _extract_llm_motion(self, content: str, dur: float = 5.0):
             """提取 LLM 的 GSAP 动画语句，返回 (纯HTML结构, 动画语句字符串)

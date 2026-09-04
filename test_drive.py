@@ -1,16 +1,10 @@
 # -*- coding: utf-8 -*-
-"""验证粒子驱动源头修复：hf-seek → __hfThreeRender"""
+"""验证粒子驱动定版：GSAP timeline + __timelines（cli.js 无条件 seek，实测可靠）"""
 import sys, re
 sys.path.insert(0, ".")
-from skills._common.scene_base import SceneBuilderBase
 from skills.hf_build_avatar.impl import Hf_build_avatar
 
-# 绕过 __init__（这些方法都是纯函数，不依赖实例状态；用具体类 Hf_build_avatar 继承全部方法）
 base = Hf_build_avatar.__new__(Hf_build_avatar)
-avatar = base
-
-HD = 'globalThis.addEventListener("hf-seek",e=>rd(e.detail.time));rd(globalThis.__hfThreeTime||0);'
-DRV = '(function(){var _p=globalThis.__hfThreeRender;globalThis.__hfThreeRender=function(){if(_p)_p();rd(globalThis.__hfThreeTime||0)}})();'
 
 ok = True
 def check(name, cond, detail=""):
@@ -19,39 +13,31 @@ def check(name, cond, detail=""):
     if not cond:
         ok = False
 
-# 用例1：LLM 照抄旧菜单（hf-seek 驱动）→ 移除 hf-seek + 注入 __hfThreeRender
-inner1 = 'const c=document.getElementById("pt3d"),r=new THREE.WebGLRenderer({canvas:c});function rd(t){r.render(s,cam)}' + HD
+# 用例1：LLM 照抄菜单（hf-seek 驱动）→ 追加 GSAP timeline + __timelines（hf-seek 保留）
+inner1 = 'const c=document.getElementById("pt3d"),r=new THREE.WebGLRenderer({canvas:c});function rd(t){r.render(s,cam)}globalThis.addEventListener("hf-seek",e=>rd(e.detail.time));rd(globalThis.__hfThreeTime||0);'
 out1 = base._fix_particle_drive(inner1)
-check("1. hf-seek 被移除", "hf-seek" not in out1)
-check("1. __hfThreeRender 已注入", "__hfThreeRender" in out1)
-check("1. 无残留孤立 )", out1.rstrip().endswith(")();") or out1.rstrip().endswith("})();"))
+check("1. 追加 GSAP timeline", "gsap.timeline" in out1)
+check("1. 注册 __timelines", "__timelines" in out1 and "_particle_pt3d" in out1)
+check("1. hf-seek 保留（额外保险）", "hf-seek" in out1)
+check("1. 不注入 __hfThreeRender", "__hfThreeRender" not in out1)
+check("1. onUpdate 驱动 rd", "onUpdate" in out1 and "rd(_tl.time())" in out1)
 
-# 用例2：LLM 照抄新菜单（已含 __hfThreeRender）→ 跳过不重复注入
-inner2 = 'const c=document.getElementById("pt3d");function rd(t){r.render(s,cam)}' + DRV
+# 用例2：已有 GSAP timeline 驱动 → 跳过（不重复注册）
+inner2 = 'const c=document.getElementById("bg3d");function rd(t){r.render(s,cam)};(function(){var _tl=gsap.timeline({paused:true});_tl.to({},{duration:3600,onUpdate:function(){rd(_tl.time())}});globalThis.__timelines=globalThis.__timelines||{};globalThis.__timelines["_particle_bg3d"]=_tl;})();'
 out2 = base._fix_particle_drive(inner2)
-check("2. 已含 __hfThreeRender 不重复注入", out2.count("__hfThreeRender") == 2)  # DRV 里出现 2 次
+check("2. 已有驱动不重复注入", out2.count("gsap.timeline") == 1)
 
-# 用例3：只有 rd(0) 初始渲染（无 hf-seek 无 __hfThreeRender）→ 注入
-inner3 = 'const c=document.getElementById("pt3d");function rd(t){r.render(s,cam)}rd(globalThis.__hfThreeTime||0);'
-out3 = base._fix_particle_drive(inner3)
-check("3. 只有 rd(0) 也注入 __hfThreeRender", "__hfThreeRender" in out3)
-
-# 用例4：window.addEventListener 变体 → 也能移除
-inner4 = 'window.addEventListener("hf-seek",e=>rd(e.detail.time));'
-out4 = base._fix_particle_drive(inner4)
-check("4. window 前缀 hf-seek 被移除", "hf-seek" not in out4)
-
-# 用例5：菜单输出（_threejs_menu）→ 无 hf-seek，有 __hfThreeRender
-menu = avatar._threejs_menu("portrait", "corner")
-check("5. 菜单无 hf-seek", "hf-seek" not in menu)
-check("5. 菜单有 __hfThreeRender", "__hfThreeRender" in menu)
-check("5. 菜单 6 个技法都有 __hfThreeRender", menu.count("__hfThreeRender") >= 6)
-
-# 用例6：_default_threejs 兜底走 _wrap_particle_iife → 无 hf-seek，有 __hfThreeRender
+# 用例3：_default_threejs 兜底走 wrap → 有 GSAP timeline + __timelines
 default_html = base._default_threejs("portrait")
 wrapped = base._wrap_particle_iife(default_html)
-check("6. 兜底粒子经 wrap 后无 hf-seek", "hf-seek" not in wrapped)
-check("6. 兜底粒子经 wrap 后有 __hfThreeRender", "__hfThreeRender" in wrapped)
+check("3. 兜底粒子经 wrap 后有 GSAP timeline", "gsap.timeline" in wrapped)
+check("3. 兜底粒子经 wrap 后注册 __timelines", "__timelines" in wrapped and "_particle_pt3d" in wrapped)
+
+# 用例4：菜单输出保持 hf-seek 原样（无 __hfThreeRender）
+menu = base._threejs_menu("portrait", "corner")
+check("4. 菜单保持 hf-seek", "hf-seek" in menu)
+check("4. 菜单无 __hfThreeRender", "__hfThreeRender" not in menu)
+check("4. 菜单 6 个技法都有 hf-seek", menu.count("hf-seek") >= 6)
 
 print()
 print("✅ 全部通过" if ok else "❌ 有失败")
