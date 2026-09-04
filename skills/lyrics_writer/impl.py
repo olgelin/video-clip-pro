@@ -64,7 +64,7 @@ class LyricsWriter(SkillBase):
         )
         if not provider:
             return None
-        raw = provider.call("lyrics_writer", user_prompt, system=system_prompt, max_tokens=4000)
+        raw = provider.call("lyrics_writer", user_prompt, system=system_prompt, max_tokens=8000)
         if not raw:
             return None
         return self._clean(raw)
