@@ -10,7 +10,7 @@ Flow:
   4. Mix speech + ducked BGM → replace video audio
 """
 from __future__ import annotations
-import json, subprocess, sys, os
+import json, subprocess, sys, os, random, re
 from pathlib import Path
 from core.base import SkillBase
 
@@ -101,7 +101,8 @@ class Bgm_mix(SkillBase):
         caption = self._build_caption(context)
 
         video_path = context.get("final_polished", "")
-        duration = int(self._video_duration(Path(video_path)) + 5)
+        # 🔴 对齐 VF：BGM 时长按歌词长度+随机抖动（在一个范围内变化，不锁死）
+        duration = int(self._calc_bgm_duration(lyrics, self._video_duration(Path(video_path))))
 
         print(f"      [bgm_mix] ACE-Step: dur={duration}s, caption=\"{caption[:60]}...\"")
 
@@ -164,6 +165,21 @@ class Bgm_mix(SkillBase):
 
         base = ", ".join(moods[:3]) if moods else "cinematic, engaging"
         return f"{base}, instrumental, 100-120 BPM, background music for narration"
+
+    def _calc_bgm_duration(self, lyrics_text: str, video_dur: float) -> float:
+        """对齐 VF bgm_generator 的 _calc_duration_by_lyrics：BGM 时长按歌词长度+随机抖动，
+        在一个范围内变化（不锁死固定值）。区间适配口播视频时长 [video_dur, video_dur+12]。"""
+        clean = re.sub(r'\[.*?\]', '', lyrics_text)
+        clean = re.sub(r'[^\u4e00-\u9fff]', '', clean)
+        char_count = len(clean)
+        # 歌词长度线性映射到余量 [0, 12]：200字→+0s，500字→+12s
+        _min_extra, _max_extra = 0.0, 12.0
+        extra = _min_extra + (char_count - 200) / (500 - 200) * (_max_extra - _min_extra)
+        extra = max(_min_extra, min(_max_extra, extra))
+        # 随机抖动 ±3s（对齐 VF 的 ±8s，clip-pro 视频短故幅度小）
+        jitter = random.uniform(-3, 3)
+        duration = video_dur + extra + jitter
+        return round(max(video_dur, min(video_dur + _max_extra, duration)), 1)
 
     # ── Ducking & mixing ────────────────────────────────
 
