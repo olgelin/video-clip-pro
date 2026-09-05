@@ -32,6 +32,7 @@ TASK_MODELS = {
     "topic_scout": {"primary": "deepseek-v4-pro", "fallback": [], "max_tokens": 3000},
     "topic_selector": {"primary": "deepseek-v4-pro", "fallback": [], "max_tokens": 2000},
     "publish_meta": {"primary": "deepseek-chat", "fallback": [], "max_tokens": 800},
+    "lyrics_writer": {"primary": "deepseek-v4-pro", "fallback": [], "max_tokens": 16000},
 }
 MODEL_PRICES = {
     "deepseek-v4-pro": {"input": 0.5, "output": 2.0},
