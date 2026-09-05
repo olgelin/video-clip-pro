@@ -192,22 +192,20 @@
 
 🔴 复制完整的 canvas + script 代码块（普通 script，禁止 type="module"——module 异步执行导致渲染时 Three.js 未就绪；不要写 importmap，不要写 import 语句——Three.js 已由框架内联为全局 THREE）。相邻场景禁止同一技法。
 
-## 🔥 Three.js 动画铁律（确定性版——位置是时间 t 的纯函数）
+## 🔥 Three.js 动画铁律（确定性版——旋转是时间 t 的纯函数）
 
-🔴 **下坠铁律（确定性）**：粒子用「确定性下坠」——位置是时间 t 的纯函数 `y = y0[i] - spd[i]*t`，**不是累积 `-=spd[i]`**。HyperFrames 逐帧 seek 渲染（乱序/并行），累积状态会 desync（粒子静止/乱跳），必须根据 t 确定性计算。技法菜单的 rd 函数若写成累积下坠（`-=`），改成确定性计算。
+🔴 **旋转铁律（同步 object 属性，禁止 needsUpdate 下坠）**：粒子用「整体旋转」——`pts.rotation.y = t * 0.4`（绕 y 轴，同步，HyperFrames seek 下可靠）。**绝对禁止**逐帧改 buffer position + `needsUpdate=true`——needsUpdate 是异步 GPU 上传，HyperFrames seek 截图时没反映到画面 → 粒子静止（实测帧差 0，这是「画面静态」的头号根因，video-factory 早就根治）。
 
 🔴 **代码模板（rd 必须是 t 的纯函数）**：
-- 生成粒子时保存初始 y：`const y0=new Float32Array(N); ...生成后 y0[i]=p[i*3+1]`
-- rd(t) 里：`p[i*3+1]=y0[i]-spd[i]*t; p[i*3+1]=((p[i*3+1]+9)%18+18)%18-9;`（从 y=9 下坠到 y=-9 循环）
-- 🔴 禁止 `p[i*3+1]-=spd[i]`（累积下坠会 desync，画面静止）
+- `function rd(t){pts.rotation.y=t*0.4;r.render(s,cam)}`（整体绕 y 轴旋转）
+- 可选微摆：`pts.rotation.x=Math.sin(t*0.2)*0.06`（绕 x 轴辅助，幅度小）
+- 🔴 禁止 `p[i*3+1]-=spd[i]`（累积下坠 desync）、禁止 `needsUpdate=true`（异步静止）、禁止绕 x 轴当主运动（帧差也接近 0）
 
-🔴 **下坠速度（单位=每秒，因为 rd 用 t 秒计算）**：`spd[i]=0.3+Math.random()*0.7`（每秒下坠 0.3-1.0 单位）。禁止改慢——下坠太慢画面就静止。
+🔴 **旋转速度**：`rotation.y=t*0.3~0.5`（每秒 0.3-0.5 弧度）。禁止 <0.2（太慢静止）。
 
-🔴 **needsUpdate 必须写**：每帧下坠后必须 `g.attributes.position.needsUpdate=true`，否则 GPU 不更新位置，粒子静止。
+🔴 **直接复制技法菜单的完整 rd 函数骨架**（技法菜单已经是 rotation.y 正确写法），不要自己改成下坠 + needsUpdate。
 
-🔴 **直接复制技法菜单的完整 rd 函数骨架**，但把累积下坠（`-=`）改成确定性（`y0[i]-spd[i]*t`）。B（星空慢旋）/C（银河漩涡）旋转也要用 t 驱动（`rotation.y=t*速度`），不要用累积 `+=`。
-
-可选呼吸（让粒子有生命，但只是辅助，主动态靠下坠）：
+可选呼吸（让粒子有生命，但只是辅助，主动态靠旋转）：
 - `material.opacity = 0.5 + Math.sin(t*1.5)*0.3`
 - 颜色 lerp 呼吸
 - `cam.position.y = 3 + Math.sin(t*0.5)*0.5`
