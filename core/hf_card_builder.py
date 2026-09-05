@@ -584,10 +584,15 @@ def render_hyperframes(hf_dir):
         standalone_dir = temp_dir / f"standalone_{i:02d}"
         standalone_dir.mkdir(exist_ok=True)
         shutil.copy2(str(beat_html), str(standalone_dir / "index.html"))
-        # 🔴 beat-N.html 缺 data-duration → 注入正确时长（否则 HyperFrames 用默认 12.6s，渲染慢且时长错）
+        # 🔴 standalone 渲染：beat-N.html 是 root（不是 sub-comp），必须去 template 包装 + 注入 data-start/data-duration
+        #    否则 HyperFrames 静态分析找不到 timeline → zero duration 渲染中止
+        #    （template 是 sub-composition 契约；standalone root 用纯 div+script）
         try:
             _h = (standalone_dir / "index.html").read_text(encoding="utf-8")
-            _h = _h.replace(f'data-composition-id="{bid}"', f'data-composition-id="{bid}" data-duration="{duration}"', 1)
+            _m = re.search(r'<body><template>(.*)</template></body></html>', _h, re.DOTALL)
+            if _m:
+                _h = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>' + _m.group(1) + '</body></html>'
+            _h = _h.replace(f'data-composition-id="{bid}"', f'data-composition-id="{bid}" data-start="0" data-duration="{duration}"', 1)
             (standalone_dir / "index.html").write_text(_h, encoding="utf-8")
         except Exception:
             pass
