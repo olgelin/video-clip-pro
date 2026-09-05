@@ -102,6 +102,8 @@ class Hf_build_pip(SceneBuilderBase):
                 "end": scene.get("final_end", scene.get("start", 0) + scene.get("duration", 5)),
                 "beat": "INFO",
                 "quote": scene.get("narration", ""),
+                "visual_type": scene.get("visual_type", ""),
+                "person_layout": scene.get("person_layout", ""),
                 "_scene_html": html_content,
             })
         if not render_ranges:

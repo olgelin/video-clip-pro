@@ -226,9 +226,9 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
         llm_html = seg.get("_llm_html", "")
         scene_html = seg.get("_scene_html", "")  # 🔴 P0: hf_build_pip 全屏完整场景（含背景+内容+GSAP）
         card_threejs_flag = False
-        # 🔴 v42 横屏真分区：该 beat 的内容区画布（横屏分栏时 = 全屏 - 人物区520 - 缝隙30，物理分离不叠放）
+        # 🔴 v42 横屏真分区：该 beat 的内容区画布（横屏分栏时 = 全屏 - 人物区 - 缝隙，物理分离不叠放）
         _split_czone = None
-        if layout_mode == "avatar" and orientation == "landscape":
+        if layout_mode in ("pip", "avatar") and orientation == "landscape":
             from skills.hf_build_avatar.person_zone import person_layout_for_visual_type as _plvt, content_zone as _cz
             _split_czone = _cz(seg.get("person_layout") or _plvt(seg.get("visual_type", ""), orientation), orientation)
         # ── PIP模式：全屏场景，不用卡片模板 ──
@@ -308,9 +308,9 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
         radius = "50%" if orientation == "portrait" else "16px"
         shift_interval = 5
 
-        if is_avatar:
-            # ── avatar v40：数字人 video 作为 host root 直接子元素，同层渲染（方案 A，整体渲染）──
-            # 数字人位置：横屏左侧竖条(left-rail)，竖屏角标(corner)。满幅→缩位动画第2步再加。
+        if is_avatar or (layout_mode == "pip" and orientation == "landscape"):
+            # ── avatar v40 / pip横屏分屏：人物 video 作为 host root 直接子元素，同层渲染（方案 A，整体渲染）──
+            # 人物位置：横屏左右分栏(left-rail/right-rail 按语义换边)，竖屏角标(corner)。pip 横屏复用同一套分屏。
             from skills.hf_build_avatar.person_zone import person_zone as _pz, person_layout_for_visual_type as _pz_vt
             hero_dur = 5.0  # 片头满幅→缩位的触发时间
             # 🔴 v41 语义换位：每个 beat 按 visual_type 决定人物位置（金句/对比/时间线→左下/右分栏，其余→右下角标）
