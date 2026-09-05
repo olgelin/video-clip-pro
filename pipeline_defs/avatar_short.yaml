@@ -66,6 +66,14 @@ stages:
     timeout: 300
     description: 成片视觉质检
 
+  - name: publish_meta
+    skill: publish_meta
+    phase: 6.3
+    critical: false
+    retry: 1
+    timeout: 120
+    description: 发布元数据（标题/描述/标签）→ publish_meta.json
+
   - name: bgm_mix
     skill: bgm_mix
     phase: 6.5
