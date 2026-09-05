@@ -45,22 +45,13 @@ class LyricsWriter(SkillBase):
             for i, s in enumerate(sections[:6])
         ]
 
-        user_prompt = (
-            f"口播稿主题: {topic}\n"
-            f"口播稿情绪: {mood}\n\n"
-            f"口播稿内容摘要:\n{chr(10).join(section_summaries)}\n\n"
-            f"口播稿全文:\n{full_text[:2000]}\n\n"
-            f"请用「先挖本质，再找意象，最后写词」的创作逻辑写歌词：\n"
-            f"1. 先挖出这个事件背后的人性真相：为什么会发生？暴露了人性的什么？\n"
-            f"2. 提炼一句「主题」，歌词每一句都围绕它，不跑偏\n"
-            f"3. 找到一个轻脆的核心意象（泡沫/露水/雪花/薄冰/糖/梦这类轻、脆、美、易碎的东西），用它贯穿全曲——举重若轻，不选数字/命/血/山/刀这类重的意象\n"
-            f"4. 表层事件简短带过，深层真相重点展开\n"
-            f"5. 留白：情绪藏在意象背后，不直白喊\n"
-            f"6. 用遗憾美学（若是/可有/不问/别/如果/本该）翻出遗憾感\n"
-            f"7. 每句通顺有意义，不通顺就删\n"
-            f"8. 副歌开头唱核心意象+主题，至少重复3-4次\n"
-            f"9. 长度不限\n\n"
-            f"直接输出歌词，不要其他内容。"
+        user_prompt = self.load_prompt("lyrics_user").format(
+            topic=topic,
+            mood=mood,
+            topic_info="",
+            style_guide="",
+            section_summaries=chr(10).join(section_summaries),
+            full_text=full_text[:2000],
         )
         if not provider:
             return None

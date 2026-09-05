@@ -173,20 +173,21 @@ class Bgm_mix(SkillBase):
         base = ", ".join(moods[:3]) if moods else "cinematic, engaging"
         return f"{base}, instrumental, 100-120 BPM, background music for narration"
 
-    def _calc_bgm_duration(self, lyrics_text: str, video_dur: float) -> float:
-        """对齐 VF bgm_generator 的 _calc_duration_by_lyrics：BGM 时长按歌词长度+随机抖动，
-        在一个范围内变化（不锁死固定值）。区间适配口播视频时长 [video_dur, video_dur+12]。"""
+    def _calc_bgm_duration(self, lyrics_text: str, video_dur: float = 0) -> float:
+        """对齐 VF bgm_generator 的 _calc_duration_by_lyrics：BGM 时长按歌词长度
+        线性映射到固定区间 + 随机抖动（不锁死，不跟视频时长跑）。"""
+        _MIN_DURATION = 210  # 3分30秒
+        _MAX_DURATION = 280  # 4分40秒
         clean = re.sub(r'\[.*?\]', '', lyrics_text)
         clean = re.sub(r'[^\u4e00-\u9fff]', '', clean)
         char_count = len(clean)
-        # 歌词长度线性映射到余量 [0, 12]：200字→+0s，500字→+12s
-        _min_extra, _max_extra = 0.0, 12.0
-        extra = _min_extra + (char_count - 200) / (500 - 200) * (_max_extra - _min_extra)
-        extra = max(_min_extra, min(_max_extra, extra))
-        # 随机抖动 ±3s（对齐 VF 的 ±8s，clip-pro 视频短故幅度小）
-        jitter = random.uniform(-3, 3)
-        duration = video_dur + extra + jitter
-        return round(max(video_dur, min(video_dur + _max_extra, duration)), 1)
+        # 线性映射：200字→210s，500字→280s，中间线性插值
+        base = _MIN_DURATION + (char_count - 200) / (500 - 200) * (_MAX_DURATION - _MIN_DURATION)
+        base = max(_MIN_DURATION, min(_MAX_DURATION, base))
+        # 随机抖动 ±8s（让每首歌时长有变化，不锁死）
+        jitter = random.uniform(-8, 8)
+        duration = base + jitter
+        return round(max(_MIN_DURATION, min(_MAX_DURATION, duration)), 1)
 
     # ── Ducking & mixing ────────────────────────────────
 
