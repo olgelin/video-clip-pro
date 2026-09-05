@@ -375,7 +375,7 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
             #    数字人一直冻结在场景0的初始位置（历史上"换位生效"是视觉模型误判，见 636998b 被误 revert）。
             #    解法：位置仍由 LLM 语义判断（person_layout→person_zone），但渲染用"每段一个 video、
             #    初始 CSS 写死=该段位置 + data-start/data-duration 控制显示"，hidden 场景不放 video。
-            avatar_shadow_css = ".avatar-clip{box-shadow:0 0 0 2px rgba(108,140,255,0.28),0 0 28px rgba(108,140,255,0.30),0 26px 52px rgba(0,0,0,0.6),0 10px 20px rgba(0,0,0,0.45);border:1px solid rgba(108,140,255,0.35);}"
+            avatar_shadow_css = ".avatar-clip{box-shadow:0 0 0 2px rgba(108,140,255,0.28),0 0 28px rgba(108,140,255,0.30),inset 0 0 60px rgba(6,6,24,0.55),inset 0 0 0 1px rgba(108,140,255,0.12),0 26px 52px rgba(0,0,0,0.6),0 10px 20px rgba(0,0,0,0.45);border:1px solid rgba(108,140,255,0.35);filter:brightness(0.9) saturate(0.85);}"
             pip_video_block = ""
             _vid_idx = 0
             # 🔴 数字人视频实际时长（stream duration）——duix 合成后 stream 比配音短约 0.1s，

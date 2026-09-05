@@ -63,14 +63,14 @@ class SceneBuilderBase(SkillBase):
                 time.sleep(1.5)
             return None
 
-    def _review_scene(self, provider, prompt: str, content: str, max_retry: int = 2) -> str | None:
-        """🔴 渲染前质量 review：LLM 检查内容质量（错别字/文案/重叠/数据/配色），不合格带反馈重新生成。"""
+    def _review_scene(self, provider, prompt: str, content: str, canvas_hint: str = "", max_retry: int = 2) -> str | None:
+        """🔴 渲染前质量 review：LLM 检查内容质量（错别字/文案/重叠/数据/配色/数字人遮挡），不合格带反馈重新生成。"""
         review_tpl = self._load_shared("scene_review")
         if not review_tpl:
             return content
         import json as _json
         for retry in range(max_retry + 1):
-            rp = review_tpl.replace("{content}", content)
+            rp = review_tpl.replace("{content}", content).replace("{canvas_hint}", canvas_hint or "（无数字人，全屏画布）")
             raw = provider.call("scene_review", rp, max_tokens=1500, model="deepseek-chat")
             if not raw:
                 return content

@@ -67,6 +67,7 @@ class Hf_build_avatar(SceneBuilderBase):
             prompt = scene_prompt_tpl
             # 🔴 数字人编排优先用 LLM 判断结果（storyboard 里 _direct_person_layouts 产出），失败回退硬编码
             _pl = scene.get("person_layout") or self._person_layout(orientation, scene.get('visual_type'))
+            canvas_hint = self._canvas_hint(orientation, _pl)
             reps = {
                 "visual_brief": brief,
                 "color_palette": json.dumps(palette, ensure_ascii=False, indent=2),
@@ -74,15 +75,15 @@ class Hf_build_avatar(SceneBuilderBase):
                 "threejs_menu": self._threejs_menu(orientation, _pl),
                 "motion_instructions": self._motion_nl(motion),
                 "opening_hint": self._opening_hint(idx, orientation),
-                "canvas_hint": self._canvas_hint(orientation, _pl),
+                "canvas_hint": canvas_hint,
             }
             for k, v in reps.items():
                 prompt = prompt.replace("{" + k + "}", v)
 
             content = self._call_scene(provider, prompt)
             if content:
-                # 🔴 渲染前质量 review：错别字/文案/重叠/数据/配色，不合格带反馈重新生成（最多重试2次）
-                content = self._review_scene(provider, prompt, content)
+                # 🔴 渲染前质量 review：错别字/文案/重叠/数据/配色/数字人遮挡，不合格带反馈重新生成（最多重试2次）
+                content = self._review_scene(provider, prompt, content, canvas_hint=canvas_hint)
                 # 🔴 P0：提取 LLM 动画语句，合并进 stage 的统一 timeline（单一 __timelines["beat-N"]）
                 content_html, llm_motion = self._extract_llm_motion(content, dur=dur)
                 content_html = self._ensure_threejs(content_html, orientation)  # 🔴 兜底：Three.js 缺失注入默认粒子
