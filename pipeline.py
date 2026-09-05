@@ -87,6 +87,9 @@ def main():
     # 🔴 方向默认值根治：avatar 系列（话题输入，无输入视频）默认横屏，其他模式默认竖屏（pip/fullscreen 自行检测输入视频方向）
     if args.orientation is None:
         args.orientation = "landscape" if is_avatar_topic else "portrait"
+        _auto_orient = True
+    else:
+        _auto_orient = False
     if is_avatar_topic:
         if not args.topic or not args.topic.strip():
             print(f"ERROR: --mode {args.mode} 需要 --topic \"话题/碎碎念\"")
@@ -100,6 +103,18 @@ def main():
         if not video_path.exists():
             print(f"ERROR: File not found: {video_path}")
             sys.exit(1)
+
+    # 🔴 pip/fullscreen 检测输入视频方向（横屏→分屏，竖屏→圆窗）——storyboard 与 build 必须同向，否则横屏视频 person_layout 仍是竖屏角标
+    if _auto_orient and not is_avatar_topic:
+        try:
+            _r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0",
+                                 "-show_entries", "stream=width,height", "-of", "csv=p=0",
+                                 str(video_path)], capture_output=True, text=True, timeout=30)
+            _parts = _r.stdout.strip().split(",")
+            if len(_parts) >= 2:
+                args.orientation = "portrait" if int(_parts[1]) > int(_parts[0]) else "landscape"
+        except Exception:
+            pass
 
     # 🔴 统一输出路径：output/<mode>/<标识>/（avatar 用 topic 前 20 字做目录名）
     if is_avatar_topic:
