@@ -241,8 +241,8 @@
 🔴 **z-index 分层铁律（背景 0 < 粒子 2 < 内容 3，违反=代码雨遮挡标题，最常见的画面 bug）**：
 - 背景渐变 + 装饰层（网格/ghost 水印/辉光带/粒子雨/扫光/径向光晕）：z-index:0-1
 - Three.js 的 `<canvas>`（粒子层）：z-index:2
-- 🔴 **内容层 main-content（标题/卡片/数据）：z-index:3 或更高**——必须在 canvas 之上，否则代码雨/粒子会盖住标题文字、让标题看不清
-- 🔴 禁止：`main-content` 写 `z-index:1` 或 `2`（会被粒子压住）、`<canvas>` 写 `z-index:0` 或 `1`（被背景盖住粒子白画）、背景渐变写不透明实色（用 rgba 半透明，否则盖住粒子）
+- 🔴 **内容层 main-content（标题/卡片/数据）：z-index:3 或更高，且 background 必须透明**——必须在 canvas 之上（否则代码雨遮标题），但**绝对不能写 background**。框架根 div 已经铺好深色渐变背景，你在 main-content 上再写 `background:linear-gradient(...)` 会盖住 canvas 的 3D 粒子，导致 3D 动效整个"消失"（最常见的翻车）。main-content 只放内容元素，背景交给根 div。
+- 🔴 禁止：`main-content` 写 `z-index:1` 或 `2`（会被粒子压住）、`main-content` 写任何 `background`（盖住 canvas 的 3D 粒子）、`<canvas>` 写 `z-index:0` 或 `1`（被背景盖住粒子白画）、背景渐变写不透明实色盖住粒子
 
 ## 禁止项
 

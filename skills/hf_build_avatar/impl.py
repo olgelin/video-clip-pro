@@ -87,6 +87,10 @@ class Hf_build_avatar(SceneBuilderBase):
                 # 🔴 P0：提取 LLM 动画语句，合并进 stage 的统一 timeline（单一 __timelines["beat-N"]）
                 content_html, llm_motion = self._extract_llm_motion(content, dur=dur)
                 content_html = self._ensure_threejs(content_html, orientation)  # 🔴 兜底：Three.js 缺失注入默认粒子
+                # 🔴 兜底：去掉 main-content 的 background（LLM 常加不透明渐变盖住 canvas 的 3D 粒子，导致 3D 动效整个"消失"）
+                content_html = re.sub(r'(<div\s+id="main-content"[^>]*?style=")([^"]*?)(")',
+                                      lambda m: m.group(1) + re.sub(r'background[^;]*;?', '', m.group(2)) + m.group(3),
+                                      content_html)
                 stage = build_stage(idx, dur, palette, motion, ghost=ghost, quote=quote, llm_motion=llm_motion,
                                     orientation=orientation, person_layout=_pl)
                 scene["person_layout"] = _pl

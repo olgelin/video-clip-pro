@@ -174,7 +174,9 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
     hf_dir.mkdir(parents=True, exist_ok=True); comp_dir.mkdir(exist_ok=True)
     src_v = str(output_dir / "final.mp4")
     # 🔴 avatar 新流程：无剪切无 final.mp4，用数字人视频（video_path=avatar_video.mp4）
-    if not os.path.exists(src_v) and video_path and os.path.exists(str(video_path)):
+    #    旧逻辑 `if not exists(src_v)` 有坑：output_dir 残留第一次运行的旧 final.mp4 时不会 fallback，
+    #    导致复制旧配音（口播和当前口播稿对不上）。avatar 模式强制用 video_path。
+    if video_path and os.path.exists(str(video_path)) and (layout_mode == "avatar" or not os.path.exists(src_v)):
         src_v = str(video_path)
     dst_v = str(hf_dir / "final.mp4")
     if os.path.exists(src_v): shutil.copy2(src_v, dst_v); print("      Video copied")
