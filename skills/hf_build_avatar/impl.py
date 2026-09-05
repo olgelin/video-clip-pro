@@ -81,6 +81,8 @@ class Hf_build_avatar(SceneBuilderBase):
 
             content = self._call_scene(provider, prompt)
             if content:
+                # 🔴 渲染前质量 review：错别字/文案/重叠/数据/配色，不合格带反馈重新生成（最多重试2次）
+                content = self._review_scene(provider, prompt, content)
                 # 🔴 P0：提取 LLM 动画语句，合并进 stage 的统一 timeline（单一 __timelines["beat-N"]）
                 content_html, llm_motion = self._extract_llm_motion(content, dur=dur)
                 content_html = self._ensure_threejs(content_html, orientation)  # 🔴 兜底：Three.js 缺失注入默认粒子

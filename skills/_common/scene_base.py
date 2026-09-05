@@ -62,6 +62,39 @@ class SceneBuilderBase(SkillBase):
                     return content
                 time.sleep(1.5)
             return None
+
+    def _review_scene(self, provider, prompt: str, content: str, max_retry: int = 2) -> str | None:
+        """🔴 渲染前质量 review：LLM 检查内容质量（错别字/文案/重叠/数据/配色），不合格带反馈重新生成。"""
+        review_tpl = self._load_shared("scene_review")
+        if not review_tpl:
+            return content
+        import json as _json
+        for retry in range(max_retry + 1):
+            rp = review_tpl.replace("{content}", content)
+            raw = provider.call("scene_review", rp, max_tokens=1500, model="deepseek-chat")
+            if not raw:
+                return content
+            m = re.search(r'\{.*\}', raw, re.DOTALL)
+            if not m:
+                return content
+            try:
+                res = _json.loads(m.group(0))
+            except Exception:
+                return content
+            if res.get("ok"):
+                return content
+            issues = res.get("issues", [])
+            if not issues or retry >= max_retry:
+                return content
+            feedback = "；".join(str(i) for i in issues[:5])
+            retry_prompt = prompt + "\n\n🔴 上一版画面有问题，重新生成，必须修复这些：\n" + feedback
+            new_content = self._call_scene(provider, retry_prompt)
+            if new_content:
+                content = new_content
+            else:
+                return content
+        return content
+
     def _clean_scene(self, raw, strip_full_doc: bool = False) -> str | None:
             """清洗 LLM 响应：剥推理前缀 + 剥代码块 + 剥完整文档外壳"""
             if not raw or len(raw) <= 80:
