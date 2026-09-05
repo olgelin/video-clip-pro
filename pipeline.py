@@ -62,8 +62,8 @@ def main():
     parser = argparse.ArgumentParser(description="Video Factory Pro — YAML-driven pipeline")
     parser.add_argument("video", nargs="?", help="Input video file path (pip/V23 必填；avatar 模式用 --topic 代替)")
     parser.add_argument("--topic", type=str, help="话题/碎碎念文字输入（avatar-seed / avatar-short 模式用）")
-    parser.add_argument("--orientation", choices=["portrait", "landscape"], default="portrait",
-                       help="数字人视频方向：portrait 竖屏(默认) / landscape 横屏")
+    parser.add_argument("--orientation", choices=["portrait", "landscape"], default=None,
+                       help="数字人视频方向：portrait 竖屏 / landscape 横屏（avatar 系列默认横屏）")
     parser.add_argument("--output", "-o", help="Output directory")
     parser.add_argument("--whisper-model", "-m", default="large-v3", help="Whisper model size (default: large-v3)")
     parser.add_argument("--lang", default="zh", help="Language code (default: zh)")
@@ -84,6 +84,9 @@ def main():
 
     # 🔴 avatar 系列（seed/short）用 --topic 输入，不走 video 剪切
     is_avatar_topic = args.mode in ("avatar-seed", "avatar-short")
+    # 🔴 方向默认值根治：avatar 系列（话题输入，无输入视频）默认横屏，其他模式默认竖屏（pip/fullscreen 自行检测输入视频方向）
+    if args.orientation is None:
+        args.orientation = "landscape" if is_avatar_topic else "portrait"
     if is_avatar_topic:
         if not args.topic or not args.topic.strip():
             print(f"ERROR: --mode {args.mode} 需要 --topic \"话题/碎碎念\"")
