@@ -441,7 +441,8 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
         # 🔴 窗口比例：竖屏 1:1（圆框），横屏 3:4（竖向长方形框，高>宽）
         _aspect = "1" if orientation == "portrait" else "3/4"
         # 🔴 avatar 已在分支内生成 pip_video_block（video direct child），这里只给 pip 生成
-        if not is_avatar:
+        # 🔴 pip 横屏分屏走 avatar 分支（人物竖条），也不能被这里覆盖回 pip-win
+        if not is_avatar and not (layout_mode == "pip" and orientation == "landscape"):
             pip_video_block = f'<div id="pip-bg"></div><video id="pip-bg-v" src="final.mp4" data-start="0" data-duration="{td_str}" data-track-index="0" muted playsinline></video><div id="pip-win" style="{pos_css};width:{_init_size}%;aspect-ratio:{_aspect};--pip-radius:{radius};">'
             pip_video_block += f'<video id="pip-win-v" src="final.mp4" data-start="0" data-duration="{td_str}" data-track-index="1" muted playsinline></video>'
             pip_video_block += f'<div id="pip-frame" style="{frame_css}"></div></div>'

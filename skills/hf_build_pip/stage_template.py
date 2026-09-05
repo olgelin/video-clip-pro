@@ -65,7 +65,7 @@ def _dedup_motion(motion_code: str) -> str:
 
 def build_stage(scene_idx: int, dur: float, palette: dict, motion: dict,
                 ghost: str, quote: str, llm_motion: str = "",
-                orientation: str = "portrait") -> str:
+                orientation: str = "portrait", transparent: bool = False) -> str:
     fw, fh = (1920, 1080) if orientation == "landscape" else (1080, 1920)
     gs = palette["gradient_start"]
     gm = palette["gradient_mid"]
@@ -154,7 +154,14 @@ def build_stage(scene_idx: int, dur: float, palette: dict, motion: dict,
     gsap_block = _GSAP_FIXED.format(gsap_local=_load_gsap_local(), motion_code=motion_code, scene_idx=scene_idx)
     three_block = _load_three_local()
 
-    return f"""<div data-composition-id="beat-{scene_idx}" data-width="{fw}" data-height="{fh}" style="position:absolute;inset:0;z-index:10;overflow:hidden;background:linear-gradient(180deg,{gs},{gm},{ge});font-family:'PingFang SC','Microsoft YaHei',sans-serif;">
+    # 🔴 透明渐变卡片（开场前几秒）：半透明背景透出模糊原视频，毛玻璃质感。后面场景保持实色不丢失。
+    if transparent:
+        _gr, _gg, _gb = hex_to_rgb(gs); _mr, _mg, _mb = hex_to_rgb(gm); _er, _eg, _eb = hex_to_rgb(ge)
+        bg_style = f"background:linear-gradient(180deg,rgba({_gr},{_gg},{_gb},0.62),rgba({_mr},{_mg},{_mb},0.68),rgba({_er},{_eg},{_eb},0.74));"
+    else:
+        bg_style = f"background:linear-gradient(180deg,{gs},{gm},{ge});"
+
+    return f"""<div data-composition-id="beat-{scene_idx}" data-width="{fw}" data-height="{fh}" style="position:absolute;inset:0;z-index:10;overflow:hidden;{bg_style}font-family:'PingFang SC','Microsoft YaHei',sans-serif;">
 {three_block}
 {grid_3d}
 {glow}
