@@ -69,6 +69,16 @@ def _detect_orientation(video_path):
     except: pass
     return "portrait"
 
+def _video_duration(video_path) -> float:
+    """ffprobe 视频 stream 实际时长（秒）。失败返回 0。"""
+    try:
+        r = subprocess.run(["ffprobe","-v","error","-select_streams","v:0",
+                            "-show_entries","stream=duration","-of","csv=p=0",
+                            str(video_path)], capture_output=True, text=True, timeout=30)
+        return float(r.stdout.strip())
+    except Exception:
+        return 0.0
+
 def _find_npx():
     for c in ["npx.cmd","npx","npx.bat"]:
         p = shutil.which(c)
@@ -368,12 +378,19 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
             avatar_shadow_css = ".avatar-clip{box-shadow:0 26px 52px rgba(0,0,0,0.6),0 10px 20px rgba(0,0,0,0.45);border:1px solid rgba(255,255,255,0.14);}"
             pip_video_block = ""
             _vid_idx = 0
+            # 🔴 数字人视频实际时长（stream duration）——duix 合成后 stream 比配音短约 0.1s，
+            #    最后一个 video 的 media 段(data-media-start+data-duration)会超出视频实际帧，
+            #    HyperFrames 严格 coverage 检查判 captured 0 帧。用真实时长 clamp 每个 video 段。
+            _av_dur = _video_duration(dst_v) or _video_duration(src_v)
             for _i, _z in enumerate(_zones):
                 _pl_i = ranges[_i].get("person_layout") or _pz_vt(ranges[_i].get("visual_type", ""), orientation)
                 if _pl_i == "hidden":
                     continue
                 _seg_start = round(seg_offsets[_i], 2)
                 _seg_dur = round(ranges[_i]["end"] - ranges[_i]["start"], 2)
+                # 🔴 clamp：media 段不超过数字人视频实际帧末尾（根治 avatar-video-N captured 0 帧）
+                if _av_dur > 0 and _seg_start < _av_dur:
+                    _seg_dur = round(min(_seg_dur, _av_dur - _seg_start), 2)
                 _v_zr = _z["w"] // 2 if orientation == "portrait" else 16
                 # 🔴 HyperFrames clip 契约：data-start=合成时间轴秒数(非文件seek)，data-track-index 控制时间重叠。
                 #    多个 video 共享 track 0（同 track 不重叠即可），各自 data-start=seg_offsets[i] 顺序排列。
