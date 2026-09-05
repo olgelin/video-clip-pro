@@ -73,7 +73,7 @@ def main():
     parser.add_argument("--bgm", action="store_true", help="Add AI-generated background music with ducking")
     parser.add_argument("--no-bgm", action="store_true", dest="no_bgm",
                         help="Disable BGM（avatar-short/avatar-seed 默认开 BGM，用此关闭）")
-    parser.add_argument("--mode", choices=["fullscreen", "pip", "avatar", "avatar-seed", "avatar-short"], default="fullscreen",
+    parser.add_argument("--mode", choices=["fullscreen", "pip", "avatar-seed", "avatar-short"], default="fullscreen",
                        help="Layout mode: fullscreen(V23) / pip(画中画) / avatar-seed(碎碎念→数字人) / avatar-short(话题→数字人)")
     args = parser.parse_args()
 
@@ -116,7 +116,7 @@ def main():
     provider = Provider(cost_tracker)
 
     # Load pipeline definition
-    _mode_yaml = {"fullscreen": "v23", "pip": "pip", "avatar": "avatar",
+    _mode_yaml = {"fullscreen": "v23", "pip": "pip",
                   "avatar-seed": "avatar_seed", "avatar-short": "avatar_short"}.get(args.mode, "v23")
     yaml_path = SCRIPT_DIR / "pipeline_defs" / f"{_mode_yaml}.yaml"
     loader = PipelineLoader(provider)
