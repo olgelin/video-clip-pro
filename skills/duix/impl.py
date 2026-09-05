@@ -99,7 +99,12 @@ class Duix(SkillBase):
         avatar_video = synth_avatar["video"]
 
         # 1. 配音复制到 Duix 数据目录（容器内 /code/data/<name>）
-        audio_name = Path(voice_path).name
+        # 🔴 唯一命名：并发话题的配音都叫 step05_voice.wav，同名复制到共享目录会互相覆盖，
+        #    导致 A 话题合成读到 B 话题的配音（音频错乱）。用 output_dir 短 hash 做前缀隔离。
+        import hashlib as _hashlib
+        _out_name = Path(context.get("output_dir", ".")).name or "topic"
+        _topic_hash = _hashlib.md5(_out_name.encode("utf-8")).hexdigest()[:8]
+        audio_name = f"{_topic_hash}_{Path(voice_path).name}"
         audio_dst = DUIX_HOST_DATA / audio_name
         shutil.copy2(voice_path, audio_dst)
         audio_url = f"/code/data/{audio_name}"
