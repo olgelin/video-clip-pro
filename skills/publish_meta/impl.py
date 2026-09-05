@@ -27,9 +27,16 @@ class PublishMeta(SkillBase):
                     script = {}
 
         topic = script.get("topic", "") or context.get("topic", "")
-        sections = script.get("voiceover_sections", []) or script.get("scenes", [])
+        # 🔴 适配 pip/fullscreen：无 script_data 时，用 storyboard 的 scenes（含 narration）
+        sections = script.get("voiceover_sections", []) or script.get("scenes", []) or context.get("scenes", [])
+        # 🔴 适配 pip/fullscreen：topic 为空时，用输入视频文件名当标题来源
+        if not topic:
+            vp = context.get("video_path", "")
+            if vp:
+                topic = Path(vp).stem
         full_text = "\n".join(
-            s.get("content", "") or s.get("voiceover", "") for s in sections
+            s.get("content", "") or s.get("voiceover", "") or s.get("narration", "")
+            for s in sections
         )
 
         if not topic and not full_text:

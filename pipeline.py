@@ -138,7 +138,7 @@ def main():
         "whisper_model": args.whisper_model,
         "lang": args.lang,
         "provider": provider,
-        "enable_bgm": args.bgm or (not args.no_bgm and is_avatar_topic),
+        "enable_bgm": args.bgm or (not args.no_bgm),
         "layout_mode": args.mode,
         "no_2x": args.no_2x,
         "topic": args.topic or "",  # 🔴 avatar-seed/short 的文字输入
