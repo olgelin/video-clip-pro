@@ -45,14 +45,41 @@ class _DuixStuck(Exception):
 class Duix(SkillBase):
     name = "duix"
 
+    @staticmethod
+    def _media_duration(path: str) -> float:
+        """ffprobe 获取媒体时长（秒），失败返回 0。"""
+        try:
+            r = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                 "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
+                capture_output=True, text=True, timeout=30)
+            return float(r.stdout.strip()) if r.stdout.strip() else 0.0
+        except Exception:
+            return 0.0
+
     def execute(self, context: dict) -> dict:
         # 🔴 幂等：数字人视频已存在则跳过合成（断点续跑，长任务失败重跑不重新合成）
+        # 🔴 但必须校验配音时长匹配：LLM 每次段数不同→配音时长不同，复用旧数字人视频会导致
+        #    渲染时最后一段超出数字人视频时长 → coverage 0% → 渲染中止（复用了旧竖屏成片的真凶）
         out_dir = Path(context.get("output_dir", "."))
         _dst = out_dir / "avatar_video.mp4"
+        voice_path = context.get("voice_path", "")
         if _dst.exists() and _dst.stat().st_size > 1000:
-            print("  [duix] ⏭️ 数字人视频已存在，跳过合成")
-            context["avatar_video_path"] = str(_dst)
-            return context
+            _v_dur = self._media_duration(voice_path) if voice_path else 0.0
+            _a_dur = self._media_duration(str(_dst))
+            # 配音时长 vs 数字人视频时长：允许 ±1.5s 缓冲（数字人合成可能有微小对齐差）
+            if _v_dur > 0 and _a_dur > 0 and abs(_v_dur - _a_dur) <= 1.5:
+                print("  [duix] ⏭️ 数字人视频已存在且配音时长匹配，跳过合成")
+                context["avatar_video_path"] = str(_dst)
+                return context
+            if _v_dur > 0 and _a_dur > 0 and abs(_v_dur - _a_dur) > 1.5:
+                print(f"  [duix] ⚠️ 数字人视频时长({_a_dur:.1f}s)与配音时长({_v_dur:.1f}s)不匹配，删除重新合成")
+                _dst.unlink(missing_ok=True)
+            else:
+                # 无法获取时长（ffprobe 失败/无配音），保守跳过（保持原行为）
+                print("  [duix] ⏭️ 数字人视频已存在，跳过合成")
+                context["avatar_video_path"] = str(_dst)
+                return context
 
         voice_path = context.get("voice_path", "")
         if not voice_path or not Path(voice_path).exists():

@@ -1177,10 +1177,14 @@ def _render_fullscreen(hf_dir, gpu_flag):
         _n_beats = len(list(_comp_dir.glob("beat-*.html"))) if _comp_dir.exists() else 1
         _timeout = max(900, _n_beats * 15)
         print(f"      渲染超时预算: {_timeout}s ({_n_beats} 张卡片)")
+        # 🔴 根治复用旧 mp4：render 前清理 renders 目录旧产物，避免 render 失败时 copy 到旧方向/旧内容的成片
+        rd = hf_dir / "renders"
+        if rd.exists():
+            for _old in rd.glob("*.mp4"):
+                _old.unlink(missing_ok=True)
         cmd = f'hyperframes render --quality high {gpu_flag}'
         proc = subprocess.Popen(cmd, shell=True, cwd=str(hf_dir), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = proc.communicate(timeout=_timeout)
-        rd = hf_dir / "renders"
         if rd.exists():
             mp4s = sorted(rd.glob("*.mp4"), key=lambda q: q.stat().st_mtime, reverse=True)
             if mp4s:
@@ -1194,6 +1198,12 @@ def _render_fullscreen(hf_dir, gpu_flag):
             print(f"      整体渲染失败 (rc={proc.returncode})")
             if err_text:
                 for line in err_text.strip().split("\n")[-6:]:
+                    print(f"        {line}")
+        else:
+            # 🔴 returncode 0 但没生成 mp4：HyperFrames 可能 coverage 失败静默退出
+            print("      ⚠️ 渲染未生成 mp4（可能 coverage 失败），stderr 尾部：")
+            if err_text:
+                for line in err_text.strip().split("\n")[-10:]:
                     print(f"        {line}")
     except subprocess.TimeoutExpired:
         print("      整体渲染超时（卡片过多，渲染时间超预算）")
