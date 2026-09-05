@@ -76,8 +76,8 @@ class PublishMeta(SkillBase):
             print("  [publish-meta] ⚠️ JSON 解析失败")
             return None
 
-        title = (meta.get("title") or "").strip()[:16]
-        description = (meta.get("description") or "").strip()[:40]
+        title = self._truncate((meta.get("title") or "").strip(), 16)
+        description = self._truncate((meta.get("description") or "").strip(), 40)
         tags = [str(t).strip() for t in (meta.get("tags") or []) if str(t).strip()]
         while len(tags) < 4:
             tags.append("")
@@ -89,6 +89,20 @@ class PublishMeta(SkillBase):
             "description": description,
             "tags": tags,
         }
+
+    def _truncate(self, text: str, limit: int) -> str:
+        """超长智能截断：在 limit 内去掉末尾悬空虚词/标点，避免「…不加班是」半句悬空。"""
+        if len(text) <= limit:
+            return text
+        cut = text[:limit]
+        # 末尾悬空虚词（单字助词/介词/连词/判断词）删掉
+        weak = "的了在就把还被和与或及而等于是个这那呢吗吧啊"
+        while cut and cut[-1] in weak:
+            cut = cut[:-1]
+        # 末尾标点/空格删掉
+        while cut and cut[-1] in "，。！？：；、,.!?:; ":
+            cut = cut[:-1]
+        return cut
 
     def _parse_json(self, response: str) -> dict | None:
         cleaned = re.sub(r'```json\s*', '', response)
