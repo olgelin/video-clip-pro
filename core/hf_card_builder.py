@@ -655,6 +655,18 @@ def render_hyperframes(hf_dir):
                     return composed
             except Exception as e:
                 print(f"      PIP 叠加错误: {e}")
+                # 🔴 叠加失败也补音频（否则成品无声音）
+                try:
+                    _tmp = hf_dir.parent / "_with_audio.mp4"
+                    _fm = hf_dir.parent / "final.mp4"
+                    if _fm.exists():
+                        _c = f'ffmpeg -y -i "{pol}" -i "{_fm}" -map 0:v -map 1:a -c:v copy -c:a aac -b:a 192k -shortest "{_tmp}"'
+                        _r = subprocess.run(_c, shell=True, capture_output=True, timeout=300)
+                        if _r.returncode == 0 and _tmp.exists():
+                            _tmp.replace(pol)
+                            print("      叠加失败，已兜底补音频")
+                except Exception:
+                    pass
             return pol
     except Exception as e:
         print(f"      concat 错误: {e}")
@@ -774,7 +786,7 @@ def _compose_pip(hf_dir, polished_path):
                 crop_y = cy - int(ph * 0.33)  # 脸中心在 crop 上 33% 处（脸靠上，露更多身体）
                 crop_x = max(0, min(crop_x, W - pw)); crop_y = max(0, min(crop_y, H - ph))
                 return pw, ph, crop_x, crop_y
-            if faces:
+            if faces is not None and len(faces) > 0:
                 _bf = max(faces, key=lambda f: f[2] * f[3])
                 if best_face is None or _bf[2] > best_face[2]:
                     best_face = _bf
