@@ -6,7 +6,8 @@ from pathlib import Path
 from core.base import SkillBase
 from core.provider import Provider
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from core.hf_card_builder import build_hyperframes_composition, render_hyperframes
+from core.hf_card_builder import build_hyperframes_composition, render_hyperframes, _detect_orientation
+from skills.hf_build.stage_template import build_card
 
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
 
@@ -210,10 +211,13 @@ class Hf_build(SkillBase):
         # Step 1: LLM 提取卡片结构化数据（保留给 fallback 用）
         edl = self._enrich_cards(edl, provider)
 
+        # 🔴 对齐 PIP：检测输入视频方向，用于卡片尺寸（竖屏 500-600px 宽 / 横屏 560-680px 宽）
+        orientation = context.get("orientation") or _detect_orientation(str(video_path))
+
         # Step 2: V15 口播→HTML一步到位（主流程）
         print("\n[6/6] Generating card HTML — direct quote→visual (V15)...")
         try:
-            edl = self._llm_card_html_direct(edl, provider)
+            edl = self._llm_card_html_direct(edl, provider, orientation)
             if edl:
                 print("      Using direct quote→visual V15 cards")
         except Exception as e:
@@ -313,8 +317,20 @@ class Hf_build(SkillBase):
         print(f"      LLM HTML: {llm_count}/{llm_count+fail_count} cards (fail={fail_count})")
         return edl
 
-    def _llm_card_html_direct(self, edl: dict, provider) -> dict:
-        """V19: 口播原文 + 结构化数据 → 画面一步到位。"""
+    def _card_size(self, layout: str, orientation: str) -> tuple:
+        """卡片尺寸（照抄 hf_card_builder 的尺寸逻辑，对齐 PIP 框架层算尺寸）。"""
+        if layout in ("big-number", "comparison"):
+            return (680, 280) if orientation != "portrait" else (600, 300)
+        elif layout == "bullets":
+            return (620, 280) if orientation != "portrait" else (560, 300)
+        elif layout == "quote-card":
+            return (600, 220) if orientation != "portrait" else (540, 240)
+        return (560, 260) if orientation != "portrait" else (500, 250)
+
+    def _llm_card_html_direct(self, edl: dict, provider, orientation: str = "portrait") -> dict:
+        """V19: 口播原文 + 结构化数据 → 画面一步到位。
+        🔴 对齐 PIP：LLM 只生成卡片内容（标题/数据/装饰 + GSAP），透明浮空面板壳由
+        stage_template.build_card 代码层写死（半透明渐变+圆角+发光边框，100% 稳定）。"""
         ranges = edl.get("ranges", [])
         if not ranges or not isinstance(provider, Provider):
             return edl
@@ -327,7 +343,7 @@ class Hf_build(SkillBase):
         llm_count = 0
         fail_count = 0
 
-        for r in ranges:
+        for idx, r in enumerate(ranges):
             quote = r.get("quote", "")
             if not quote:
                 continue
@@ -341,6 +357,8 @@ class Hf_build(SkillBase):
             beat_type = r.get("beat", "INFO")
             emotion = r.get("card_emotion", "neutral")
             layout = r.get("card_layout_hint", "bullets")
+            cw, ch = self._card_size(layout, orientation)
+            dur = max(0.5, (r.get("end", 0) - r.get("start", 0)))
 
             prompt = CARD_DIRECT_PROMPT.format(
                 quote=quote, headline=headline, subtext=subtext,
@@ -350,8 +368,8 @@ class Hf_build(SkillBase):
                 scene_prompt=scene_prompt
             )
 
-            html = None
-            for _attempt in range(2):  # 空/坏输出重试一次，降低 fallback 到模板的概率
+            content = None
+            for _attempt in range(2):
                 try:
                     raw = provider.call("card_direct", prompt)
                     if raw and len(raw) > 50 and not raw.startswith("[ERROR"):
@@ -361,13 +379,14 @@ class Hf_build(SkillBase):
                         elif "```" in h:
                             h = h.split("```")[1].split("```")[0].strip()
                         if "<div" in h and "</div>" in h and _card_quality_check(h)[0]:
-                            html = h
+                            content = h
                             break
                 except Exception:
                     pass
 
-            if html:
-                r["_llm_html"] = html
+            if content:
+                # 🔴 对齐 PIP：透明浮空面板壳由代码层 build_card 写死，LLM 只填内容
+                r["_llm_html"] = build_card(idx, dur, emotion, cw, ch, content)
                 llm_count += 1
             else:
                 fail_count += 1
