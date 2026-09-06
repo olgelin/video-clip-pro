@@ -280,8 +280,8 @@ class Storyboard(SkillBase):
                     else:
                         side = "L" if sv in ("L", "LEFT", "左") else "R"
                         if orientation == "landscape":
-                            # 🔴 pip 横屏始终分栏（用户需求：人物独占一侧整条）；avatar 保持满版冲击（full→角标/inset→分栏交替）
-                            if not is_avatar or sc == "inset":
+                            # 横屏：inset 场景→分栏(分屏)，full 场景→角标小窗(画中画)，两者共存不丢失
+                            if sc == "inset":
                                 s["person_layout"] = "left-rail" if side == "L" else "right-rail"
                             else:
                                 s["person_layout"] = "corner-bl" if side == "L" else "corner-br"
