@@ -58,6 +58,22 @@ stages:
     timeout: 300
     description: 成片视觉质检（deepseek 视觉模型抽帧检查画面质量）
 
+  - name: publish_meta
+    skill: publish_meta
+    phase: 6.3
+    critical: false
+    retry: 1
+    timeout: 120
+    description: 发布元数据（标题/描述/标签）→ publish_meta.json
+
+  - name: lyrics_writer
+    skill: lyrics_writer
+    phase: 6.4
+    critical: false
+    retry: 1
+    timeout: 300
+    description: 口播稿 → 歌词（先挖本质→核心意象→写词）→ lyrics.txt
+
   - name: upscale
     skill: upscale
     phase: 7

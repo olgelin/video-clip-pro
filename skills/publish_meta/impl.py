@@ -38,6 +38,11 @@ class PublishMeta(SkillBase):
             s.get("content", "") or s.get("voiceover", "") or s.get("narration", "")
             for s in sections
         )
+        # 🔴 card 兜底：无 scenes/script_data 时，用 words（transcribe 逐字文本）当口播正文
+        if not full_text:
+            words = context.get("words", [])
+            if words:
+                full_text = "".join(w.get("text", "") for w in words)
 
         if not topic and not full_text:
             print("  [publish-meta] ❌ 无口播稿，跳过")
