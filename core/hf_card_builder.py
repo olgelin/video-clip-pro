@@ -169,7 +169,7 @@ def _wrap_scripts_scope(frag):
 
 # Visual components
 
-def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mode="fullscreen", orientation=None):
+def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mode="card", orientation=None):
     hf_dir = output_dir / "hyperframes"; comp_dir = hf_dir / "compositions"
     hf_dir.mkdir(parents=True, exist_ok=True); comp_dir.mkdir(exist_ok=True)
     src_v = str(output_dir / "final.mp4")
@@ -356,7 +356,7 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
             #    根因：composition 有 <canvas>（Three.js 场景）时，HyperFrames 的 canvas 合成路径（drawImage）
             #    忽略 video 的 CSS transform（scaleX/scaleY/x/y 失效），但 left/top/width/height 位置动画生效。
             #    video 必须 host root 直接子元素才能 seek/播放（包 untimed wrapper 会让 video 不 seek、显示首帧）。
-            #    lint 报 gsap_non_transform_motion（建议 transform），但 _render_fullscreen 不带 --strict 不 block。
+            #    lint 报 gsap_non_transform_motion（建议 transform），但 _render_card 不带 --strict 不 block。
             # 🔴 开屏满幅框：分区定位——竖屏贴底（数字人在下、内容在上），横屏贴右分栏（数字人在右、内容在左）
             #    满幅时数字人占自己的地盘，不遮挡内容区（物理分离，不是叠放）。缩位后再缩到角落小图标（小图标叠一点无妨）。
             if orientation == "portrait":
@@ -576,18 +576,18 @@ def render_hyperframes(hf_dir):
     print("\n[8/8] Rendering HyperFrames composition (standalone per-beat) ..." + (" (GPU)" if gpu["available"] else ""))
     t0 = time.time()
 
-    # 🔴 fullscreen（卡片 sub-composition）与 pip（全屏场景 standalone）渲染方式不同
-    # fullscreen 的 beat-N.html 是 500x260 小卡片（叠加在背景视频上），standalone 会把卡片当全屏渲染→卡住
+    # 🔴 card（卡片 sub-composition）与 pip（全屏场景 standalone）渲染方式不同
+    # card 的 beat-N.html 是 500x260 小卡片（叠加在背景视频上），standalone 会把卡片当全屏渲染→卡住
     # 必须整体渲染 index.html（背景视频+卡片 sub-composition）
     try:
         _idx_html = (hf_dir / "index.html").read_text(encoding="utf-8")
     except Exception:
         _idx_html = ""
     if "pip-win" not in _idx_html or 'data-layout="avatar"' in _idx_html or "avatar-video-" in _idx_html:
-        # 🔴 fullscreen（卡片 sub-comp 叠加背景视频）→ 整体渲染 index.html
+        # 🔴 card（卡片 sub-comp 叠加背景视频）→ 整体渲染 index.html
         # 🔴 avatar v40（数字人 video direct child + 卡片 sub-comp + 前景粒子）→ 整体渲染 index.html
         #    （数字人作为 composition 里的 video 轨道，和卡片同层渲染，不再 ffmpeg 后期叠加）
-        return _render_fullscreen(hf_dir, gpu_flag)
+        return _render_card(hf_dir, gpu_flag)
 
     # 🔴 照抄 video-factory：每个 beat 单独 standalone 渲染成 segment，再 concat 拼接
     comp_dir = hf_dir / "compositions"
@@ -898,8 +898,8 @@ def _compose_pip(hf_dir, polished_path):
         pip_crop = hero_crop
     _crop = hero_crop
     if _crop is None:
-        # 无人物 → 降级纯 fullscreen：只补字幕+音频，不叠加人物窗口
-        print("      无人物检测 → 降级纯 fullscreen（只补字幕+音频）")
+        # 无人物 → 降级纯 card：只补字幕+音频，不叠加人物窗口
+        print("      无人物检测 → 降级纯 card（只补字幕+音频）")
         try:
             tmp = out_dir / "_no_person.mp4"
             cmd = f'ffmpeg -y -i "{polished_path}" -i "{final_mp4}" -map 0:v -map 1:a -c:v copy -c:a aac -b:a 192k -shortest "{tmp}"'
@@ -1216,8 +1216,8 @@ def _build_outro_html(topic="", fw=1920, fh=1080, brand_name="不闻AI", brand_t
     return html
 
 
-def _render_fullscreen(hf_dir, gpu_flag):
-    """fullscreen 模式：整体渲染 index.html（背景视频 + 卡片 sub-composition）。"""
+def _render_card(hf_dir, gpu_flag):
+    """card 模式：整体渲染 index.html（背景视频 + 卡片 sub-composition）。"""
     t0 = time.time()
     try:
         # 动态超时：卡片越多渲染越久（22 卡 ≈ 4-5 分钟，241 卡 ≈ 45-60 分钟）

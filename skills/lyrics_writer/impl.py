@@ -16,7 +16,7 @@ class LyricsWriter(SkillBase):
     def execute(self, context: dict) -> dict:
         script = context.get("script_data", {})
         if not script or not script.get("voiceover_sections"):
-            # 🔴 适配 pip/fullscreen：无 script_data 时，用 scenes(narration) 或 words 构造口播稿
+            # 🔴 适配 pip/card：无 script_data 时，用 scenes(narration) 或 words 构造口播稿
             scenes = context.get("scenes", [])
             _vp = context.get("video_path", "")
             _topic = Path(_vp).stem if _vp else ""

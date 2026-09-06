@@ -13,7 +13,7 @@ class SceneBuilderBase(SkillBase):
 
     def _load_shared(self, name: str, subdir: str = "prompts") -> str:
         """🔴 加载 _common 共享文件（prompts/threejs_menu.md、templates/default_threejs.html 等）。
-        四条管线（avatar/pip/fullscreen）共享同一份 prompt/模板，改一处全局生效，根治复制粘贴重复。"""
+        四条管线（avatar/pip/card）共享同一份 prompt/模板，改一处全局生效，根治复制粘贴重复。"""
         from pathlib import Path
         p = Path(__file__).parent / subdir / name
         return p.read_text(encoding="utf-8") if p.exists() else ""

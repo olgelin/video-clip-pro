@@ -73,8 +73,8 @@ def main():
     parser.add_argument("--bgm", action="store_true", help="Add AI-generated background music with ducking")
     parser.add_argument("--no-bgm", action="store_true", dest="no_bgm",
                         help="Disable BGM（avatar-short/avatar-seed 默认开 BGM，用此关闭）")
-    parser.add_argument("--mode", choices=["fullscreen", "pip", "avatar-seed", "avatar-short"], default="fullscreen",
-                       help="Layout mode: fullscreen(V23) / pip(画中画) / avatar-seed(碎碎念→数字人) / avatar-short(话题→数字人)")
+    parser.add_argument("--mode", choices=["card", "pip", "avatar-seed", "avatar-short"], default="card",
+                       help="Layout mode: card(卡片浮空面板) / pip(画中画) / avatar-seed(碎碎念→数字人) / avatar-short(话题→数字人)")
     args = parser.parse_args()
 
     if args.doctor:
@@ -84,7 +84,7 @@ def main():
 
     # 🔴 avatar 系列（seed/short）用 --topic 输入，不走 video 剪切
     is_avatar_topic = args.mode in ("avatar-seed", "avatar-short")
-    # 🔴 方向默认值根治：avatar 系列（话题输入，无输入视频）默认横屏，其他模式默认竖屏（pip/fullscreen 自行检测输入视频方向）
+    # 🔴 方向默认值根治：avatar 系列（话题输入，无输入视频）默认横屏，其他模式默认竖屏（pip/card 自行检测输入视频方向）
     if args.orientation is None:
         args.orientation = "landscape" if is_avatar_topic else "portrait"
         _auto_orient = True
@@ -104,7 +104,7 @@ def main():
             print(f"ERROR: File not found: {video_path}")
             sys.exit(1)
 
-    # 🔴 pip/fullscreen 检测输入视频方向（横屏→分屏，竖屏→圆窗）——storyboard 与 build 必须同向，否则横屏视频 person_layout 仍是竖屏角标
+    # 🔴 pip/card 检测输入视频方向（横屏→分屏，竖屏→圆窗）——storyboard 与 build 必须同向，否则横屏视频 person_layout 仍是竖屏角标
     if _auto_orient and not is_avatar_topic:
         try:
             _r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0",
@@ -131,8 +131,8 @@ def main():
     provider = Provider(cost_tracker)
 
     # Load pipeline definition
-    _mode_yaml = {"fullscreen": "v23", "pip": "pip",
-                  "avatar-seed": "avatar_seed", "avatar-short": "avatar_short"}.get(args.mode, "v23")
+    _mode_yaml = {"card": "card", "pip": "pip",
+                  "avatar-seed": "avatar_seed", "avatar-short": "avatar_short"}.get(args.mode, "card")
     yaml_path = SCRIPT_DIR / "pipeline_defs" / f"{_mode_yaml}.yaml"
     loader = PipelineLoader(provider)
     manifest = loader.load(str(yaml_path))

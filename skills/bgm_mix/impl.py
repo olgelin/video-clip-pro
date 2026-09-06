@@ -154,7 +154,7 @@ class Bgm_mix(SkillBase):
             if m in mood_map and m not in seen:
                 seen.add(m)
                 moods.append(mood_map[m])
-        # 兜底：fullscreen/pip 模式用 edl ranges 的 narrative beat 映射
+        # 兜底：card/pip 模式用 edl ranges 的 narrative beat 映射
         if not moods:
             edl = context.get("edl", {})
             ranges = edl.get("ranges", [])

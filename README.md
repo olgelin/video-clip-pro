@@ -7,7 +7,7 @@
 | 管道 | 命令 | 场景 | 用途 |
 |------|------|------|------|
 | **PIP**（推荐） | `--mode pip` | 全屏 HTML 场景 + 人物窗口 + 字幕 | 口播视频主力，Three.js 粒子 3D 场景 |
-| **V23** | `--mode fullscreen`（默认） | 卡片式画面 + 字幕 | 旧版卡片模式，保留兼容 |
+| **Card** | `--mode card`（默认） | 卡片式画面 + 字幕 | 旧版卡片模式，保留兼容 |
 
 两个管道共用同一套 `transcribe → understand → edit → storyboard` 剪辑内核，区别只在最后的画面生成阶段（`hf_build_pip` vs `hf_build`）。
 
@@ -17,8 +17,8 @@
 # PIP 管道（全屏 3D 场景 + 人物窗口）
 python pipeline.py "输入视频.mp4" --mode pip
 
-# V23 管道（卡片模式）
-python pipeline.py "输入视频.mp4" --mode fullscreen
+# Card 管道（卡片模式）
+python pipeline.py "输入视频.mp4" --mode card
 
 # 常用参数
 python pipeline.py "输入.mp4" --mode pip --whisper-model large-v3 --bgm
@@ -39,7 +39,7 @@ output/
 │   │   ├── pipeline_context.json  # 完整上下文（调试用）
 │   │   └── hyperframes/           # HyperFrames 中间产物
 │   └── ...
-└── v23/              # V23 管道输出
+└── card/              # Card 管道输出
     └── ...
 ```
 
@@ -65,7 +65,7 @@ output/
 | 路径 | 作用 |
 |------|------|
 | `pipeline.py` | **唯一入口** |
-| `pipeline_defs/*.yaml` | 管道定义（pip / v23） |
+| `pipeline_defs/*.yaml` | 管道定义（pip / card） |
 | `core/` | 核心模块（provider / loader / gpu / hf_card_builder / card_constants） |
 | `skills/<name>/impl.py` | 各阶段实现 |
 | `skills/<name>/prompts/*.md` | 各阶段 LLM prompt（独立文件，不硬编码） |

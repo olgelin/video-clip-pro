@@ -1,6 +1,6 @@
-name: v23
+name: card
 version: "3.0"
-description: 口播视频智能剪辑 V23 — 卡片式HyperFrames
+description: 口播视频智能剪辑 Card — 卡片式HyperFrames（透明渐变浮空科技面板）
 stages:
   - name: transcribe
     skill: transcribe

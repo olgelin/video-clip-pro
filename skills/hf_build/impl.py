@@ -227,7 +227,7 @@ class Hf_build(SkillBase):
         # Step 3: 构建 HyperFrames composition + 渲染
         try:
             hf_dir = build_hyperframes_composition(edl, words, output_dir, video_path,
-                layout_mode=context.get("layout_mode", "fullscreen"))
+                layout_mode=context.get("layout_mode", "card"))
             if hf_dir:
                 polished = render_hyperframes(hf_dir)
                 if polished:
