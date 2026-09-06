@@ -65,8 +65,14 @@ def _dedup_motion(motion_code: str) -> str:
 
 def build_stage(scene_idx: int, dur: float, palette: dict, motion: dict,
                 ghost: str, quote: str, llm_motion: str = "",
-                orientation: str = "portrait", transparent: bool = False) -> str:
+                orientation: str = "portrait", transparent: bool = False,
+                person_layout: str = "corner") -> str:
     fw, fh = (1920, 1080) if orientation == "landscape" else (1080, 1920)
+    # 🔴 横屏真分区：分栏时内容画布 = 内容区宽度（人物区 640 + 缝隙 30 之外），LLM 在内容区内排版
+    is_split = orientation == "landscape" and person_layout in ("left-rail", "right-rail")
+    if is_split:
+        from skills.hf_build_avatar.person_zone import content_zone as _cz
+        fw = _cz(person_layout, orientation)["w"]
     gs = palette["gradient_start"]
     gm = palette["gradient_mid"]
     ge = palette["gradient_end"]

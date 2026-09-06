@@ -572,7 +572,7 @@ def render_hyperframes(hf_dir):
         _idx_html = (hf_dir / "index.html").read_text(encoding="utf-8")
     except Exception:
         _idx_html = ""
-    if "pip-win" not in _idx_html or 'data-layout="avatar"' in _idx_html:
+    if "pip-win" not in _idx_html or 'data-layout="avatar"' in _idx_html or "avatar-video-" in _idx_html:
         # 🔴 fullscreen（卡片 sub-comp 叠加背景视频）→ 整体渲染 index.html
         # 🔴 avatar v40（数字人 video direct child + 卡片 sub-comp + 前景粒子）→ 整体渲染 index.html
         #    （数字人作为 composition 里的 video 轨道，和卡片同层渲染，不再 ffmpeg 后期叠加）

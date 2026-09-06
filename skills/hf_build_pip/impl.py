@@ -65,7 +65,7 @@ class Hf_build_pip(SceneBuilderBase):
                 # 🔴 P0：提取 LLM 动画语句，合并进 stage 的统一 timeline（单一 __timelines["beat-N"]）
                 content_html, llm_motion = self._extract_llm_motion(content, dur=dur)
                 content_html = self._ensure_threejs(content_html, orientation)  # 🔴 兜底：Three.js 缺失注入默认粒子
-                stage = build_stage(idx, dur, palette, motion, ghost=ghost, quote=quote, llm_motion=llm_motion, orientation=orientation, transparent=(idx < 2))
+                stage = build_stage(idx, dur, palette, motion, ghost=ghost, quote=quote, llm_motion=llm_motion, orientation=orientation, transparent=(idx < 2), person_layout=scene.get("person_layout", "corner"))
                 html = stage.replace("<!-- LLM_CONTENT_INSERT -->", content_html)
                 (output_dir / f"beat-{idx}.html").write_text(html, encoding="utf-8")
                 html_files.append(str(output_dir / f"beat-{idx}.html"))

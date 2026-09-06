@@ -72,7 +72,8 @@ class Storyboard(SkillBase):
 
     def execute(self, context: dict) -> dict:
         # 🔴 avatar 分支：口播稿 + 配音时长直接分镜（无剪切，不依赖转录）
-        if context.get("script_data") and context.get("voice_scene_durations"):
+        is_avatar = bool(context.get("script_data") and context.get("voice_scene_durations"))
+        if is_avatar:
             ranges = self._script_to_ranges(context["script_data"], context["voice_scene_durations"])
         elif context.get("re_transcribed") and context.get("words"):
             ranges = self._words_to_ranges(context["words"])
@@ -86,7 +87,7 @@ class Storyboard(SkillBase):
 
         provider = context.get("provider")
         orientation = context.get("orientation", "portrait")
-        scenes = self._build(ranges, provider=provider, orientation=orientation)
+        scenes = self._build(ranges, provider=provider, orientation=orientation, is_avatar=is_avatar)
         print(f"  Storyboard: {len(ranges)} segments → {len(scenes)} visual scenes")
         for s in scenes:
             ke = s.get("key_elements", [])
@@ -132,7 +133,7 @@ class Storyboard(SkillBase):
             acc += dur
         return ranges
 
-    def _build(self, ranges: list, provider=None, orientation: str = "portrait") -> list:
+    def _build(self, ranges: list, provider=None, orientation: str = "portrait", is_avatar: bool = False) -> list:
         """核心：语义分镜 + 推断 + 提取"""
         if not ranges:
             return []
@@ -221,11 +222,11 @@ class Storyboard(SkillBase):
             acc += real_dur
 
         # 🔴 数字人编排 LLM 判断（不代码锁死）：读场景语义，LLM 决定每个场景数字人摆位（大/小/左/右）
-        scenes = self._direct_person_layouts(scenes, orientation, provider)
+        scenes = self._direct_person_layouts(scenes, orientation, provider, is_avatar)
 
         return scenes
 
-    def _direct_person_layouts(self, scenes: list, orientation: str, provider) -> list:
+    def _direct_person_layouts(self, scenes: list, orientation: str, provider, is_avatar: bool = False) -> list:
         """🔴 数字人编排：景别决定大小（full→corner角标/inset→rail分栏，确定性、稳定），
         LLM 判断左右换位（灵活、创意）。这样既不死锁（左右由 LLM 判断），又稳定（大↔小由景别保证，不依赖 LLM 随机性）。
         LLM 失败 → fallback 到 person_layout_for_visual_type 硬编码映射。"""
@@ -279,7 +280,8 @@ class Storyboard(SkillBase):
                     else:
                         side = "L" if sv in ("L", "LEFT", "左") else "R"
                         if orientation == "landscape":
-                            if sc == "inset":
+                            # 🔴 pip 横屏始终分栏（用户需求：人物独占一侧整条）；avatar 保持满版冲击（full→角标/inset→分栏交替）
+                            if not is_avatar or sc == "inset":
                                 s["person_layout"] = "left-rail" if side == "L" else "right-rail"
                             else:
                                 s["person_layout"] = "corner-bl" if side == "L" else "corner-br"
