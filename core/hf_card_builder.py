@@ -496,6 +496,14 @@ def _build_captions(ranges, words, seg_offsets, orientation="portrait", video_wi
         s, e = seg["start"], seg["end"]; offset = seg_offsets[seg_idx]
         seg_words = [w for w in words if w["start"] >= s - 0.1 and w["end"] <= e + 0.1]
         if not seg_words: continue
+        # 🔴 分屏时字幕跟着内容区走（人物右→字幕左，人物左→字幕右），不跨到人物区
+        pl = seg.get("person_layout", "")
+        if orientation == "landscape" and pl == "right-rail":
+            seg_left_pct = 33   # 人物右，内容区左侧
+        elif orientation == "landscape" and pl == "left-rail":
+            seg_left_pct = 67   # 人物左，内容区右侧
+        else:
+            seg_left_pct = 50
         phrase_text = ""; ps = pe = None
         for w in seg_words:
             ft = w["start"] - s + offset; fe = w["end"] - s + offset
@@ -503,14 +511,14 @@ def _build_captions(ranges, words, seg_offsets, orientation="portrait", video_wi
             elif ft - pe < 0.3: pe = fe; phrase_text += w["text"]
             else:
                 dur = round(pe - ps + 0.1, 2)
-                if dur >= 0.2: _make_caption(captions, ps, dur, phrase_text.strip(), safe_width, orientation)
+                if dur >= 0.2: _make_caption(captions, ps, dur, phrase_text.strip(), safe_width, orientation, seg_left_pct)
                 ps, pe, phrase_text = ft, fe, w["text"]
         if phrase_text:
             dur = round(pe - ps + 0.1, 2)
-            if dur >= 0.2: _make_caption(captions, ps, dur, phrase_text.strip(), safe_width, orientation)
+            if dur >= 0.2: _make_caption(captions, ps, dur, phrase_text.strip(), safe_width, orientation, seg_left_pct)
     return captions[:200]
 
-def _make_caption(captions, start, dur, text, safe_width, orientation):
+def _make_caption(captions, start, dur, text, safe_width, orientation, left_pct=50):
     max_font = 48 if orientation == "portrait" else 42
     bottom = 130 if orientation == "portrait" else 100
 
@@ -519,7 +527,7 @@ def _make_caption(captions, start, dur, text, safe_width, orientation):
         return
     if len(text) <= 18:
         captions.append({"idx": len(captions), "start": round(start - 0.05, 2),
-            "dur": max(0.4, dur), "text": text, "font_size": max_font, "bottom": bottom, "left_pct": 50})
+            "dur": max(0.4, dur), "text": text, "font_size": max_font, "bottom": bottom, "left_pct": left_pct})
         return
 
     # 在标点处拆，否则按字拆
@@ -555,7 +563,7 @@ def _make_caption(captions, start, dur, text, safe_width, orientation):
         if not part: continue
         chunk_dur = max(0.4, dur * len(part) / max(total_chars, 1))
         captions.append({"idx": len(captions), "start": round(start + acc - 0.05, 2),
-            "dur": round(chunk_dur, 2), "text": part, "font_size": max_font, "bottom": bottom, "left_pct": 50})
+            "dur": round(chunk_dur, 2), "text": part, "font_size": max_font, "bottom": bottom, "left_pct": left_pct})
         acc += chunk_dur
 
 def render_hyperframes(hf_dir):

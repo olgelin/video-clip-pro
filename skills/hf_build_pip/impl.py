@@ -168,6 +168,6 @@ class Hf_build_pip(SceneBuilderBase):
         return "\n".join(parts)
 
     def _opening_hint(self, idx: int) -> str:
-        if idx == 0:
-            return "🔴 开场——大字110-130px，选最炫Three.js，1-2个标签慢飘入，不用KPI。"
+        if idx < 2:
+            return "🔴 开场——大字110-130px，选最炫Three.js，1-2个标签慢飘入，不用KPI。🔴 Three.js renderer 必须 alpha:true 透明背景（底层有模糊视频要透出，禁止不透明纯色 canvas 铺满）。"
         return ""
