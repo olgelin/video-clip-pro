@@ -299,6 +299,9 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
 
     # ── PIP/avatar layout (person-in-window / multi-form avatar) ──
     pip_motion = ""  # 🔴 窗口定时换位的 GSAP 动画语句
+    is_avatar = False  # 🔴 card 模式非 avatar（pip/avatar 分支内覆盖），否则第 479 行 env-vignette 判断 UnboundLocalError
+    fg_particles_html = ""  # 🔴 card 模式无前景粒子/阴影（pip/avatar 分支内覆盖），否则 UnboundLocalError
+    avatar_shadow_css = ""
     if layout_mode in ("pip", "avatar"):
         import random
         is_avatar = (layout_mode == "avatar")
