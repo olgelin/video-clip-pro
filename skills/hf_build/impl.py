@@ -40,8 +40,11 @@ def _is_empty_card(html: str) -> bool:
         return True
     if not re.search(r'\btl\.(?:from|to|fromTo)\(', html):
         return True
-    text = re.sub(r'<[^>]+>', '', html).strip()
-    if len(text) < 2:
+    # 🔴 排除 script/style 里的代码，只检测「可见文字」（div 里的实际标题/数据）。
+    # 旧逻辑 re.sub 会把 <script> 里的 JS（var tl=gsap...）也算文字 → 空 div + 有 script 的卡片漏检。
+    visible = re.sub(r'<(script|style)\b[^>]*>.*?</\1>', '', html, flags=re.DOTALL)
+    visible_text = re.sub(r'<[^>]+>', '', visible).strip()
+    if len(visible_text) < 2:
         return True
     return False
 
@@ -348,7 +351,7 @@ class Hf_build(SkillBase):
             if not quote:
                 continue
 
-            headline = r.get("card_headline", "")
+            headline = r.get("card_headline", "") or r.get("quote", "")[:18]
             subtext = r.get("card_subtext", "")
             metric = r.get("card_metric", "")
             data_points = r.get("card_data_points", [])
