@@ -244,6 +244,15 @@ class SceneBuilderBase(SkillBase):
                         continue  # 未闭合的 function()，删除整句
                 _clean_statements.append(_s)
             statements = _clean_statements
+            # 🔴 过滤括号不闭合的畸形语句（LLM 超长 nth-child 逐元素动画写到一半截断：
+            #    `tl.from("...#div:nth-child(14.0)` 缺 ) 和参数 → JS 语法错误 → 整个 timeline 脚本解析失败
+            #    → window.__timelines["beat-N"]=tl 不执行 → 该场景动画全失效（静态画面）。）
+            _balanced = []
+            for _s in statements:
+                if _s.count('(') > _s.count(')'):
+                    continue  # 括号不闭合，丢弃畸形语句
+                _balanced.append(_s)
+            statements = _balanced
             if dur and dur > 0:
                 clamped = []
                 for s in statements:
