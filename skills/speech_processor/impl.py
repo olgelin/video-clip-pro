@@ -58,7 +58,7 @@ class SpeechProcessor(SkillBase):
         return '\n'.join(lines)
 
     def _process_with_llm(self, raw_text: str, provider) -> dict | None:
-        system_prompt = self.load_prompt("system")
+        system_prompt = self.load_prompt("system") + "\n\n" + self.load_prompt("script_examples")
         user_prompt = (
             f"请深度处理以下口语原文，清洗、增强、重构为有冲击力的视频脚本。\n\n"
             f"===== 原文开始 =====\n{raw_text}\n===== 原文结束 =====\n\n"

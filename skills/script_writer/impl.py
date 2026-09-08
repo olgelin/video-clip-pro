@@ -45,7 +45,7 @@ class ScriptWriter(SkillBase):
         return context
 
     def _write(self, topic: str, provider) -> dict | None:
-        system_prompt = self.load_prompt("system")
+        system_prompt = self.load_prompt("system") + "\n\n" + self.load_prompt("script_examples")
         user_prompt = (
             f"请根据以下话题，写一个有深度、有冲击力的口播脚本。\n\n"
             f"===== 话题 =====\n{topic}\n===== 话题结束 =====\n\n"
