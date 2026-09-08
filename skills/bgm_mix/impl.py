@@ -104,12 +104,35 @@ class Bgm_mix(SkillBase):
         # 🔴 对齐 VF：BGM 时长按歌词长度+随机抖动（在一个范围内变化，不锁死）
         duration = int(self._calc_bgm_duration(lyrics, self._video_duration(Path(video_path))))
 
-        print(f"      [bgm_mix] ACE-Step: dur={duration}s, caption=\"{caption[:60]}...\"")
+        print(f"      [bgm_mix] ACE-Step 抽卡: dur={duration}s, caption=\"{caption[:60]}...\"")
 
+        # 🔴 抽卡：生成 N 首（每次随机 seed），筛废品 + 客观指标打分挑最健康的
+        N_SAMPLES = 4
+        candidates = []
+        for i in range(N_SAMPLES):
+            cand = output_dir / f"_bgm_cand_{i}.wav"
+            if self._run_acestep_once(lyrics_file, cand, duration, caption):
+                candidates.append(cand)
+        lyrics_file.unlink(missing_ok=True)
+
+        if not candidates:
+            print("      [bgm_mix] ACE-Step 全部生成失败")
+            return False
+
+        best = self._pick_best(candidates, duration)
+        for c in candidates:
+            if c != best:
+                c.unlink(missing_ok=True)
+        best.rename(bgm_path)
+        print(f"      [bgm_mix] ✅ 从 {len(candidates)} 首里挑出最好: {bgm_path.stat().st_size // 1024}KB")
+        return True
+
+    def _run_acestep_once(self, lyrics_file: Path, output_path: Path, duration: int, caption: str) -> bool:
+        """调用 ACE-Step 生成一首 BGM 到 output_path（每次随机 seed）"""
         cmd = [
             str(ACESTEP_PYTHON), str(ACESTEP_CLI),
             "--lyrics", str(lyrics_file),
-            "--output", str(bgm_path),
+            "--output", str(output_path),
             "--duration", str(duration),
             "--captions", caption,
         ]
@@ -118,22 +141,80 @@ class Bgm_mix(SkillBase):
                 cmd, capture_output=True, text=True, timeout=600,
                 cwd=str(ACESTEP_CLI.parent),
             )
-            if result.returncode == 0 and bgm_path.exists():
-                print(f"      [bgm_mix] BGM generated: {bgm_path.stat().st_size // 1024}KB")
-                lyrics_file.unlink(missing_ok=True)
+            if result.returncode == 0 and output_path.exists():
                 return True
-
-            print(f"      [bgm_mix] ACE-Step failed (exit {result.returncode})")
+            print(f"      [bgm_mix] 一首生成失败 (exit {result.returncode})")
             if result.stderr:
                 for line in result.stderr.strip().split("\n")[-3:]:
                     print(f"        {line}")
         except subprocess.TimeoutExpired:
-            print("      [bgm_mix] ACE-Step timeout (10min)")
+            print("      [bgm_mix] 一首超时")
         except Exception as e:
-            print(f"      [bgm_mix] ACE-Step error: {e}")
-
-        lyrics_file.unlink(missing_ok=True)
+            print(f"      [bgm_mix] 一首出错: {e}")
+        output_path.unlink(missing_ok=True)
         return False
+
+    def _pick_best(self, candidates: list, target_dur: float) -> Path:
+        """客观指标打分，选最健康的（不是废品 + 有起伏）"""
+        scored = []
+        for c in candidates:
+            s = self._score_bgm(c, target_dur)
+            scored.append((s, c))
+            print(f"      [bgm_mix] 候选 {c.name}: 分={s}")
+        scored.sort(key=lambda x: -x[0])
+        return scored[0][1]
+
+    def _score_bgm(self, path: Path, target_dur: float) -> int:
+        """用 ffmpeg volumedetect + silencedetect 提取客观指标打分。
+        高分 = 不是死静音 + 不削波 + 静音少 + 有正常起伏。"""
+        score = 0
+        try:
+            # 1. 音量检测
+            r = subprocess.run(
+                ["ffmpeg", "-i", str(path), "-af", "volumedetect", "-f", "null", "-"],
+                capture_output=True, text=True, timeout=30,
+            )
+            mean_vol = max_vol = None
+            for line in r.stderr.split("\n"):
+                if "mean_volume" in line:
+                    try:
+                        mean_vol = float(line.split(":")[-1].strip().split(" ")[0])
+                    except (ValueError, IndexError):
+                        pass
+                elif "max_volume" in line:
+                    try:
+                        max_vol = float(line.split(":")[-1].strip().split(" ")[0])
+                    except (ValueError, IndexError):
+                        pass
+
+            # 2. 静音检测（连续 3 秒 < -35dB 视为静音）
+            r2 = subprocess.run(
+                ["ffmpeg", "-i", str(path), "-af", "silencedetect=n=-35dB:d=3", "-f", "null", "-"],
+                capture_output=True, text=True, timeout=30,
+            )
+            silence_dur = 0.0
+            for line in r2.stderr.split("\n"):
+                if "silence_duration" in line:
+                    try:
+                        silence_dur += float(line.split(":")[-1].strip())
+                    except (ValueError, IndexError):
+                        pass
+
+            # 3. 打分
+            if mean_vol is not None and mean_vol > -40:
+                score += 2  # 不是死静音
+            if max_vol is not None and max_vol <= 0:
+                score += 1  # 不削波
+            if silence_dur < 0.2 * target_dur:
+                score += 1  # 静音占比 < 20%
+            if mean_vol is not None and max_vol is not None:
+                dynamic = max_vol - mean_vol
+                if 5 < dynamic < 35:
+                    score += 1  # 有正常起伏（不单调）
+            return score
+        except Exception as e:
+            print(f"      [bgm_mix] 打分出错 {path.name}: {e}")
+            return 0
 
     def _build_caption(self, context: dict) -> str:
         """对齐 VF：按场景 mood（中文情绪）映射 music mood。scenes 无 beat 字段（storyboard 只存 mood），
