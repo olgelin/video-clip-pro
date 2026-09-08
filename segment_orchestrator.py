@@ -28,6 +28,10 @@ TARGET_SEG = 600.0      # 每段目标时长 10 分钟
 MIN_GAP = 1.5           # 切点停顿阈值：相邻字之间 >= 1.5s 才算「句子边界」
 SEARCH_WINDOW = 90.0    # 在理想边界 ±90s 内找最佳停顿点
 
+# ── BGM（整片统一加，避免分段每段各自 BGM 合并后断裂）────
+ACESTEP_PYTHON = Path(r"E:\Hermes-Agent\workspace\xiaoshan\video-factory\tools\acestep\.venv\Scripts\python.exe")
+ACESTEP_CLI = Path(r"E:\Hermes-Agent\workspace\xiaoshan\video-factory\tools\acestep\cli.py")
+
 
 def ffprobe_duration(path: Path) -> float:
     r = subprocess.run(
@@ -134,6 +138,133 @@ def concat_segments(finals: list, final_out: Path):
     return final_out
 
 
+def _run_acestep(lyrics_file: Path, output_path: Path, duration: int, caption: str) -> bool:
+    """调 ACE-Step 生成一首 BGM。输出重定向文件（不用管道）+ taskkill /T 杀进程树
+    防卡死（同 bgm_mix 的坑：孙进程继承管道会拖死 communicate）。"""
+    cmd = [str(ACESTEP_PYTHON), str(ACESTEP_CLI),
+           "--lyrics", str(lyrics_file), "--output", str(output_path),
+           "--duration", str(duration), "--captions", caption]
+    log_file = output_path.with_suffix(".log")
+    logf = open(log_file, "w", encoding="utf-8")
+    try:
+        proc = subprocess.Popen(cmd, stdout=logf, stderr=subprocess.STDOUT,
+                                cwd=str(ACESTEP_CLI.parent),
+                                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        try:
+            proc.wait(timeout=600)
+        except subprocess.TimeoutExpired:
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                           capture_output=True, text=True)
+            print("  [orchestrator] 一首 BGM 卡死超时，已杀进程树")
+            output_path.unlink(missing_ok=True)
+            return False
+        ok = proc.returncode == 0 and output_path.exists()
+        if not ok:
+            output_path.unlink(missing_ok=True)
+        return ok
+    except Exception as e:
+        print(f"  [orchestrator] 一首 BGM 出错: {e}")
+        output_path.unlink(missing_ok=True)
+        return False
+    finally:
+        logf.close()
+        log_file.unlink(missing_ok=True)
+
+
+def _score_bgm(path: Path, target_dur: float) -> int:
+    """ffmpeg 客观指标打分（同 bgm_mix：不判好听只判健康，筛废品）。"""
+    score = 0
+    try:
+        r = subprocess.run(["ffmpeg", "-i", str(path), "-af", "volumedetect",
+                            "-f", "null", "-"], capture_output=True, text=True, timeout=30)
+        mean_vol = max_vol = None
+        for line in r.stderr.split("\n"):
+            if "mean_volume" in line:
+                try:
+                    mean_vol = float(line.split(":")[-1].strip().split(" ")[0])
+                except (ValueError, IndexError):
+                    pass
+            elif "max_volume" in line:
+                try:
+                    max_vol = float(line.split(":")[-1].strip().split(" ")[0])
+                except (ValueError, IndexError):
+                    pass
+        r2 = subprocess.run(["ffmpeg", "-i", str(path), "-af", "silencedetect=n=-35dB:d=3",
+                             "-f", "null", "-"], capture_output=True, text=True, timeout=30)
+        silence_dur = 0.0
+        for line in r2.stderr.split("\n"):
+            if "silence_duration" in line:
+                try:
+                    silence_dur += float(line.split(":")[-1].strip())
+                except (ValueError, IndexError):
+                    pass
+        if mean_vol is not None and mean_vol > -40:
+            score += 2
+        if max_vol is not None and max_vol <= 0:
+            score += 1
+        if silence_dur < 0.2 * target_dur:
+            score += 1
+        if mean_vol is not None and max_vol is not None:
+            dynamic = max_vol - mean_vol
+            if 5 < dynamic < 35:
+                score += 1
+        return score
+    except Exception:
+        return 0
+
+
+def add_bgm_to_full(final_out: Path, raw_words: list, out_dir: Path) -> Path:
+    """合并后整片统一加 BGM：生成一个 BGM（抽 3 首挑最健康）→ 循环填充整片 → 低音量
+    背景混音。不做逐句 ducking（30min 口播逐句 ducking 意义不大，整体低音量背景即可）。"""
+    print("\n[orchestrator] 整片统一加 BGM ...")
+    transcript = " ".join(w["text"] for w in raw_words)
+    lyrics = transcript[:2000]
+    lyrics_file = out_dir / "_full_bgm_lyrics.txt"
+    lyrics_file.write_text(lyrics, encoding="utf-8")
+
+    bgm_path = out_dir / "bgm.wav"
+    caption = "cinematic, engaging, instrumental, 100-120 BPM, background music for narration"
+    duration = 240
+    candidates = []
+    for i in range(3):
+        cand = out_dir / f"_full_bgm_cand_{i}.wav"
+        if _run_acestep(lyrics_file, cand, duration, caption):
+            candidates.append(cand)
+            print(f"  [orchestrator] BGM 候选 {i} 生成成功")
+    lyrics_file.unlink(missing_ok=True)
+    if not candidates:
+        print("  [orchestrator] BGM 全部生成失败，保持无 BGM")
+        return final_out
+
+    scored = sorted(((_score_bgm(c, duration), c) for c in candidates), key=lambda x: -x[0])
+    best = scored[0][1]
+    for c in candidates:
+        if c != best:
+            c.unlink(missing_ok=True)
+    best.rename(bgm_path)
+    print(f"  [orchestrator] 挑出最优 BGM: {scored[0][0]} 分")
+
+    dur = ffprobe_duration(final_out)
+    mixed = out_dir / "final_bgm.mp4"
+    r = subprocess.run([
+        "ffmpeg", "-y", "-i", str(final_out),
+        "-stream_loop", "-1", "-i", str(bgm_path),
+        "-filter_complex",
+        f"[1:a]volume=0.12,afade=t=in:st=0:d=3,afade=t=out:st={max(0, dur - 5)}:d=5[bgm];"
+        f"[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=3[out]",
+        "-map", "0:v:0", "-map", "[out]",
+        "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest",
+        str(mixed),
+    ], capture_output=True, text=True, timeout=600)
+    if r.returncode == 0 and mixed.exists():
+        mixed.rename(final_out)
+        mb = final_out.stat().st_size / (1024 * 1024)
+        print(f"  [orchestrator] ✅ 整片 BGM 混音完成 ({mb:.1f} MB)")
+        return final_out
+    print(f"  [orchestrator] BGM 混音失败，保持无 BGM: {r.stderr[-200:] if r.stderr else ''}")
+    return final_out
+
+
 def main():
     parser = argparse.ArgumentParser(description="长视频分段剪辑编排器（card/pip 前置）")
     parser.add_argument("video", help="输入视频文件")
@@ -198,10 +329,13 @@ def main():
 
     seg_paths = split_video(video, cut_points, workdir)
 
+    # 分段模式：每段强制 --no-bgm（避免 4 段各自 BGM 合并后断裂 + 避免逐段 BGM 卡死），
+    # 合并后整片统一加一个 BGM
+    seg_extra = extra + ["--no-bgm"]
     finals = []
     for i, seg in enumerate(seg_paths):
         seg_out = out_root / f"seg_{i:02d}"
-        final = run_pipeline(seg, args.mode, seg_out, extra)
+        final = run_pipeline(seg, args.mode, seg_out, seg_extra)
         if final:
             finals.append(final)
         else:
@@ -215,6 +349,10 @@ def main():
     concat_segments(finals, final_out)
     mb = final_out.stat().st_size / (1024 * 1024)
     print(f"\n[orchestrator] ✅ 分段剪辑完成: {final_out} ({mb:.1f} MB, {len(finals)} 段合并)")
+
+    # 整片统一加 BGM（默认加，除非 --no-bgm）
+    if args.bgm or (not args.no_bgm):
+        final_out = add_bgm_to_full(final_out, raw_words, out_root)
 
     # 清理分段中间文件
     for seg in seg_paths:

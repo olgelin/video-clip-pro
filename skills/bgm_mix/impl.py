@@ -107,7 +107,8 @@ class Bgm_mix(SkillBase):
         print(f"      [bgm_mix] ACE-Step 抽卡: dur={duration}s, caption=\"{caption[:60]}...\"")
 
         # 🔴 抽卡：生成 N 首（每次随机 seed），筛废品 + 客观指标打分挑最健康的
-        N_SAMPLES = 4
+        # 267s 长 BGM 每首 ~3 分钟，偶发卡死，抽 3 首足够挑优（4 首边际收益低、卡死概率翻倍）
+        N_SAMPLES = 3
         candidates = []
         for i in range(N_SAMPLES):
             cand = output_dir / f"_bgm_cand_{i}.wav"
@@ -128,7 +129,15 @@ class Bgm_mix(SkillBase):
         return True
 
     def _run_acestep_once(self, lyrics_file: Path, output_path: Path, duration: int, caption: str) -> bool:
-        """调用 ACE-Step 生成一首 BGM 到 output_path（每次随机 seed）"""
+        """调用 ACE-Step 生成一首 BGM 到 output_path（每次随机 seed）。
+
+        坑（2026-09-08 实测 30min 视频）：ACE-Step 生成 267s 音乐会偶发卡死，且
+        subprocess.run(capture_output=True) 用管道捕获输出时，孙进程继承管道写端 →
+        超时 kill 主进程后 communicate() 卡在回收管道，TimeoutExpired 永远抛不出来，
+        整个 pipeline 被拖死 2 小时。
+        解法：stdout/stderr 重定向到文件（不用管道，彻底避开管道阻塞），超时用
+        taskkill /T 杀整个进程树（含孙进程），单首卡死跳过不阻塞后续抽卡。
+        """
         cmd = [
             str(ACESTEP_PYTHON), str(ACESTEP_CLI),
             "--lyrics", str(lyrics_file),
@@ -136,23 +145,34 @@ class Bgm_mix(SkillBase):
             "--duration", str(duration),
             "--captions", caption,
         ]
+        log_file = output_path.with_suffix(".log")
+        logf = open(log_file, "w", encoding="utf-8")
         try:
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=600,
+            proc = subprocess.Popen(
+                cmd, stdout=logf, stderr=subprocess.STDOUT,
                 cwd=str(ACESTEP_CLI.parent),
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
-            if result.returncode == 0 and output_path.exists():
-                return True
-            print(f"      [bgm_mix] 一首生成失败 (exit {result.returncode})")
-            if result.stderr:
-                for line in result.stderr.strip().split("\n")[-3:]:
-                    print(f"        {line}")
-        except subprocess.TimeoutExpired:
-            print("      [bgm_mix] 一首超时")
+            try:
+                proc.wait(timeout=600)
+            except subprocess.TimeoutExpired:
+                subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                               capture_output=True, text=True)
+                print("      [bgm_mix] 一首卡死超时，已杀进程树")
+                output_path.unlink(missing_ok=True)
+                return False
+            ok = proc.returncode == 0 and output_path.exists()
+            if not ok:
+                print(f"      [bgm_mix] 一首生成失败 (exit {proc.returncode})")
+                output_path.unlink(missing_ok=True)
+            return ok
         except Exception as e:
             print(f"      [bgm_mix] 一首出错: {e}")
-        output_path.unlink(missing_ok=True)
-        return False
+            output_path.unlink(missing_ok=True)
+            return False
+        finally:
+            logf.close()
+            log_file.unlink(missing_ok=True)
 
     def _pick_best(self, candidates: list, target_dur: float) -> Path:
         """客观指标打分，选最健康的（不是废品 + 有起伏）"""
