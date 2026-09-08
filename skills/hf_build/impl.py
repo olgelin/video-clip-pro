@@ -333,7 +333,11 @@ class Hf_build(SkillBase):
     def _llm_card_html_direct(self, edl: dict, provider, orientation: str = "portrait") -> dict:
         """V19: 口播原文 + 结构化数据 → 画面一步到位。
         🔴 对齐 PIP：LLM 只生成卡片内容（标题/数据/装饰 + GSAP），透明浮空面板壳由
-        stage_template.build_card 代码层写死（半透明渐变+圆角+发光边框，100% 稳定）。"""
+        stage_template.build_card 代码层写死（半透明渐变+圆角+发光边框，100% 稳定）。
+        🔴 2026-09-08 并行化：逐张串行生成 HTML 太慢（每张 ~2min × 60+ 张 ≈ 2h），
+        改 ThreadPoolExecutor 4 并发（~4 倍加速）。"""
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
         ranges = edl.get("ranges", [])
         if not ranges or not isinstance(provider, Provider):
             return edl
@@ -343,13 +347,10 @@ class Hf_build(SkillBase):
             print("      scene_system.md missing, skip V19")
             return edl
 
-        llm_count = 0
-        fail_count = 0
-
-        for idx, r in enumerate(ranges):
+        def _gen_one(idx, r):
             quote = r.get("quote", "")
             if not quote:
-                continue
+                return idx, None
 
             headline = r.get("card_headline", "") or r.get("quote", "")[:18]
             subtext = r.get("card_subtext", "")
@@ -389,10 +390,21 @@ class Hf_build(SkillBase):
 
             if content:
                 # 🔴 对齐 PIP：透明浮空面板壳由代码层 build_card 写死，LLM 只填内容
-                r["_llm_html"] = build_card(idx, dur, emotion, cw, ch, content)
-                llm_count += 1
-            else:
-                fail_count += 1
+                return idx, build_card(idx, dur, emotion, cw, ch, content)
+            return idx, None
+
+        llm_count = 0
+        fail_count = 0
+        # 并行生成（4 并发），结果按下标写回 ranges 保持顺序
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            futures = {ex.submit(_gen_one, idx, r): idx for idx, r in enumerate(ranges) if r.get("quote")}
+            for fut in as_completed(futures):
+                idx, html = fut.result()
+                if html:
+                    ranges[idx]["_llm_html"] = html
+                    llm_count += 1
+                else:
+                    fail_count += 1
 
         print(f"      V19 direct: {llm_count}/{llm_count+fail_count} cards (fail={fail_count})")
         return edl

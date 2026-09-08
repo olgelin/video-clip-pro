@@ -98,6 +98,7 @@ class CostTracker:
     def __init__(self, output_dir="test_output"):
         self.output_dir=Path(output_dir);self.output_dir.mkdir(exist_ok=True)
         self.log_path=self.output_dir/"cost_log.json";self.entries=[];self._active={}
+        self._lock=threading.Lock()  # 🔴 并行 LLM 调用时保护 _save 写文件不竞争
         if self.log_path.exists():
             try:self.entries=json.loads(self.log_path.read_text(encoding="utf-8")).get("entries",[])
             except:pass
@@ -141,7 +142,8 @@ class CostTracker:
         return f"API calls: {s['total_calls']}, total cost: ${s['total_spent_usd']:.4f}"
 
     def _save(self):
-        self.log_path.write_text(json.dumps({"updated":datetime.now(timezone.utc).isoformat(),"entries":self.entries[-50:],"summary":self.snapshot()},ensure_ascii=False,indent=2),encoding="utf-8")
+        with self._lock:
+            self.log_path.write_text(json.dumps({"updated":datetime.now(timezone.utc).isoformat(),"entries":self.entries[-50:],"summary":self.snapshot()},ensure_ascii=False,indent=2),encoding="utf-8")
 
 class Provider:
     def __init__(self,cost_tracker=None):
