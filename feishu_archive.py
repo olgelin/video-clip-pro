@@ -157,20 +157,14 @@ def archive_task(meta: dict) -> bool:
     lyrics_url = upload_file(meta['lyrics']) if meta.get('lyrics') else None
 
     fields = {
-        '任务/主题': topic,
-        '模式': meta.get('mode', ''),
-        '标题': meta.get('title', ''),
-        '标签': meta.get('tags', ''),
-        '耗时(秒)': meta.get('cost', 0),
+        '任务/主题': topic,                    # 主字段（飞书强制，不可删）
+        '管道': meta.get('mode', ''),           # 哪个管道
+        '输出结果': meta.get('title', ''),       # 输出标题
         '状态': meta.get('status', '完成'),
-        '日期': int(time.time() * 1000),  # 毫秒时间戳
+        '日期': int(time.time() * 1000),         # 毫秒时间戳
     }
     if video_url:
         fields['视频'] = {'text': '看视频', 'link': video_url}
-    if bgm_url:
-        fields['BGM'] = {'text': '听BGM', 'link': bgm_url}
-    if lyrics_url:
-        fields['歌词'] = {'text': '看歌词', 'link': lyrics_url}
 
     ok = add_record(fields)
     if ok:
