@@ -185,6 +185,9 @@ def main():
         print(f"  {provider.cost.summary()}")
         print("=" * 60)
 
+        # 🔴 飞书归档：电脑一份 + 飞书一份（输出区 + 台账）
+        _archive_to_feishu(args, output_dir, elapsed)
+
     except Exception as e:
         print(f"\nERROR: Pipeline failed: {e}")
         traceback.print_exc()
@@ -198,6 +201,40 @@ def main():
     # Cleanup: 生产模式（非 --debug）只留最终成品，删所有中间产物 → 目录极简
     if not args.debug:
         _cleanup_output(output_dir)
+
+
+def _archive_to_feishu(args, output_dir: Path, elapsed: float):
+    """🔴 飞书归档：电脑一份 + 飞书一份（输出区文件夹 + 台账多维表格）。
+    失败不影响成品（静默降级，不抛异常）。"""
+    try:
+        from feishu_archive import archive_task
+    except ImportError:
+        return
+    meta_path = output_dir / "publish_meta.json"
+    title = tags = ""
+    if meta_path.exists():
+        try:
+            m = json.loads(meta_path.read_text(encoding="utf-8"))
+            title = m.get("title", "") or ""
+            t = m.get("tags", [])
+            tags = " / ".join(t) if isinstance(t, list) else (t or "")
+        except Exception:
+            pass
+    topic = (args.topic or "").strip() or (Path(args.video).stem if args.video else "")
+    try:
+        archive_task({
+            'topic': topic[:50],
+            'mode': args.mode,
+            'title': title,
+            'tags': tags,
+            'video': str(output_dir / "final_polished.mp4"),
+            'bgm': str(output_dir / "bgm.wav"),
+            'lyrics': str(output_dir / "lyrics.txt"),
+            'cost': int(elapsed),
+            'status': '完成',
+        })
+    except Exception as e:
+        print(f"  [feishu] 归档失败（不影响成品）: {e}")
 
 
 def _cleanup_output(output_dir: Path):
