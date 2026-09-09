@@ -217,6 +217,9 @@ class Hf_build(SkillBase):
         # 🔴 对齐 PIP：检测输入视频方向，用于卡片尺寸（竖屏 500-600px 宽 / 横屏 560-680px 宽）
         orientation = context.get("orientation") or _detect_orientation(str(video_path))
 
+        # Step 1.5: 语义分段（62 片段 → N 画面组，减少 LLM 调用 + 卡片依次弹入）
+        edl = self._segment_groups(edl, provider)
+
         # Step 2: V15 口播→HTML一步到位（主流程）
         print("\n[6/6] Generating card HTML — direct quote→visual (V15)...")
         try:
@@ -242,6 +245,169 @@ class Hf_build(SkillBase):
         except Exception as e:
             print(f"      HyperFrames error: {e}")
         return {"final_polished": str(output_dir / "final.mp4")}
+
+    def _segment_groups(self, edl: dict, provider) -> dict:
+        """语义分段：把 ranges 按语义聚成 N 个画面组，存到 edl['_segments']。
+
+        每个 segment = {idxs, theme, start, dur}。片段太少(<6)不分段返回原 edl（走逐句逻辑）。
+        分段失败/分组非法静默返回原 edl，不影响主流程（保证可回滚、不崩管道）。
+        """
+        ranges = edl.get("ranges", [])
+        if not ranges or len(ranges) < 6 or not isinstance(provider, Provider):
+            return edl
+
+        # 构造片段列表（编号 + 节奏 + 文本）
+        lines = []
+        for i, r in enumerate(ranges):
+            beat = r.get("beat", "INFO")
+            text = r.get("text", "") or r.get("quote", "")
+            if not text:
+                continue
+            lines.append(f"[{i}] {beat} | {text}")
+        if not lines:
+            return edl
+
+        prompt_tpl = _load_prompt("segment")
+        if not prompt_tpl:
+            print("      segment.md 缺失，跳过语义分段")
+            return edl
+        prompt = prompt_tpl.replace("{segments_json}", "\n".join(lines))
+
+        try:
+            raw = provider.call("understand", prompt)
+        except Exception:
+            return edl
+        if not raw or raw.startswith("[ERROR"):
+            return edl
+        data = provider.extract_json(raw)
+        if not data or not isinstance(data.get("groups"), list):
+            print("      分段结果解析失败，走逐句逻辑")
+            return edl
+
+        groups = data["groups"]
+        # 校验分组：覆盖全部、无重叠、顺序正确（非法则走逐句逻辑兜底）
+        segs = []
+        prev_end = -1
+        for g in groups:
+            try:
+                s, e = int(g.get("start", 0)), int(g.get("end", 0))
+            except (ValueError, TypeError):
+                return edl
+            if s < 0 or e >= len(ranges) or s > e or s != prev_end + 1:
+                return edl
+            segs.append({"idxs": list(range(s, e + 1)), "theme": str(g.get("theme", ""))[:8]})
+            prev_end = e
+        if not segs or segs[0]["idxs"][0] != 0 or segs[-1]["idxs"][-1] != len(ranges) - 1:
+            return edl
+
+        # 算每个 segment 的合成轴 start / dur（和 build_hyperframes_composition 的 seg_offsets 一致）
+        seg_offsets = []
+        acc = 0.0
+        for r in ranges:
+            seg_offsets.append(acc)
+            acc += r["end"] - r["start"]
+        for seg in segs:
+            i0, i1 = seg["idxs"][0], seg["idxs"][-1]
+            seg["start"] = seg_offsets[i0]
+            seg["dur"] = seg_offsets[i1] + (ranges[i1]["end"] - ranges[i1]["start"]) - seg_offsets[i0]
+
+        edl["_segments"] = segs
+        print(f"      语义分段: {len(ranges)} 片段 → {len(segs)} 画面组")
+        return edl
+
+    def _llm_segment_html(self, edl: dict, provider, orientation: str = "portrait") -> dict:
+        """语义分段模式：每段生成一个 HTML（段内多卡 + 代码注入依次弹入时间线）。
+        存到 edl['_segment_html'] = [{start, dur, theme, html}]。任一段失败则清空 _segments 走逐句逻辑兜底。"""
+        segments = edl.get("_segments", [])
+        ranges = edl.get("ranges", [])
+        if not segments or not ranges or not isinstance(provider, Provider):
+            return edl
+
+        seg_tpl = _load_prompt("segment_html")
+        if not seg_tpl:
+            edl.pop("_segments", None)
+            return edl
+
+        # 合成轴偏移（和 _segment_groups 一致）
+        seg_offsets = []
+        acc = 0.0
+        for r in ranges:
+            seg_offsets.append(acc)
+            acc += r["end"] - r["start"]
+
+        results = []
+        for si, seg in enumerate(segments):
+            cards = []
+            for idx in seg["idxs"]:
+                r = ranges[idx]
+                rel_t = round(seg_offsets[idx] - seg["start"], 2)
+                cards.append({
+                    "i": len(cards),
+                    "headline": r.get("card_headline", "") or r.get("text", "")[:18] or r.get("quote", "")[:18],
+                    "subtext": r.get("card_subtext", ""),
+                    "metric": r.get("card_metric") or "",
+                    "emotion": r.get("card_emotion", "neutral"),
+                    "layout": r.get("card_layout", "bullets"),
+                    "data": r.get("card_data", []) or [],
+                    "takeaway": r.get("card_takeaway", ""),
+                    "rel_t": rel_t,
+                })
+
+            prompt = seg_tpl.replace("{theme}", seg.get("theme", "")).replace(
+                "{cards_json}", json.dumps(cards, ensure_ascii=False))
+
+            content = None
+            for _attempt in range(2):
+                try:
+                    raw = provider.call("card_direct", prompt)
+                    if raw and len(raw) > 100 and not raw.startswith("[ERROR"):
+                        h = raw.strip()
+                        if "```html" in h:
+                            h = h.split("```html")[1].split("```")[0].strip()
+                        elif "```" in h:
+                            h = h.split("```")[1].split("```")[0].strip()
+                        if "<div" in h and "seg-card" in h:
+                            content = h
+                            break
+                except Exception:
+                    pass
+
+            if not content:
+                print(f"      段 {seg.get('theme','')[:8]} 生成失败 → 走逐句逻辑兜底")
+                edl.pop("_segments", None)
+                return edl
+
+            html = self._wrap_segment_html(content, cards, "beat-" + str(si))
+            results.append({"start": seg["start"], "dur": seg["dur"], "theme": seg.get("theme", ""), "html": html})
+
+        edl["_segment_html"] = results
+        print(f"      段 HTML: {len(results)}/{len(segments)} 段生成成功")
+        return edl
+
+    def _wrap_segment_html(self, content: str, cards: list, beat_id: str) -> str:
+        """包浮空面板壳 + 代码注入「依次弹入」时间线（注册到 window.__timelines[beat_id]）。
+        每张卡在 rel_t 时刻弹出，rel_t = 该句配音在段内的相对偏移。"""
+        panel = (
+            f'<div class="seg-panel" data-composition-id="{beat_id}" '
+            f'style="position:absolute;inset:0;width:100%;height:100%;'
+            f'display:flex;flex-direction:column;justify-content:flex-start;align-items:center;'
+            f'padding:70px 56px 200px;box-sizing:border-box;overflow:hidden;">'
+            f'{content}</div>'
+        )
+        reveal = []
+        for c in cards:
+            t = c["rel_t"]
+            reveal.append(
+                f'tl.fromTo(".seg-card[data-seg=\'{c["i"]}\']",{{opacity:0,y:44,scale:0.92}},'
+                f'{{opacity:1,y:0,scale:1,duration:0.45,ease:"back.out(1.6)"}},{t});'
+            )
+        gsap = (
+            '<script>window.__timelines=window.__timelines||{};(function(){'
+            'var tl=gsap.timeline({paused:true});'
+            + "".join(reveal) +
+            f'window.__timelines["{beat_id}"]=tl;}})();</script>'
+        )
+        return panel + gsap
 
     def _llm_card_html(self, edl: dict, provider) -> dict:
         """V6: LLM 为每张卡片直接生成 HTML。失败时保留旧数据用于 fallback。"""
@@ -336,6 +502,10 @@ class Hf_build(SkillBase):
         stage_template.build_card 代码层写死（半透明渐变+圆角+发光边框，100% 稳定）。
         🔴 2026-09-08 并行化：逐张串行生成 HTML 太慢（每张 ~2min × 60+ 张 ≈ 2h），
         改 ThreadPoolExecutor 4 并发（~4 倍加速）。"""
+        # 🔴 语义分段模式：有 _segments 就走段 HTML 生成（每段一个画面，段内多卡依次弹入）
+        if edl.get("_segments"):
+            return self._llm_segment_html(edl, provider, orientation)
+
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         ranges = edl.get("ranges", [])

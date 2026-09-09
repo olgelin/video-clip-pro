@@ -193,7 +193,20 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
     fw, fh = (1920, 1080) if orientation == "landscape" else (1080, 1920)
     captions = _build_captions(ranges, words, seg_offsets, orientation, fw)
     beat_files = []
+    seg_htmls = edl.get("_segment_html", [])
+    if seg_htmls:
+        # 🔴 语义分段模式：每段一个 beat（含段内多卡 + 依次弹入时间线）
+        for si, sh in enumerate(seg_htmls):
+            beat_id = "beat-" + str(si)
+            full_html = ('<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"></head><body><template><style>'
+                         + FONT_CSS + '*{margin:0;padding:0;box-sizing:border-box}body{overflow:hidden;background:transparent}</style>'
+                         + sh["html"] + '</template></body></html>')
+            (comp_dir / (beat_id + ".html")).write_text(full_html, encoding="utf-8")
+            card_style = f"position:absolute;inset:0;width:{fw}px;height:{fh}px;z-index:10;"
+            beat_files.append((beat_id, sh["start"], sh["dur"], card_style, fw, fh))
     for idx, seg in enumerate(ranges):
+        if seg_htmls:
+            continue
         offset = seg_offsets[idx]; beat_id = "beat-" + str(idx)
         dur = round(seg["end"] - seg["start"], 2); beat = seg.get("beat", "INFO").upper()
         quote = seg.get("quote", "")
