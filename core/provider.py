@@ -10,34 +10,35 @@ from typing import Optional
 # ⚡ V23 fix: deepseek-chat/reasoner → deepseek-v4-pro (舊模型已503)
 TASK_MODELS = {
     "transcribe": {"primary": "deepseek-v4-pro", "fallback": [], "max_tokens": 2000},
-    "understand": {"primary": "deepseek-chat", "fallback": [], "max_tokens": 8000},
-    "understand_verify": {"primary": "deepseek-chat", "fallback": [], "max_tokens": 8000},
-    "draft": {"primary": "deepseek-chat", "fallback": [], "max_tokens": 4000},
-    "review": {"primary": "deepseek-chat", "fallback": [], "max_tokens": 3000},
+    "understand": {"primary": "deepseek-v4-flash", "fallback": [], "max_tokens": 8000},
+    "understand_verify": {"primary": "deepseek-v4-flash", "fallback": [], "max_tokens": 8000},
+    "draft": {"primary": "deepseek-v4-flash", "fallback": [], "max_tokens": 4000},
+    "review": {"primary": "deepseek-v4-flash", "fallback": [], "max_tokens": 3000},
     "refine": {"primary": "deepseek-v4-pro", "fallback": [], "max_tokens": 8000},
     "edit": {"primary": "deepseek-v4-pro", "fallback": [], "max_tokens": 4000},
-    "concept": {"primary": "deepseek-chat", "fallback": [], "max_tokens": 80},
-    "scene_content": {"primary": "deepseek-chat", "fallback": [], "max_tokens": 8000},
-    "pip_scene": {"primary": "deepseek-chat", "fallback": [], "max_tokens": 8000},
+    "concept": {"primary": "deepseek-v4-flash", "fallback": [], "max_tokens": 80},
+    "scene_content": {"primary": "deepseek-v4-flash", "fallback": [], "max_tokens": 8000},
+    "pip_scene": {"primary": "deepseek-v4-flash", "fallback": [], "max_tokens": 8000},
     "scene_designer": {"primary": "deepseek-v4-pro", "fallback": [], "max_tokens": 1000},
     "card_direct": {"primary": "deepseek-v4-pro", "fallback": [], "max_tokens": 16000},
     "card_html": {"primary": "deepseek-v4-pro", "fallback": [], "max_tokens": 16000},
-    "card_enrich": {"primary": "deepseek-chat", "fallback": [], "max_tokens": 8000},
+    "card_enrich": {"primary": "deepseek-v4-flash", "fallback": [], "max_tokens": 8000},
     "storyboard": {"primary": "deepseek-v4-pro", "fallback": [], "max_tokens": 4000},
-    "storyboard_split": {"primary": "deepseek-chat", "fallback": [], "max_tokens": 300},
+    "storyboard_split": {"primary": "deepseek-v4-flash", "fallback": [], "max_tokens": 300},
     "design_system": {"primary": "deepseek-v4-pro", "fallback": [], "max_tokens": 2000},
     # 🔴 avatar 系列（话题→口播稿→配音→数字人）
     "speech_processor": {"primary": "deepseek-v4-pro", "fallback": [], "max_tokens": 8000},
     "script_writer": {"primary": "deepseek-v4-pro", "fallback": [], "max_tokens": 8000},
     "topic_scout": {"primary": "deepseek-v4-pro", "fallback": [], "max_tokens": 3000},
     "topic_selector": {"primary": "deepseek-v4-pro", "fallback": [], "max_tokens": 2000},
-    "publish_meta": {"primary": "deepseek-chat", "fallback": [], "max_tokens": 800},
+    "publish_meta": {"primary": "deepseek-v4-flash", "fallback": [], "max_tokens": 800},
     "lyrics_writer": {"primary": "deepseek-v4-pro", "fallback": [], "max_tokens": 16000},
 }
 MODEL_PRICES = {
-    "deepseek-v4-pro": {"input": 0.5, "output": 2.0},
-    "deepseek-chat": {"input": 0.27, "output": 1.1},
-    "deepseek-reasoner": {"input": 0.55, "output": 2.2},
+    "deepseek-v4-pro": {"input": 0.63, "output": 1.89},
+    "deepseek-v4-flash": {"input": 0.21, "output": 0.63},
+    "deepseek-chat": {"input": 0.21, "output": 0.63},  # 别名，同 flash
+    "deepseek-reasoner": {"input": 0.63, "output": 1.89},
 }
 RMB_TO_USD = 0.14
 
@@ -192,10 +193,13 @@ class Provider:
             for api_key in keys:
                 self._rate.wait()
                 try:
+                    body={"model":model,"messages":([{"role":"system","content":system}]if system else[])+[{"role":"user","content":prompt if prompt else ""}],"temperature":0,"max_tokens":mt}
+                    if "flash" in model and "vision" not in model:
+                        body["reasoning_effort"]="none"  # flash 关思考省 token，对齐老 deepseek-chat
                     resp=requests.post(
                         url,
                         headers={"Authorization":f"Bearer {api_key}","Content-Type":"application/json"},
-                        json={"model":model,"messages":([{"role":"system","content":system}]if system else[])+[{"role":"user","content":prompt if prompt else ""}],"temperature":0,"max_tokens":mt},
+                        json=body,
                         timeout=120)
                     if resp.status_code==200:
                         msg = resp.json()["choices"][0]["message"]

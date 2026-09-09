@@ -56,7 +56,7 @@ class SceneBuilderBase(SkillBase):
                         "🔴 HTML 输出机。你只输出 HTML 代码片段（canvas/div/h1），禁止任何其他文字。"
                         "第一字符必须是 <。禁止输出 DOCTYPE/html/head/body/style 标签。"
                     ),
-                    max_tokens=8000, model="deepseek-chat")
+                    max_tokens=8000, model="deepseek-v4-flash")
                 content = self._clean_scene(raw2, strip_full_doc=True)
                 if content:
                     return content
@@ -71,7 +71,7 @@ class SceneBuilderBase(SkillBase):
         import json as _json
         for retry in range(max_retry + 1):
             rp = review_tpl.replace("{content}", content).replace("{canvas_hint}", canvas_hint or "（无数字人，全屏画布）")
-            raw = provider.call("scene_review", rp, max_tokens=1500, model="deepseek-chat")
+            raw = provider.call("scene_review", rp, max_tokens=1500, model="deepseek-v4-flash")
             if not raw:
                 return content
             m = re.search(r'\{.*\}', raw, re.DOTALL)

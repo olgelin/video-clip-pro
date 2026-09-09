@@ -4,7 +4,7 @@ import requests
 class LLMProvider:
     """Unified LLM provider supporting deepseek, openai, and custom backends."""
     
-    def __init__(self, provider="deepseek", model="deepseek-chat", api_key=None):
+    def __init__(self, provider="deepseek", model="deepseek-v4-flash", api_key=None):
         self.provider = provider
         self.model = model
         self.api_key = api_key
@@ -30,6 +30,7 @@ class LLMProvider:
                 ],
                 "temperature": temperature,
                 "max_tokens": max_tokens,
+                **({"reasoning_effort": "none"} if "flash" in self.model else {}),
             },
             timeout=300,
         )
