@@ -404,8 +404,13 @@ class Hf_build(SkillBase):
                 'display:flex;flex-direction:column;justify-content:flex-end;align-items:center;'
                 'padding:16px 44px;box-sizing:border-box;overflow:hidden;'
             )
+        # 🔴 框架层兜底：强制外层容器透明 + seg-card 半透明 + 边框蓝色（防 LLM 生成 background:#0d0f14 纯黑 / alpha 0.92 / 红橙绿边框遮挡人物）
+        _guard = ('<style>.seg-panel>div{background:transparent!important;}'
+                  '.seg-card{background-color:rgba(14,17,36,0.68)!important;'
+                  'border-left-color:rgba(108,140,255,0.65)!important;}</style>')
         panel = (
             f'<div class="seg-panel" data-composition-id="{beat_id}" style="{panel_style}">'
+            f'{_guard}'
             f'{content}</div>'
         )
         reveal = []
