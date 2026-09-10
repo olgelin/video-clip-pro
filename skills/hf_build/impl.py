@@ -390,19 +390,20 @@ class Hf_build(SkillBase):
         🔴 位置铁律（2026-09-10 用户拍板）：横屏人物居中 → 卡片靠左固定宽避开人物；
         竖屏卡片居中（竖屏人物占比小 + 半透明面板透出人物，无所谓）。"""
         if orientation == "landscape":
-            # 横屏：人物居中，卡片靠左堆叠（固定宽度 + 垂直居中，避开中间人物，绝不居中挡脸）
+            # 横屏：人物居中，卡片靠左堆叠（左对齐 + 上下撑满 + 垂直居中，避开中间人物，绝不居中挡脸）
+            # 🔴 用 top:0+bottom:0 撑满（top:50% 在 body 高度 auto 下会失效）
             panel_style = (
-                'position:absolute;left:40px;top:50%;transform:translateY(-50%);'
-                'width:600px;max-height:92%;'
-                'display:flex;flex-direction:column;justify-content:flex-start;align-items:flex-start;'
+                'position:absolute;left:0;top:0;bottom:0;width:600px;'
+                'display:flex;flex-direction:column;justify-content:center;align-items:flex-start;'
                 'padding:20px 24px;box-sizing:border-box;overflow:hidden;'
             )
         else:
             # 竖屏：卡片靠底部堆叠，避开中上部人物面部（visual-check 曾报「卡片大面积遮挡人物面部」）
+            # 🔴 用 inset:0 全屏 + flex-end 靠底（bottom 定位在 HyperFrames sub-composition 渲染下不可靠，卡片会跑到顶部）
             panel_style = (
-                'position:absolute;left:0;right:0;bottom:170px;'
+                'position:absolute;inset:0;width:100%;height:100%;'
                 'display:flex;flex-direction:column;justify-content:flex-end;align-items:center;'
-                'padding:16px 44px;box-sizing:border-box;overflow:hidden;'
+                'padding:0 44px 170px;box-sizing:border-box;overflow:hidden;'
             )
         # 🔴 框架层兜底：强制外层容器透明 + seg-card 半透明 + 边框蓝色（防 LLM 生成 background:#0d0f14 纯黑 / alpha 0.92 / 红橙绿边框遮挡人物）
         _guard = ('<style>.seg-panel>div{background:transparent!important;}'
