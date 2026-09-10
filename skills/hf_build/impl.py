@@ -377,21 +377,35 @@ class Hf_build(SkillBase):
                 edl.pop("_segments", None)
                 return edl
 
-            html = self._wrap_segment_html(content, cards, "beat-" + str(si))
+            html = self._wrap_segment_html(content, cards, "beat-" + str(si), orientation)
             results.append({"start": seg["start"], "dur": seg["dur"], "theme": seg.get("theme", ""), "html": html})
 
         edl["_segment_html"] = results
         print(f"      段 HTML: {len(results)}/{len(segments)} 段生成成功")
         return edl
 
-    def _wrap_segment_html(self, content: str, cards: list, beat_id: str) -> str:
+    def _wrap_segment_html(self, content: str, cards: list, beat_id: str, orientation: str = "portrait") -> str:
         """包浮空面板壳 + 代码注入「依次弹入」时间线（注册到 window.__timelines[beat_id]）。
-        每张卡在 rel_t 时刻弹出，rel_t = 该句配音在段内的相对偏移。"""
+        每张卡在 rel_t 时刻弹出，rel_t = 该句配音在段内的相对偏移。
+        🔴 位置铁律（2026-09-10 用户拍板）：横屏人物居中 → 卡片靠左固定宽避开人物；
+        竖屏卡片居中（竖屏人物占比小 + 半透明面板透出人物，无所谓）。"""
+        if orientation == "landscape":
+            # 横屏：人物居中，卡片靠左堆叠（固定宽度 + 垂直居中，避开中间人物，绝不居中挡脸）
+            panel_style = (
+                'position:absolute;left:40px;top:50%;transform:translateY(-50%);'
+                'width:600px;max-height:92%;'
+                'display:flex;flex-direction:column;justify-content:flex-start;align-items:flex-start;'
+                'padding:20px 24px;box-sizing:border-box;overflow:hidden;'
+            )
+        else:
+            # 竖屏：卡片居中（竖屏人物占比小，半透明面板透出人物，用户拍板无所谓）
+            panel_style = (
+                'position:absolute;inset:0;width:100%;height:100%;'
+                'display:flex;flex-direction:column;justify-content:flex-start;align-items:center;'
+                'padding:70px 56px 200px;box-sizing:border-box;overflow:hidden;'
+            )
         panel = (
-            f'<div class="seg-panel" data-composition-id="{beat_id}" '
-            f'style="position:absolute;inset:0;width:100%;height:100%;'
-            f'display:flex;flex-direction:column;justify-content:flex-start;align-items:center;'
-            f'padding:70px 56px 200px;box-sizing:border-box;overflow:hidden;">'
+            f'<div class="seg-panel" data-composition-id="{beat_id}" style="{panel_style}">'
             f'{content}</div>'
         )
         reveal = []
