@@ -398,11 +398,11 @@ class Hf_build(SkillBase):
                 'padding:20px 24px;box-sizing:border-box;overflow:hidden;'
             )
         else:
-            # 竖屏：卡片居中（竖屏人物占比小，半透明面板透出人物，用户拍板无所谓）
+            # 竖屏：卡片靠底部堆叠，避开中上部人物面部（visual-check 曾报「卡片大面积遮挡人物面部」）
             panel_style = (
-                'position:absolute;inset:0;width:100%;height:100%;'
-                'display:flex;flex-direction:column;justify-content:flex-start;align-items:center;'
-                'padding:70px 56px 200px;box-sizing:border-box;overflow:hidden;'
+                'position:absolute;left:0;right:0;bottom:170px;'
+                'display:flex;flex-direction:column;justify-content:flex-end;align-items:center;'
+                'padding:16px 44px;box-sizing:border-box;overflow:hidden;'
             )
         panel = (
             f'<div class="seg-panel" data-composition-id="{beat_id}" style="{panel_style}">'

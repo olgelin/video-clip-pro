@@ -257,7 +257,8 @@ def add_bgm_to_full(final_out: Path, raw_words: list, out_dir: Path) -> Path:
         str(mixed),
     ], capture_output=True, text=True, timeout=600)
     if r.returncode == 0 and mixed.exists():
-        mixed.rename(final_out)
+        # Windows os.rename 不覆盖已存在文件 → 用 replace（os.replace 原子覆盖）
+        mixed.replace(final_out)
         mb = final_out.stat().st_size / (1024 * 1024)
         print(f"  [orchestrator] ✅ 整片 BGM 混音完成 ({mb:.1f} MB)")
         return final_out
