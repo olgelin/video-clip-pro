@@ -319,16 +319,25 @@ def main():
     workdir = out_root / "_segments"
     workdir.mkdir(parents=True, exist_ok=True)
 
-    raw_words = transcribe_for_cuts(video)
-    cut_points = find_cut_points(raw_words, total_dur)
-    if not cut_points:
-        print("  [orchestrator] 无需分段，直接走完整管道")
-        subprocess.run([sys.executable, str(SCRIPT_DIR / "pipeline.py"), str(video),
-                        "--mode", args.mode, "--output", str(out_root)] + extra,
-                       cwd=str(SCRIPT_DIR))
-        return
+    # ── resume 断点续跑：转录缓存 + 切段复用 + 已完成段跳过 ──
+    raw_words_cache = workdir / "_raw_words.json"
+    seg_files = sorted(workdir.glob("_seg_*.mp4"))
 
-    seg_paths = split_video(video, cut_points, workdir)
+    if raw_words_cache.exists() and seg_files:
+        raw_words = json.loads(raw_words_cache.read_text(encoding='utf-8'))
+        seg_paths = seg_files
+        print(f"  [orchestrator] 断点续跑：复用 {len(seg_files)} 段切段 + 转录缓存")
+    else:
+        raw_words = transcribe_for_cuts(video)
+        raw_words_cache.write_text(json.dumps(raw_words, ensure_ascii=False), encoding='utf-8')
+        cut_points = find_cut_points(raw_words, total_dur)
+        if not cut_points:
+            print("  [orchestrator] 无需分段，直接走完整管道")
+            subprocess.run([sys.executable, str(SCRIPT_DIR / "pipeline.py"), str(video),
+                            "--mode", args.mode, "--output", str(out_root)] + extra,
+                           cwd=str(SCRIPT_DIR))
+            return
+        seg_paths = split_video(video, cut_points, workdir)
 
     # 分段模式：每段强制 --no-bgm（避免 4 段各自 BGM 合并后断裂 + 避免逐段 BGM 卡死），
     # 合并后整片统一加一个 BGM
@@ -336,6 +345,11 @@ def main():
     finals = []
     for i, seg in enumerate(seg_paths):
         seg_out = out_root / f"seg_{i:02d}"
+        seg_final = seg_out / "final_polished.mp4"
+        if seg_final.exists():
+            print(f"  [orchestrator] 段 {i} 已有成品，跳过")
+            finals.append(seg_final)
+            continue
         final = run_pipeline(seg, args.mode, seg_out, seg_extra)
         if final:
             finals.append(final)
