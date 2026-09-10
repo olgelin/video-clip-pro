@@ -147,8 +147,18 @@ def add_record(fields: dict) -> bool:
     return True
 
 
+def _parse_tags(tags_raw) -> list:
+    """标签统一成 list：支持 list / 逗号 / 顿号 / 斜杠分隔字符串。"""
+    if not tags_raw:
+        return []
+    if isinstance(tags_raw, (list, tuple)):
+        return [str(t).strip() for t in tags_raw if str(t).strip()]
+    s = str(tags_raw).replace('，', ',').replace('、', ',').replace('/', ',').replace('／', ',')
+    return [t.strip() for t in s.split(',') if t.strip()]
+
+
 def archive_task(meta: dict) -> bool:
-    """归档一次任务：上传成品 + 加台账记录。返回是否成功。"""
+    """归档一次任务：上传成品 + 加台账记录（传媒公司精细化字段）。返回是否成功。"""
     topic = meta.get('topic', '')
     print(f"  [feishu] 归档任务「{topic}」...")
 
@@ -156,15 +166,32 @@ def archive_task(meta: dict) -> bool:
     bgm_url = upload_file(meta['bgm']) if meta.get('bgm') else None
     lyrics_url = upload_file(meta['lyrics']) if meta.get('lyrics') else None
 
+    tags = _parse_tags(meta.get('tags', []))
+
     fields = {
-        '任务/主题': topic,                    # 主字段（飞书强制，不可删）
-        '管道': meta.get('mode', ''),           # 哪个管道
-        '输出结果': meta.get('title', ''),       # 输出标题
+        '任务/主题': topic,                        # 主字段（飞书强制，不可删）
+        '标题': meta.get('title', '') or topic,     # 成片标题
+        '描述': meta.get('description', ''),         # 视频简介
+        '管道': meta.get('mode', ''),               # 哪个管道
         '状态': meta.get('status', '完成'),
-        '日期': int(time.time() * 1000),         # 毫秒时间戳
+        '日期': int(time.time() * 1000),            # 毫秒时间戳
     }
+    if tags:
+        fields['标签'] = tags                       # 多选字段，传 list
     if video_url:
         fields['视频'] = {'text': '看视频', 'link': video_url}
+    if bgm_url:
+        fields['音乐'] = {'text': '背景音乐', 'link': bgm_url}
+
+    # 输出结果 = 交付物清单
+    parts = []
+    if video_url:
+        parts.append('视频')
+    if bgm_url:
+        parts.append('BGM')
+    if lyrics_url:
+        parts.append('歌词')
+    fields['输出结果'] = ' + '.join(parts) if parts else '完成'
 
     ok = add_record(fields)
     if ok:

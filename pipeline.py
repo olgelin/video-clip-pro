@@ -211,23 +211,30 @@ def _archive_to_feishu(args, output_dir: Path, elapsed: float):
     except ImportError:
         return
     meta_path = output_dir / "publish_meta.json"
-    title = tags = ""
+    title = description = ""
+    tags = []
     if meta_path.exists():
         try:
             m = json.loads(meta_path.read_text(encoding="utf-8"))
             title = m.get("title", "") or ""
+            description = m.get("description", "") or ""
             t = m.get("tags", [])
-            tags = " / ".join(t) if isinstance(t, list) else (t or "")
+            tags = t if isinstance(t, list) else [t]
         except Exception:
             pass
     topic = (args.topic or "").strip() or (Path(args.video).stem if args.video else "")
+    # 高清版优先（4K final_polished_2x.mp4），缺失降级 1080p
+    video = output_dir / "final_polished_2x.mp4"
+    if not video.exists():
+        video = output_dir / "final_polished.mp4"
     try:
         archive_task({
             'topic': topic[:50],
             'mode': args.mode,
             'title': title,
+            'description': description,
             'tags': tags,
-            'video': str(output_dir / "final_polished.mp4"),
+            'video': str(video),
             'bgm': str(output_dir / "bgm.wav"),
             'lyrics': str(output_dir / "lyrics.txt"),
             'cost': int(elapsed),
