@@ -448,7 +448,7 @@ class Hf_build(SkillBase):
                 stmts.append(f'tl.to(".seg-card[data-seg=\'{idx}\']",{{opacity:0,y:-30,duration:0.4,ease:"power1.in"}},{exit_t});')
 
         return (
-            '<div class="seg-panel" style="position:absolute;inset:0;width:100%;height:100%;">'
+            '<div class="seg-panel" data-composition-id="beat-0" style="position:absolute;inset:0;width:100%;height:100%;">'
             + "".join(card_divs)
             + '<script>(function(){var tl=gsap.timeline({paused:true});'
             + "".join(stmts)
