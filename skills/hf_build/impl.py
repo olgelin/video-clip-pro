@@ -408,20 +408,13 @@ class Hf_build(SkillBase):
         配音驱动：每张卡在 final_start（讲到对应语义单元）入场，下一张前 0.4s 淡出（切换动画）。
         全部卡在一个 HTML 里，window.__timelines["beat-0"] 由 HyperFrames seek 驱动。
         """
-        # 🔴 位置铁律（用户定版）：卡片放【左右两侧】不居中（避开人物）。
-        #    横屏：左侧/右侧垂直居中；竖屏：上半部分区域、靠左/靠右。
-        #    左右两侧交替（idx%2），不做居中、不做底部。
-        pos_styles = {
-            "portrait": [
-                "left:30px;top:200px",
-                "right:30px;top:200px",
-            ],
-            "landscape": [
-                "left:30px;top:50%;transform:translateY(-50%)",
-                "right:30px;top:50%;transform:translateY(-50%)",
-            ],
-        }
-        ps = pos_styles[orientation]
+        # 🔴 位置铁律（用户定版）：信息卡【左右两列堆叠，不消失】。
+        #    每张卡按 idx 依次排进左列/右列（2 列网格），从上到下堆叠。
+        #    讲到哪淡入哪，之前的不退场（堆叠保留），不是切换。
+        if orientation == "portrait":
+            _cw, _row_gap, _top0 = 500, 280, 160
+        else:
+            _cw, _row_gap, _top0 = 600, 260, 60
 
         card_divs = []
         stmts = []
@@ -439,20 +432,21 @@ class Hf_build(SkillBase):
             start = round(float(scene.get("final_start", 0)), 2)
             dur = round(float(scene.get("duration", 5)), 2)
             layout = vt_layout.get(scene.get("visual_type", "quote_hero"), "quote-card")
-            cw, ch = self._card_size(layout, orientation)
-            pos = ps[idx % 2]
+            _, ch = self._card_size(layout, orientation)
+
+            # 🔴 左右两列堆叠：idx 偶数进左列、奇数进右列，行 = idx//2，从上到下
+            col = idx % 2
+            row = idx // 2
+            side = "left:30px" if col == 0 else "right:30px"
+            pos = f"{side};top:{_top0 + row * _row_gap}px"
             card_divs.append(
-                f'<div class="seg-card" data-seg="{idx}" style="position:absolute;{pos};width:{cw}px;height:{ch}px;opacity:0;">{html}</div>'
+                f'<div class="seg-card" data-seg="{idx}" style="position:absolute;{pos};width:{_cw}px;height:{ch}px;opacity:0;">{html}</div>'
             )
-            # 入场（配音讲到 → 卡出场）
-            stmts.append(f'tl.fromTo(".seg-card[data-seg=\'{idx}\']",{{opacity:0,y:44,scale:0.92}},{{opacity:1,y:0,scale:1,duration:0.45,ease:"back.out(1.6)"}},{start});')
+            # 入场（配音讲到 → 卡淡入，不隐藏、不退场 = 堆叠保留）
+            stmts.append(f'tl.fromTo(".seg-card[data-seg=\'{idx}\']",{{opacity:0,y:30}},{{opacity:1,y:0,duration:0.4,ease:"power2.out"}},{start});')
             # 🔴 信息点逐个弹出（跟着口播语音）：卡片内非装饰子元素 stagger 依次入场
             _decor = ":not(.glow):not(.glow-second):not(.particle):not(.pulse-dot):not(.icon-float):not(.light-scan):not(#light-scan)"
             stmts.append(f'tl.fromTo(".seg-card[data-seg=\'{idx}\'] #card > *{_decor}",{{opacity:0,y:20}},{{opacity:1,y:0,duration:0.3,stagger:0.12,ease:"power3.out"}},{round(start + 0.15, 2)});')
-            # 退场（下一张卡前 0.4s 淡出 = 切换动画）
-            exit_t = round(start + dur - 0.4, 2)
-            if exit_t > start + 0.5:
-                stmts.append(f'tl.to(".seg-card[data-seg=\'{idx}\']",{{opacity:0,y:-30,duration:0.4,ease:"power1.in"}},{exit_t});')
 
         return (
             '<div class="seg-panel" data-composition-id="beat-0" style="position:absolute;inset:0;width:100%;height:100%;">'
