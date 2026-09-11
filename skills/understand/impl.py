@@ -45,6 +45,10 @@ class Understand(SkillBase):
             for pid in cut_pids:
                 if 0 <= pid < len(phrases):
                     p = phrases[pid]
+                    # 🔴 反问句保护：以"吗/呢/吧"结尾的短语是反问/感叹，删了少语气、意思不完整 → 保留
+                    pt = p.get("text", "")
+                    if pt and pt[-1] in {"吗", "呢", "吧"}:
+                        continue
                     for i, w in enumerate(raw_words):
                         if p["start"] <= w["start"] < p["end"]:
                             delete.add(i)
@@ -66,23 +70,13 @@ class Understand(SkillBase):
         core_message = "".join(str(r.get("text", "")) for r in keep_ranges)[:120]
         narrative_arc = ["HOOK", "CONTEXT", "PROBLEM", "STRUGGLE", "RESOLUTION"]
 
-        # 🔴 塌缩/删减过度检测：用保留字数判断（区间数量会因 <0.5s 合并而变化，不可靠）
-        kept_chars = sum(len(r.get("text", "")) for r in keep_ranges)
-        total_chars = len(full_text)
-        if total_chars > 0 and kept_chars < total_chars * 0.3:
-            print(f"      ⚠ 删减过度（保留 {kept_chars}/{total_chars} 字 <30%）→ fallback 保守删减")
-            return self._conservative_keep(raw_words, full_text)
-
+        # 🔴 删减比例不做任何限制：用户要"意思对，删多少无所谓"（10分钟→1分钟都行）。
+        #    只保留上面的"删光"保护（keep_ranges 空判断），不设 <30% 比例兜底
         kept_dur = sum(r["end"] - r["start"] for r in keep_ranges)
         total_dur = context.get("duration", 1)
         pct = kept_dur / total_dur * 100 if total_dur > 0 else 0
         deleted = sum(1 for w in raw_words if not any(
             r["start"] <= w["start"] < r["end"] for r in keep_ranges))
-
-        # 🔴 删减过度兜底：保留率 <30% 才 fallback（纯安全网，防止 LLM 抽风把内容删光；不是删减目标）
-        if pct < 30:
-            print(f"      ⚠ 删减过度 {pct:.0f}%（<30%）→ fallback 确定性删减")
-            return self._conservative_keep(raw_words, full_text)
 
         # 🔴 碎片检测：>3 个 <0.5s 的碎片区间 → LLM 碎片化删减（删了完整句留了碎字），fallback
         n_frag = sum(1 for r in keep_ranges if (r["end"] - r["start"]) < 0.5)

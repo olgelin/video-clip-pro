@@ -38,7 +38,8 @@ def _merge_cjk_words(words, max_gap=0.25, max_chars=12):
             buf_count += 1
             continue
 
-        if (is_cjk or is_num) and buf_count > 0 and gap < max_gap and len(buf_text) + len(text) <= max_chars:
+        if (is_cjk or is_num) and buf_count > 0 and gap < max_gap and len(buf_text) + len(text) <= max_chars \
+                and buf_text[-1] not in "吗呢吧啊？!！。":
             # Merge into current phrase
             buf_text += text
             buf_end = w["end"]
