@@ -278,12 +278,12 @@ def build_hyperframes_composition(edl, words, output_dir, video_path, layout_mod
             else:
                 card_style = f"position:absolute;inset:0;width:{fw}px;height:{fh}px;z-index:10;"
         else:
-            # 位置轮换：竖屏卡片放上半屏（避开底部字幕 + 人物面部），横屏靠左/中/右
+            # 位置轮换：竖屏卡片放顶部（人物头顶上方，避开中上部面部），横屏靠左/中/右
             if orientation == "portrait":
                 _pos_styles = [
-                    "left:30px;top:170px",
-                    "left:50%;top:190px;transform:translateX(-50%)",
-                    "right:30px;top:210px",
+                    "left:30px;top:80px",
+                    "left:50%;top:100px;transform:translateX(-50%)",
+                    "right:30px;top:120px",
                 ]
             else:
                 _pos_styles = [
