@@ -408,12 +408,18 @@ class Hf_build(SkillBase):
         配音驱动：每张卡在 final_start（讲到对应语义单元）入场，下一张前 0.4s 淡出（切换动画）。
         全部卡在一个 HTML 里，window.__timelines["beat-0"] 由 HyperFrames seek 驱动。
         """
-        # 🔴 位置铁律（用户定版）：横屏卡片固定【左侧】透明背景（人物在右侧）；
-        #    竖屏卡片固定【底部】堆叠（人物在上方、字幕 bottom:130px 上方）。
-        #    不做左中右轮换，所有卡同一位置，切换=淡出淡入。
+        # 🔴 位置铁律（用户定版）：卡片放【左右两侧】不居中（避开人物）。
+        #    横屏：左侧/右侧垂直居中；竖屏：上半部分区域、靠左/靠右。
+        #    左右两侧交替（idx%2），不做居中、不做底部。
         pos_styles = {
-            "portrait": ["left:30px;bottom:180px"],
-            "landscape": ["left:30px;top:50%;transform:translateY(-50%)"],
+            "portrait": [
+                "left:30px;top:200px",
+                "right:30px;top:200px",
+            ],
+            "landscape": [
+                "left:30px;top:50%;transform:translateY(-50%)",
+                "right:30px;top:50%;transform:translateY(-50%)",
+            ],
         }
         ps = pos_styles[orientation]
 
@@ -434,7 +440,7 @@ class Hf_build(SkillBase):
             dur = round(float(scene.get("duration", 5)), 2)
             layout = vt_layout.get(scene.get("visual_type", "quote_hero"), "quote-card")
             cw, ch = self._card_size(layout, orientation)
-            pos = ps[0]
+            pos = ps[idx % 2]
             card_divs.append(
                 f'<div class="seg-card" data-seg="{idx}" style="position:absolute;{pos};width:{cw}px;height:{ch}px;opacity:0;">{html}</div>'
             )
