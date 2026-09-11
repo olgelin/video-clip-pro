@@ -427,6 +427,9 @@ class Hf_build(SkillBase):
             html = html.replace(' data-composition-id="card"', '')
             html = re.sub(r' data-width="\d+"', '', html)
             html = re.sub(r' data-height="\d+"', '', html)
+            # 🔴 去掉 LLM 的 <script>（tl.from opacity:0 在单一 composition 下被 HyperFrames seek 冻结→文字不显示；
+            #    且 5 卡共用 #card/#headline 等 id 会串）。元素级出场 + 微动改由代码层统一 timeline 注入。
+            html = re.sub(r'<script>.*?</script>', '', html, flags=re.DOTALL)
             start = round(float(scene.get("final_start", 0)), 2)
             dur = round(float(scene.get("duration", 5)), 2)
             layout = vt_layout.get(scene.get("visual_type", "quote_hero"), "quote-card")
