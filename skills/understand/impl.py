@@ -270,8 +270,9 @@ class Understand(SkillBase):
             if not matched:
                 ci += 1
         # 3. 非连续重复短语（>=5 字出现两次，删第二次，如"我之所以整这么个设备"×2）
+        #    🔴 L 上限 12→20：长重复句（如"我终于把自己的大脑给剥离出来了"15字）之前删不干净，留"出来了"残留
         full_str = "".join(full_chars)
-        for L in range(min(12, cn // 2), 4, -1):
+        for L in range(min(20, cn // 2), 4, -1):
             i = 0
             while i <= cn - 2 * L:
                 phrase = full_str[i:i + L]
