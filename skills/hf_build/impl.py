@@ -369,7 +369,7 @@ class Hf_build(SkillBase):
                     llm_count += 1
         print(f"      分镜信息卡: {llm_count}/{len(scenes)} 卡（每语义单元一张）")
 
-        # scenes → ranges（供 build_hyperframes_composition 渲染，含 _llm_html + visual_type）
+        # scenes → ranges（供 build_hyperframes_composition 生成字幕 captions + seg_offsets）
         ranges = []
         for idx, scene in enumerate(scenes):
             if not scene.get("_llm_html"):
@@ -383,7 +383,14 @@ class Hf_build(SkillBase):
                 "_llm_html": scene["_llm_html"],
             })
 
-        render_edl = {"ranges": ranges}
+        # 🔴 合并成一个总 HTML（配音驱动 + 切换动画）：一个 beat 覆盖整个视频，GSAP 控制每卡出场/退场
+        cards_html = self._build_cards_html(scenes, orientation, _VT_LAYOUT)
+        total_dur = round(sum(float(s.get("duration", 5)) for s in scenes if s.get("_llm_html")), 2)
+
+        render_edl = {
+            "ranges": ranges,
+            "_segment_html": [{"start": 0, "dur": total_dur, "theme": "", "html": cards_html}],
+        }
         try:
             hf_dir = build_hyperframes_composition(render_edl, words, output_dir, video_path,
                                                    layout_mode="card", orientation=orientation)
@@ -394,6 +401,60 @@ class Hf_build(SkillBase):
         except Exception as e:
             print(f"      分镜渲染错误: {e}")
         return {}
+
+    def _build_cards_html(self, scenes: list, orientation: str, vt_layout: dict) -> str:
+        """合并 N 张信息卡成一个总 HTML（绝对定位 + GSAP 出场/退场时间线）。
+
+        配音驱动：每张卡在 final_start（讲到对应语义单元）入场，下一张前 0.4s 淡出（切换动画）。
+        全部卡在一个 HTML 里，window.__timelines["beat-0"] 由 HyperFrames seek 驱动。
+        """
+        pos_styles = {
+            "portrait": [
+                "left:30px;top:80px",
+                "left:50%;top:100px;transform:translateX(-50%)",
+                "right:30px;top:120px",
+            ],
+            "landscape": [
+                "left:30px;top:50%;transform:translateY(-50%)",
+                "left:50%;top:50%;transform:translate(-50%,-50%)",
+                "right:30px;top:50%;transform:translateY(-50%)",
+            ],
+        }
+        ps = pos_styles[orientation]
+
+        card_divs = []
+        stmts = []
+        for idx, scene in enumerate(scenes):
+            if not scene.get("_llm_html"):
+                continue
+            html = scene["_llm_html"]
+            # 去掉 build_card 的 data-composition-id/data-width/data-height（总 HTML 内部元素不是独立 composition）
+            html = html.replace(' data-composition-id="card"', '')
+            html = re.sub(r' data-width="\d+"', '', html)
+            html = re.sub(r' data-height="\d+"', '', html)
+            start = round(float(scene.get("final_start", 0)), 2)
+            dur = round(float(scene.get("duration", 5)), 2)
+            layout = vt_layout.get(scene.get("visual_type", "quote_hero"), "quote-card")
+            cw, ch = self._card_size(layout, orientation)
+            pos = ps[idx % 3]
+            card_divs.append(
+                f'<div class="seg-card" data-seg="{idx}" style="position:absolute;{pos};width:{cw}px;height:{ch}px;opacity:0;">{html}</div>'
+            )
+            # 入场（配音讲到 → 卡出场）
+            stmts.append(f'tl.fromTo(".seg-card[data-seg=\'{idx}\']",{{opacity:0,y:44,scale:0.92}},{{opacity:1,y:0,scale:1,duration:0.45,ease:"back.out(1.6)"}},{start});')
+            # 退场（下一张卡前 0.4s 淡出 = 切换动画）
+            exit_t = round(start + dur - 0.4, 2)
+            if exit_t > start + 0.5:
+                stmts.append(f'tl.to(".seg-card[data-seg=\'{idx}\']",{{opacity:0,y:-30,duration:0.4,ease:"power1.in"}},{exit_t});')
+
+        return (
+            '<div class="seg-panel" style="position:absolute;inset:0;width:100%;height:100%;">'
+            + "".join(card_divs)
+            + '<script>(function(){var tl=gsap.timeline({paused:true});'
+            + "".join(stmts)
+            + 'window.__timelines["beat-0"]=tl;})();</script>'
+            + '</div>'
+        )
 
     def _segment_groups(self, edl: dict, provider) -> dict:
         """语义分段：把 ranges 按语义聚成 N 个画面组，存到 edl['_segments']。
