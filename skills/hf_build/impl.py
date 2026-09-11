@@ -296,25 +296,43 @@ class Hf_build(SkillBase):
             dur = max(1.0, float(scene.get("duration", 5)))
             mood = scene.get("mood", "") or ""
 
-            # 从 key_elements 提取标题 + 数字
+            # 从 key_elements 提取标题 + 数字（兜底）
             title = next((e["text"] for e in ke if e.get("type") == "title"), "")
             nums = [e["text"] for e in ke if e.get("type") == "number"]
-            headline = title or narration[:8]
-            metric = nums[0] if nums else ""
-            data_str = "、".join(nums[:3])
-            layout = _VT_LAYOUT.get(vt, "quote-card")
-            emotion = "neutral"
-            for mk, me in _MOOD_EMOTION.items():
-                if mk in mood:
-                    emotion = me
-                    break
+
+            # 🔴 ENRICH 提取结构化信息（headline/data/bullets/takeaway/layout），
+            # 让卡片显示「提炼的信息卡」（清单/对比/数据），而非「整段口播原文」
+            card = {}
+            try:
+                enrich_prompt = ENRICH_PROMPT.replace(
+                    "{segments_json}", json.dumps([{"beat": "INFO", "quote": narration}], ensure_ascii=False))
+                enrich_raw = provider.call("card_enrich", enrich_prompt)
+                enrich = provider.extract_json(enrich_raw)
+                if isinstance(enrich, list) and enrich:
+                    card = enrich[0] or {}
+            except Exception:
+                card = {}
+
+            headline = card.get("headline") or title or narration[:8]
+            subtext = card.get("subtext", "")
+            metric = card.get("metric") or (nums[0] if nums else "")
+            data_points = card.get("data_points", []) or []
+            data_str = "、".join([f'{d.get("label", "")}:{d.get("value", "")}' for d in data_points[:3]])
+            takeaway = card.get("key_takeaway", "")
+            layout = card.get("layout_hint") or _VT_LAYOUT.get(vt, "quote-card")
+            emotion = card.get("emotion") or "neutral"
+            if emotion == "neutral":
+                for mk, me in _MOOD_EMOTION.items():
+                    if mk in mood:
+                        emotion = me
+                        break
 
             cw, ch = self._card_size(layout, orientation)
 
             prompt = CARD_DIRECT_PROMPT.format(
-                quote=narration, headline=headline, subtext="",
+                quote=narration, headline=headline, subtext=subtext,
                 metric=metric, data_points_str=data_str,
-                key_takeaway="", beat_type="INFO",
+                key_takeaway=takeaway, beat_type="INFO",
                 emotion=emotion, layout_hint=layout,
                 scene_prompt=scene_prompt,
             )
