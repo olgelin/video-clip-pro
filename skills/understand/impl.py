@@ -49,6 +49,14 @@ class Understand(SkillBase):
                         if p["start"] <= w["start"] < p["end"]:
                             delete.add(i)
 
+        # 🔴 否定词保护：不/没/别 绝不删（删了语义反转，"我不喜欢"→"我喜欢"是灾难）
+        #    注意：不含"无/非/未/否"——它们几乎总是词的一部分（无缘/无法/非常/未来/否则），
+        #    保护反而会留残留（"无缘"的"无"被误保护→"无缘无"）
+        NEGATION = {"不", "没", "别"}
+        for i, w in enumerate(raw_words):
+            if w.get("text", "") in NEGATION:
+                delete.discard(i)
+
         # 🔴 合并：按 word 边界生成 keep_ranges（never cut inside a word）
         keep_ranges = self._delete_to_keep_ranges(raw_words, delete)
         if not keep_ranges:
@@ -71,7 +79,7 @@ class Understand(SkillBase):
         deleted = sum(1 for w in raw_words if not any(
             r["start"] <= w["start"] < r["end"] for r in keep_ranges))
 
-        # 🔴 删减过度兜底：保留率 <30% 才 fallback（LLM 删到 40-70% 属合理精简：删过程过渡+重复+自我纠正，不该误判）
+        # 🔴 删减过度兜底：保留率 <30% 才 fallback（纯安全网，防止 LLM 抽风把内容删光；不是删减目标）
         if pct < 30:
             print(f"      ⚠ 删减过度 {pct:.0f}%（<30%）→ fallback 确定性删减")
             return self._conservative_keep(raw_words, full_text)
@@ -242,8 +250,8 @@ class Understand(SkillBase):
         texts = [w.get("text", "") for w in raw_words]
         n = len(texts)
         delete = set()
-        # 1. 语气词（单字）
-        filler = {"呢", "哎", "嘛", "啊", "嗯", "呃", "哦", "哈", "呀", "吧"}
+        # 1. 语气词（单字）。🔴 移除"哈"：它常是词的一部分（哈喽/哈哈/哈佛），单独作语气词少见，交给 LLM 判断
+        filler = {"呢", "哎", "嘛", "啊", "嗯", "呃", "哦", "呀", "吧"}
         for i, t in enumerate(texts):
             if t in filler:
                 delete.add(i)
@@ -255,12 +263,22 @@ class Understand(SkillBase):
         full_chars = list("".join(texts))
         cn = len(full_chars)
         # 2. 字符级连续重复（"X X" 模式）
+        #    🔴 AA 叠词（谢谢/妈妈/好好/看看 等正常词）不是结巴，跳过不删
+        AA_WORDS = {
+            "谢谢", "妈妈", "爸爸", "好好", "看看", "试试", "听听", "说说", "想想", "问问",
+            "走走", "跑跑", "等等", "刚刚", "常常", "渐渐", "处处", "往往", "天天", "年年",
+            "轻轻", "慢慢", "快快", "乖乖", "宝宝", "哥哥", "姐姐", "弟弟", "妹妹", "奶奶",
+            "爷爷", "叔叔", "星星", "花花", "草草", "偷偷", "悄悄", "缓缓", "高高", "深深",
+        }
         ci = 0
         while ci < cn:
             matched = False
             for L in range(min(10, (cn - ci) // 2), 0, -1):
                 seg = full_chars[ci:ci + L]
                 if seg and seg == full_chars[ci + L:ci + 2 * L]:
+                    # AA 叠词排除：两个相同字组成的正常词，不当结巴删
+                    if L == 1 and ci + 1 < cn and (full_chars[ci] + full_chars[ci + 1]) in AA_WORDS:
+                        break
                     for _k in range(ci + L, ci + 2 * L):
                         if _k < len(char_to_word):
                             delete.add(char_to_word[_k])
