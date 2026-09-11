@@ -57,11 +57,39 @@
 - 对比条（A vs B + 差值高亮）
 - 信号条（`class="signal-bar"`，多段竖条）
 - badge 链（`class="badge-item"`，2-4 个并排）
-- 图标浮标（`class="icon-float"`，emoji + 浮动动画）
+- 图标浮标（`class="icon-float"`，CSS/SVG 图形 + 浮动动画，禁 emoji）
 - 引用引号（`#quote-mark`，大引号）
 - 步骤圆点（`class="step-dot"`，编号 + 连接线）
 
 🔴 铁律：没数据不要塞假数字。数据不足时，用图标浮标 + 脉冲灯 + 大引号表达情绪，绝不能是"标题+副文"两行字。
+
+## 🔴 图标铁律：emoji 廉价，SVG/CSS 图形高级
+
+禁止用 emoji 当图标（👋🚀🧠📝📊💡 一律禁止）。改用 CSS/SVG 图形：
+
+- **圆点/竖条**：CSS 圆点（`border-radius:50%`）当信号点、步骤点、信号条（多段竖条）
+- **柱状图**：一组 `height` 不同的竖条（CSS div），对比数据量
+- **环形图**：`border` 圆环或 `conic-gradient` 环形，显示占比
+- **人形阵列**：极简 SVG 人形（圆头+身体），多=多数、少=少数，灰=基线、强调色=重点
+- **终端圆点**：红黄绿三个小圆点 + `>_` 路径（终端窗口隐喻，清单/发布类）
+
+## 🗂 排版层级（对标高级信息卡，别只"标题+正文"两行）
+
+每张卡至少 3 层，按这个层级排版：
+
+1. **面包屑 meta**：极小号英文大写 + 宽字距（如 `OPEN SOURCE · ITEM 01`），放最顶
+2. **主标题**：最大字号粗体（核心信息，1-2 行）
+3. **副标题/说明**：中号灰字（补充说明）
+4. **数据/清单/对比**：可视化元素（象形图/柱状/环形/清单项/对比条）
+5. **图例/注释**：极小号灰字（如"红色 = 本段关注重点"）
+
+中英双语混排：英文小字全大写宽字距（技术感），中文主文案（可读性），数字/标签用等宽字体（JetBrains Mono/monospace）。
+
+## 📊 数据可视化扩展（按 layout 选，对标高级信息卡）
+
+- **compare** → 象形统计图（人形/圆点阵列，灰多=多数、强调色少=少数）或左右双栏 + 细边框容器 + 强调色竖条标重点
+- **data_impact** → 环形占比图（`conic-gradient` 环形 + 中心大数字）或柱状对比图（左右/多根柱子高度对比）
+- **list_alert / bullets** → 终端清单（红黄绿圆点标题栏 + `01/02/03` 编号列 + 等宽字体路径）
 
 ## 🏃 动效铁律：入场 + 持续微动，缺一不可
 
@@ -162,12 +190,58 @@
 </script>
 ```
 
+### 示例3 — 象形统计图（compare，灰点=多数、强调色点=少数）
+
+```html
+<div id="card" style="padding:24px;position:relative;z-index:1;">
+  <div style="font-size:11px;color:rgba(255,255,255,0.45);letter-spacing:2px;font-weight:600;">AI USAGE · 概念示意</div>
+  <div id="headline" style="font-size:24px;font-weight:800;color:#fff;margin:6px 0 4px;">同样用 AI</div>
+  <div style="font-size:13px;color:#ff6b81;font-weight:600;margin-bottom:14px;">找到真实需求，再交付方案</div>
+  <div style="display:flex;gap:16px;">
+    <div style="flex:1;">
+      <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:6px;">多数人 · 问答提效</div>
+      <div class="dot-row" style="display:flex;flex-wrap:wrap;gap:3px;">
+        <span class="dot" style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.3);"></span>
+        <span class="dot" style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.3);"></span>
+        <span class="dot" style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.3);"></span>
+        <span class="dot" style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.3);"></span>
+        <span class="dot" style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.3);"></span>
+        <span class="dot" style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.3);"></span>
+        <span class="dot" style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.3);"></span>
+        <span class="dot" style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.3);"></span>
+        <span class="dot" style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.3);"></span>
+        <span class="dot" style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.3);"></span>
+        <span class="dot" style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.3);"></span>
+        <span class="dot" style="width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.3);"></span>
+      </div>
+    </div>
+    <div style="flex:1;">
+      <div style="font-size:11px;color:#ff6b81;font-weight:600;margin-bottom:6px;">少数人 · 进阶</div>
+      <div class="dot-row" style="display:flex;gap:3px;">
+        <span class="dot" style="width:6px;height:6px;border-radius:50%;background:#ff6b81;box-shadow:0 0 6px #ff6b81;"></span>
+        <span class="dot" style="width:6px;height:6px;border-radius:50%;background:#ff6b81;box-shadow:0 0 6px #ff6b81;"></span>
+        <span class="dot" style="width:6px;height:6px;border-radius:50%;background:#ff6b81;box-shadow:0 0 6px #ff6b81;"></span>
+      </div>
+    </div>
+  </div>
+  <div style="margin-top:12px;font-size:10px;color:rgba(255,255,255,0.4);">红色 = 本段关注重点</div>
+</div>
+<script>
+(function(){
+  var tl = gsap.timeline({paused:true});
+  tl.from('#headline', {y:16, opacity:0, duration:0.3, ease:'power3.out'}, 0.1);
+  tl.from('.dot-row .dot', {scale:0, opacity:0, duration:0.25, stagger:0.05, ease:'back.out(1.6)'}, 0.3);
+  tl.play();
+})();
+</script>
+```
+
 ## 硬约束
 
 - 🔴 **卡片只显示「提炼」内容：标题(headline)、核心数字(metric)、数据点(data)、要点(bullets)、金句(takeaway)。禁止把口播原文整句写进卡片**——原文在底部字幕里，写进卡片会重复（视觉检查会判「卡片与字幕重复」）
 - 尺寸：内容层填满框架提供的面板壳（面板壳尺寸已由框架按布局决定），你只管内容排版
 - 外层面板壳（透明浮空面板：半透明渐变背景 + 圆角 + 渐变发光边框 + 顶部光带 + 角部光晕）由框架提供，你禁止重复写 background/border/border-radius/box-shadow/顶部光带/外圈光晕
-- 不得遮挡人脸嘴和眼睛（卡片默认靠左/靠下，脸在视频上中部）
+- 不得遮挡人脸嘴和眼睛（卡片堆叠在左右两侧，脸在视频中上部，尽量让开嘴和眼睛）
 - 不得输出 DOCTYPE/html/head/body/meta/GSAP CDN
 - 最多 1 个视觉焦点（大数字或主标题），其余是辅助
 - 每张卡按 emotion 换配色，相邻卡片视觉明显不同
