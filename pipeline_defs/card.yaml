@@ -34,6 +34,22 @@ stages:
     timeout: 300
     description: ffmpeg 剪切+拼接
 
+  - name: re_transcribe
+    skill: re_transcribe
+    phase: 4.3
+    critical: true
+    retry: 1
+    timeout: 600
+    description: 重新转写 final.mp4 → 新时间戳（字幕/分镜完全同步）
+
+  - name: storyboard
+    skill: storyboard
+    phase: 4.5
+    critical: false
+    retry: 1
+    timeout: 300
+    description: 语义分镜（口播→N个语义单元，每单元一张信息卡）
+
   - name: hf_build
     skill: hf_build
     phase: 5

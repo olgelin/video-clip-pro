@@ -205,6 +205,12 @@ class Hf_build(SkillBase):
     name = "hf_build"
 
     def execute(self, context: dict) -> dict:
+        # 🔴 分镜导演模式（2026-09-11）：storyboard 已产出 scenes（语义分镜），
+        # 每个语义单元 = 一张信息卡（按 visual_type 选类型 + 出场动画），替代旧「每句一卡堆叠」。
+        scenes = context.get("scenes", [])
+        if scenes:
+            return self._scene_cards(context, scenes)
+
         edl = context.get("edl", {})
         words = context.get("words", [])
         output_dir = Path(context.get("output_dir", "test_output"))
@@ -245,6 +251,131 @@ class Hf_build(SkillBase):
         except Exception as e:
             print(f"      HyperFrames error: {e}")
         return {"final_polished": str(output_dir / "final.mp4")}
+
+    def _scene_cards(self, context: dict, scenes: list) -> dict:
+        """🔴 分镜导演模式：storyboard 的 scenes（语义分镜）→ 每个语义单元一张信息卡。
+
+        复用 _llm_card_html_direct 的「透明浮空面板壳 build_card + scene_system 内容驱动」，
+        但输入从「每句 card 字段」改为「每个语义单元的 visual_type + key_elements + mood」，
+        实现「一个语义单元一张信息卡 + 出场动画」，替代旧「每句一卡堆叠」。
+        """
+        provider = context.get("provider")
+        output_dir = Path(context.get("output_dir", "test_output"))
+        video_path = Path(context.get("video_path", ""))
+        words = context.get("words", [])
+        orientation = context.get("orientation") or _detect_orientation(str(video_path))
+
+        scene_prompt = _load_prompt("scene_system")
+        if not scene_prompt:
+            print("      scene_system.md 缺失，分镜信息卡跳过")
+            return {}
+
+        # visual_type → 卡片 layout（7 种视觉类型映射到 5 种卡片布局）
+        _VT_LAYOUT = {
+            "data_impact": "big-number",
+            "quote_hero": "quote-card",
+            "compare": "comparison",
+            "flow": "bullets",
+            "list_alert": "bullets",
+            "timeline_event": "bullets",
+            "hud": "bullets",
+        }
+        # 中文 mood → emotion（scene_system 按 emotion 选色板）
+        _MOOD_EMOTION = {
+            "冲击": "triumphant", "悬念": "urgent",
+            "紧张": "tense", "对立": "tense", "冲突": "urgent", "焦虑": "tense",
+            "开阔": "hopeful", "希望": "hopeful",
+        }
+
+        def _gen_scene(idx: int, scene: dict):
+            narration = scene.get("narration", "")
+            if not narration:
+                return idx, None
+            vt = scene.get("visual_type", "quote_hero")
+            ke = scene.get("key_elements", []) or []
+            dur = max(1.0, float(scene.get("duration", 5)))
+            mood = scene.get("mood", "") or ""
+
+            # 从 key_elements 提取标题 + 数字
+            title = next((e["text"] for e in ke if e.get("type") == "title"), "")
+            nums = [e["text"] for e in ke if e.get("type") == "number"]
+            headline = title or narration[:8]
+            metric = nums[0] if nums else ""
+            data_str = "、".join(nums[:3])
+            layout = _VT_LAYOUT.get(vt, "quote-card")
+            emotion = "neutral"
+            for mk, me in _MOOD_EMOTION.items():
+                if mk in mood:
+                    emotion = me
+                    break
+
+            cw, ch = self._card_size(layout, orientation)
+
+            prompt = CARD_DIRECT_PROMPT.format(
+                quote=narration, headline=headline, subtext="",
+                metric=metric, data_points_str=data_str,
+                key_takeaway="", beat_type="INFO",
+                emotion=emotion, layout_hint=layout,
+                scene_prompt=scene_prompt,
+            )
+
+            content = None
+            for _attempt in range(2):
+                try:
+                    raw = provider.call("card_direct", prompt)
+                    if raw and len(raw) > 50 and not raw.startswith("[ERROR"):
+                        h = raw.strip()
+                        if "```html" in h:
+                            h = h.split("```html")[1].split("```")[0].strip()
+                        elif "```" in h:
+                            h = h.split("```")[1].split("```")[0].strip()
+                        if "<div" in h and "</div>" in h and _card_quality_check(h)[0]:
+                            content = h
+                            break
+                except Exception:
+                    pass
+
+            if content:
+                return idx, build_card(idx, dur, emotion, cw, ch, content)
+            return idx, None
+
+        # 并行生成（4 并发），按下标写回 scenes 保持顺序
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        llm_count = 0
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            futures = {ex.submit(_gen_scene, idx, scene): idx for idx, scene in enumerate(scenes)}
+            for fut in as_completed(futures):
+                idx, html = fut.result()
+                if html:
+                    scenes[idx]["_llm_html"] = html
+                    llm_count += 1
+        print(f"      分镜信息卡: {llm_count}/{len(scenes)} 卡（每语义单元一张）")
+
+        # scenes → ranges（供 build_hyperframes_composition 渲染，含 _llm_html + visual_type）
+        ranges = []
+        for idx, scene in enumerate(scenes):
+            if not scene.get("_llm_html"):
+                continue
+            ranges.append({
+                "start": scene.get("final_start", 0),
+                "end": scene.get("final_end", scene.get("final_start", 0) + scene.get("duration", 5)),
+                "beat": "INFO",
+                "quote": scene.get("narration", ""),
+                "card_layout": _VT_LAYOUT.get(scene.get("visual_type", "quote_hero"), "quote-card"),
+                "_llm_html": scene["_llm_html"],
+            })
+
+        render_edl = {"ranges": ranges}
+        try:
+            hf_dir = build_hyperframes_composition(render_edl, words, output_dir, video_path,
+                                                   layout_mode="card", orientation=orientation)
+            if hf_dir:
+                polished = render_hyperframes(hf_dir)
+                if polished:
+                    return {"final_polished": str(polished), "edl": render_edl}
+        except Exception as e:
+            print(f"      分镜渲染错误: {e}")
+        return {}
 
     def _segment_groups(self, edl: dict, provider) -> dict:
         """语义分段：把 ranges 按语义聚成 N 个画面组，存到 edl['_segments']。
