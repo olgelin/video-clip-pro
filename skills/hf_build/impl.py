@@ -446,6 +446,9 @@ class Hf_build(SkillBase):
             )
             # 入场（配音讲到 → 卡出场）
             stmts.append(f'tl.fromTo(".seg-card[data-seg=\'{idx}\']",{{opacity:0,y:44,scale:0.92}},{{opacity:1,y:0,scale:1,duration:0.45,ease:"back.out(1.6)"}},{start});')
+            # 🔴 信息点逐个弹出（跟着口播语音）：卡片内非装饰子元素 stagger 依次入场
+            _decor = ":not(.glow):not(.glow-second):not(.particle):not(.pulse-dot):not(.icon-float):not(.light-scan):not(#light-scan)"
+            stmts.append(f'tl.fromTo(".seg-card[data-seg=\'{idx}\'] #card > *{_decor}",{{opacity:0,y:20}},{{opacity:1,y:0,duration:0.3,stagger:0.12,ease:"power3.out"}},{round(start + 0.15, 2)});')
             # 退场（下一张卡前 0.4s 淡出 = 切换动画）
             exit_t = round(start + dur - 0.4, 2)
             if exit_t > start + 0.5:
