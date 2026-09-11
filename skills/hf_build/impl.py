@@ -350,6 +350,7 @@ class Hf_build(SkillBase):
                     "layout": r.get("card_layout", "bullets"),
                     "data": r.get("card_data", []) or [],
                     "takeaway": r.get("card_takeaway", ""),
+                    "bullets": r.get("card_bullets", []) or [],
                     "rel_t": rel_t,
                 })
 
