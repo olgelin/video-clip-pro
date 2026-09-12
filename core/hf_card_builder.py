@@ -537,11 +537,14 @@ def _build_captions(ranges, words, seg_offsets, orientation="portrait", video_wi
 def _make_caption(captions, start, dur, text, safe_width, orientation, left_pct=50):
     max_font = 48 if orientation == "portrait" else 42
     bottom = 130 if orientation == "portrait" else 100
+    # 🔴 竖屏字幕拆得更短（14 字）：竖屏 1080 宽，18 字*48px 已逼近 safe_width 边缘，
+    #    口播语速快时逐字合并会出 17 字长字幕导致溢出/语义错位。横屏 1920 宽保持 18 字。
+    max_chars = 14 if orientation == "portrait" else 18
 
-    # V23: 长句拆多条字幕，每条 ≤18 字单行（对齐 video-factory max_chars=18，减少词语劈开）
+    # V23: 长句拆多条字幕，每条 ≤max_chars 字单行（对齐 video-factory max_chars，减少词语劈开）
     if not text or not text.strip():
         return
-    if len(text) <= 18:
+    if len(text) <= max_chars:
         captions.append({"idx": len(captions), "start": round(start - 0.05, 2),
             "dur": max(0.4, dur), "text": text, "font_size": max_font, "bottom": bottom, "left_pct": left_pct})
         return
@@ -553,18 +556,18 @@ def _make_caption(captions, start, dur, text, safe_width, orientation, left_pct=
     parts = []
     remaining = text
     while remaining:
-        if len(remaining) <= 18:
+        if len(remaining) <= max_chars:
             parts.append(remaining)
             break
-        # 在第 8-18 字之间找标点
-        cut = 18
-        for i in range(min(18, len(remaining))-1, 7, -1):
+        # 在第 max_chars//2 到 max_chars 字之间找标点
+        cut = max_chars
+        for i in range(min(max_chars, len(remaining))-1, max_chars//2 - 1, -1):
             if remaining[i] in '，。、？！… ':
                 cut = i + 1
                 break
         else:
-            # 没标点，在第 12-18 字间找空格
-            cut = min(18, len(remaining))
+            # 没标点，在第 max_chars//2 到 max_chars 字间找空格
+            cut = min(max_chars, len(remaining))
         # 🔴 cut 两侧都是数字/单位 → 向左移 cut，避免劈开数字
         while cut > 1 and _numish(remaining[cut-1]) and _numish(remaining[cut]):
             cut -= 1
