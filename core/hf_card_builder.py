@@ -521,10 +521,14 @@ def _build_captions(ranges, words, seg_offsets, orientation="portrait", video_wi
         else:
             seg_left_pct = 50
         phrase_text = ""; ps = pe = None
+        # 🔴 二次合并加字数上限：transcribe 的 phrase 已 ≤12 字，但这里再按 gap<0.3s 合并会变超长。
+        #    竖屏限 14 字、横屏限 18 字，与 _make_caption 对齐，避免"了...这个过"这种 17 字跨句长字幕。
+        _cap_max = 14 if orientation == "portrait" else 18
         for w in seg_words:
             ft = w["start"] - s + offset; fe = w["end"] - s + offset
             if ps is None: ps, pe, phrase_text = ft, fe, w["text"]
-            elif ft - pe < 0.3: pe = fe; phrase_text += w["text"]
+            elif ft - pe < 0.3 and len(phrase_text) + len(w["text"]) <= _cap_max:
+                pe = fe; phrase_text += w["text"]
             else:
                 dur = round(pe - ps + 0.1, 2)
                 if dur >= 0.2: _make_caption(captions, ps, dur, phrase_text.strip(), safe_width, orientation, seg_left_pct)
