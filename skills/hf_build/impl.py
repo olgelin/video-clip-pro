@@ -373,8 +373,19 @@ class Hf_build(SkillBase):
             if subtext:
                 _parts.append(f'<div style="font-size:15px;color:rgba(255,255,255,0.78);line-height:1.5;margin-top:4px;text-shadow:0 1px 6px rgba(0,0,0,0.6);">{subtext}</div>')
 
-            # 横向对比条（data_points 有 2+ 项，宽度按数值比例；非数值则等宽横条）
-            if data_points and len(data_points) >= 2:
+            # 结论列表（bullets，最多 2 条，编号方块，精简不堆叠）
+            _bullets = list(bullets[:2]) if bullets else []
+            if not _bullets and takeaway:
+                _bullets = [takeaway]
+            for _i, _b in enumerate(_bullets, 1):
+                _parts.append(
+                    f'<div style="font-size:16px;color:rgba(255,255,255,0.9);line-height:1.6;margin-top:7px;text-shadow:0 1px 6px rgba(0,0,0,0.5);">'
+                    f'<span style="display:inline-block;min-width:22px;height:22px;line-height:22px;text-align:center;background:#4fd1ff;color:#04121f;border-radius:5px;font-size:13px;font-weight:700;margin-right:8px;vertical-align:middle;">{_i}</span>{_b}'
+                    f'</div>'
+                )
+
+            # 横向对比条（data_points，仅在无 bullets 时显示，避免与列表内容重复）
+            if not _bullets and data_points and len(data_points) >= 2:
                 _nums = [_parse_num(_d.get("value", "")) for _d in data_points[:4]]
                 _bars = []
                 if all(_n is not None for _n in _nums):
@@ -400,17 +411,6 @@ class Hf_build(SkillBase):
                             f'<div style="width:100%;height:100%;background:#4fd1ff;border-radius:3px;"></div></div></div>'
                         )
                 _parts.append(''.join(_bars))
-
-            # 结论列表（bullets，编号方块）
-            _bullets = list(bullets[:3]) if bullets else []
-            if not _bullets and takeaway:
-                _bullets = [takeaway]
-            for _i, _b in enumerate(_bullets, 1):
-                _parts.append(
-                    f'<div style="font-size:16px;color:rgba(255,255,255,0.9);line-height:1.6;margin-top:7px;text-shadow:0 1px 6px rgba(0,0,0,0.5);">'
-                    f'<span style="display:inline-block;min-width:22px;height:22px;line-height:22px;text-align:center;background:#4fd1ff;color:#04121f;border-radius:5px;font-size:13px;font-weight:700;margin-right:8px;vertical-align:middle;">{_i}</span>{_b}'
-                    f'</div>'
-                )
 
             content = "".join(_parts)
             return idx, content
