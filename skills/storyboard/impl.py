@@ -36,9 +36,6 @@ CAMERA_MOTIONS = [
 # vcp 用确定性 Python 分镜，所以用 visual_type 做语义映射补上这个差异。
 VALID_TYPES = {"data_impact", "quote_hero", "compare", "flow", "list_alert", "timeline_event", "hud"}
 
-# 开场客套话/问候词（过滤：不单独做成信息卡，并入下一个实质场景）
-GREETING_PATTERNS = ["哈喽", "大家好", "你好", "嗨", "欢迎", "今天聊", "给大家", "hello", "hi", "哈咯"]
-
 DEPTH_LAYERS_BY_TYPE = {
     "data_impact": {"bg": "gradient mesh + glow orbs", "mg": "data cards stack + KPI panels", "fg": "accent lines + spark particles"},
     "quote_hero": {"bg": "dark fill + radial glow", "mg": "quote panel + floating glyphs", "fg": "grain + light streaks"},
@@ -143,8 +140,6 @@ class Storyboard(SkillBase):
 
         # Step 1: 语义分镜（LLM 读全文切话题/信息点/转折点，不机械合并）
         merged = self._semantic_split_merge(ranges, provider)
-        # 过滤开场客套话（"哈喽大家好"等问候不单独成卡，并入下一个实质场景）
-        merged = self._filter_greeting_opener(merged)
 
         # Step 2: per-group enrichment
         scenes = []
@@ -339,24 +334,6 @@ class Storyboard(SkillBase):
             })
         return merged
 
-    def _filter_greeting_opener(self, merged: list) -> list:
-        """过滤开场客套话：第一个场景若是纯问候/寒暄（短 + 问候词），并入下一个实质场景。
-
-        用户 2026-09-13 纠正：竖屏信息卡不要"哈喽开场"这种无关内容，只放实质信息。
-        确定性过滤（不依赖 LLM），失败静默返回原 merged（不崩管道）。
-        """
-        if not merged or len(merged) < 2:
-            return merged
-        first = (merged[0].get("narration", "") or "").strip()
-        # 太长（>12字）说明有实质内容，不是纯问候；且须含问候词才过滤
-        if len(first) > 12 or not any(g in first for g in GREETING_PATTERNS):
-            return merged
-        # 并入下一个场景：起点前移、文本拼接、时长累加
-        merged[1]["start"] = merged[0]["start"]
-        merged[1]["narration"] = first + merged[1].get("narration", "")
-        merged[1]["real_dur"] = merged[1].get("real_dur", 0) + merged[0].get("real_dur", merged[0]["end"] - merged[0]["start"])
-        return merged[1:]
-
     def _semantic_split(self, ranges: list, provider):
         """LLM 读全文语义，输出分镜分组（ranges 索引）。返回 groups 或 None"""
         n = len(ranges)
@@ -372,7 +349,8 @@ class Storyboard(SkillBase):
             "3. 所有片段必须被覆盖，不重不漏，按顺序\n"
             "4. 每个场景从下面 7 种视觉类型里选 1 个（相邻场景尽量不同类型，别连续用同一种）：\n"
             "   data_impact=数据冲击(有具体数字/百分比/数据对比时) | quote_hero=金句大字(观点/总结升华时) | compare=对立对比(前后反差/转折对比时) | flow=流程推进(步骤/过程/层层递进时) | list_alert=要点警示(列举要点/风险/危害时) | timeline_event=时间推演(时间发展/趋势/未来时) | hud=科技界面(技术/系统/数据面板时)\n"
-            f"5. 只输出 JSON：{{\"scenes\": [[起始索引, 结束索引, \"类型\"], ...]}}，索引范围 0-{n-1}，类型是上面 7 个之一。\n"
+            "5. 🔴 开场问候/寒暄/客套话（如'哈喽''大家好''欢迎回来''各位朋友'等无信息量的开场白）不要单独成一个场景，并入下一个实质内容场景——信息卡只展示实质信息，不展示问候寒暄\n"
+            f"6. 只输出 JSON：{{\"scenes\": [[起始索引, 结束索引, \"类型\"], ...]}}，索引范围 0-{n-1}，类型是上面 7 个之一。\n"
         )
         try:
             raw = provider.call("storyboard_split", prompt,
