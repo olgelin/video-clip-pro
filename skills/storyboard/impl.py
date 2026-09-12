@@ -36,6 +36,9 @@ CAMERA_MOTIONS = [
 # vcp 用确定性 Python 分镜，所以用 visual_type 做语义映射补上这个差异。
 VALID_TYPES = {"data_impact", "quote_hero", "compare", "flow", "list_alert", "timeline_event", "hud"}
 
+# 开场客套话/问候词（过滤：不单独做成信息卡，并入下一个实质场景）
+GREETING_PATTERNS = ["哈喽", "大家好", "你好", "嗨", "欢迎", "今天聊", "给大家", "hello", "hi", "哈咯"]
+
 DEPTH_LAYERS_BY_TYPE = {
     "data_impact": {"bg": "gradient mesh + glow orbs", "mg": "data cards stack + KPI panels", "fg": "accent lines + spark particles"},
     "quote_hero": {"bg": "dark fill + radial glow", "mg": "quote panel + floating glyphs", "fg": "grain + light streaks"},
@@ -140,6 +143,8 @@ class Storyboard(SkillBase):
 
         # Step 1: 语义分镜（LLM 读全文切话题/信息点/转折点，不机械合并）
         merged = self._semantic_split_merge(ranges, provider)
+        # 过滤开场客套话（"哈喽大家好"等问候不单独成卡，并入下一个实质场景）
+        merged = self._filter_greeting_opener(merged)
 
         # Step 2: per-group enrichment
         scenes = []
@@ -333,6 +338,24 @@ class Storyboard(SkillBase):
                 "llm_type": llm_type if llm_type in VALID_TYPES else "",
             })
         return merged
+
+    def _filter_greeting_opener(self, merged: list) -> list:
+        """过滤开场客套话：第一个场景若是纯问候/寒暄（短 + 问候词），并入下一个实质场景。
+
+        用户 2026-09-13 纠正：竖屏信息卡不要"哈喽开场"这种无关内容，只放实质信息。
+        确定性过滤（不依赖 LLM），失败静默返回原 merged（不崩管道）。
+        """
+        if not merged or len(merged) < 2:
+            return merged
+        first = (merged[0].get("narration", "") or "").strip()
+        # 太长（>12字）说明有实质内容，不是纯问候；且须含问候词才过滤
+        if len(first) > 12 or not any(g in first for g in GREETING_PATTERNS):
+            return merged
+        # 并入下一个场景：起点前移、文本拼接、时长累加
+        merged[1]["start"] = merged[0]["start"]
+        merged[1]["narration"] = first + merged[1].get("narration", "")
+        merged[1]["real_dur"] = merged[1].get("real_dur", 0) + merged[0].get("real_dur", merged[0]["end"] - merged[0]["start"])
+        return merged[1:]
 
     def _semantic_split(self, ranges: list, provider):
         """LLM 读全文语义，输出分镜分组（ranges 索引）。返回 groups 或 None"""
