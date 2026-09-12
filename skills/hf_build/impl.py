@@ -370,15 +370,15 @@ class Hf_build(SkillBase):
 
             # 大字数据（metric，超大青蓝，视觉锚点）
             if metric:
-                _parts.append(f'<div class="c-metric" style="font-size:72px;font-weight:900;color:#4fd1ff;line-height:1.0;margin:2px 0 4px;text-shadow:0 0 24px rgba(0,212,255,0.55),0 2px 16px rgba(0,0,0,0.7);">{metric}</div>')
+                _parts.append(f'<div class="c-metric" style="font-size:72px;font-weight:900;color:#4fd1ff;line-height:1.0;margin:2px 0 4px;text-shadow:0 0 16px rgba(0,212,255,0.4),0 2px 12px rgba(0,0,0,0.7);">{metric}</div>')
 
             # 说明（subtext 优先，fallback takeaway）
             _note = subtext or takeaway
             if _note:
                 _parts.append(f'<div class="c-sub" style="font-size:15px;color:rgba(255,255,255,0.78);line-height:1.5;margin-top:4px;text-shadow:0 1px 6px rgba(0,0,0,0.6);">{_note}</div>')
 
-            # 底部组件：进度条/比例条（data_points 数据可视化 + 白色端点圆点）
-            if data_points and len(data_points) >= 2:
+            # 底部组件：进度条/比例条（data_points 数据可视化 + 白色端点圆点；仅在无 metric 时显示，避免和大字数据重复）
+            if (not metric) and data_points and len(data_points) >= 2:
                 _nums = [_parse_num(_d.get("value", "")) for _d in data_points[:3]]
                 _max = max([_n for _n in _nums if _n is not None] or [1.0])
                 _bars = []
