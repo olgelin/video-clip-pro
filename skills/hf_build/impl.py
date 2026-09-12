@@ -375,7 +375,7 @@ class Hf_build(SkillBase):
             # 说明（subtext 优先，fallback takeaway）
             _note = subtext or takeaway
             if _note:
-                _parts.append(f'<div class="c-sub" style="font-size:15px;color:rgba(255,255,255,0.78);line-height:1.5;margin-top:4px;text-shadow:0 1px 6px rgba(0,0,0,0.6);">{_note}</div>')
+                _parts.append(f'<div class="c-sub" style="font-size:16px;color:rgba(255,255,255,0.88);line-height:1.5;margin-top:5px;text-shadow:0 1px 8px rgba(0,0,0,0.7);">{_note}</div>')
 
             # 底部组件：进度条/比例条（data_points 数据可视化 + 白色端点圆点；仅在无 metric 时显示，避免和大字数据重复）
             if (not metric) and data_points and len(data_points) >= 2:
