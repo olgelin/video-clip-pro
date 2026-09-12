@@ -414,20 +414,20 @@ class Hf_build(SkillBase):
 
         # 左/右面板：渐变方向 + 圆角 + 边框 + 时间轴/节点位置
         if side == "right":
-            pos = "right:0;top:0;"
-            grad = "linear-gradient(270deg,rgba(8,12,30,0.88) 0%,rgba(8,12,30,0.52) 55%,rgba(8,12,30,0.0) 100%)"
+            pos = "right:24px;top:24px;"
+            grad = "linear-gradient(270deg,rgba(8,12,30,0.85) 0%,rgba(8,12,30,0.5) 40%,rgba(8,12,30,0.0) 100%)"
             top_line = "linear-gradient(270deg,#00d4ff,rgba(108,140,255,0.3),transparent)"
-            radius = "border-radius:16px 0 0 16px;"
-            border_off = "border-right:none;border-top:none;"
+            radius = "border-radius:16px;"
+            border_off = ""
             line_pos = "right:18px;"
             node_pos = "right:14px;"
             item_pad = "padding:12px 44px 12px 16px;"
         else:
-            pos = "left:0;top:0;"
-            grad = "linear-gradient(90deg,rgba(8,12,30,0.88) 0%,rgba(8,12,30,0.52) 55%,rgba(8,12,30,0.0) 100%)"
+            pos = "left:24px;top:24px;"
+            grad = "linear-gradient(90deg,rgba(8,12,30,0.85) 0%,rgba(8,12,30,0.5) 40%,rgba(8,12,30,0.0) 100%)"
             top_line = "linear-gradient(90deg,#00d4ff,rgba(108,140,255,0.3),transparent)"
-            radius = "border-radius:0 16px 16px 0;"
-            border_off = "border-left:none;border-top:none;"
+            radius = "border-radius:16px;"
+            border_off = ""
             line_pos = "left:18px;"
             node_pos = "left:14px;"
             item_pad = "padding:12px 16px 12px 44px;"
@@ -454,7 +454,7 @@ class Hf_build(SkillBase):
 
         panel = (
             f'<div class="card-stream" data-composition-id="beat-0" style="position:absolute;{pos}width:{panel_w}px;height:{panel_h}px;overflow:hidden;{radius}'
-            f'border:1px solid rgba(0,212,255,0.22);{border_off}'
+            f'border:1px solid rgba(0,212,255,0.35);{border_off}'
             f'background:{grad};'
             'backdrop-filter:blur(8px) saturate(130%);box-shadow:0 24px 60px rgba(0,0,0,0.4),inset 0 0 0 1px rgba(0,212,255,0.05);">'
             f'<div style="position:absolute;top:0;left:0;width:100%;height:2px;background:{top_line}"></div>'
