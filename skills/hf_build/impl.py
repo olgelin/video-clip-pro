@@ -414,19 +414,19 @@ class Hf_build(SkillBase):
 
         # 左/右面板：渐变方向 + 圆角 + 边框 + 时间轴/节点位置
         if side == "right":
-            pos = "right:24px;top:24px;"
-            grad = "linear-gradient(270deg,rgba(8,12,30,0.85) 0%,rgba(8,12,30,0.5) 40%,rgba(8,12,30,0.0) 100%)"
+            pos = "right:32px;top:32px;"
+            grad = "linear-gradient(270deg,rgba(12,18,40,0.62) 0%,rgba(12,18,40,0.32) 45%,rgba(12,18,40,0.0) 100%)"
             top_line = "linear-gradient(270deg,#00d4ff,rgba(108,140,255,0.3),transparent)"
-            radius = "border-radius:16px;"
+            radius = "border-radius:18px;"
             border_off = ""
             line_pos = "right:18px;"
             node_pos = "right:14px;"
             item_pad = "padding:12px 44px 12px 16px;"
         else:
-            pos = "left:24px;top:24px;"
-            grad = "linear-gradient(90deg,rgba(8,12,30,0.85) 0%,rgba(8,12,30,0.5) 40%,rgba(8,12,30,0.0) 100%)"
+            pos = "left:32px;top:32px;"
+            grad = "linear-gradient(90deg,rgba(12,18,40,0.62) 0%,rgba(12,18,40,0.32) 45%,rgba(12,18,40,0.0) 100%)"
             top_line = "linear-gradient(90deg,#00d4ff,rgba(108,140,255,0.3),transparent)"
-            radius = "border-radius:16px;"
+            radius = "border-radius:18px;"
             border_off = ""
             line_pos = "left:18px;"
             node_pos = "left:14px;"
@@ -454,9 +454,9 @@ class Hf_build(SkillBase):
 
         panel = (
             f'<div class="card-stream" data-composition-id="beat-0" style="position:absolute;{pos}width:{panel_w}px;height:{panel_h}px;overflow:hidden;{radius}'
-            f'border:1px solid rgba(0,212,255,0.35);{border_off}'
+            f'border:1.5px solid rgba(0,212,255,0.5);{border_off}'
             f'background:{grad};'
-            'backdrop-filter:blur(8px) saturate(130%);box-shadow:0 24px 60px rgba(0,0,0,0.4),inset 0 0 0 1px rgba(0,212,255,0.05);">'
+            'backdrop-filter:blur(12px) saturate(140%);box-shadow:0 18px 40px rgba(0,0,0,0.35),inset 0 0 0 1px rgba(0,212,255,0.06);">'
             f'<div style="position:absolute;top:0;left:0;width:100%;height:2px;background:{top_line}"></div>'
             '<div style="padding:14px 18px 10px;font-size:11px;color:#00d4ff;letter-spacing:3px;font-weight:700;border-bottom:1px solid rgba(255,255,255,0.08);">SESSION · 实时笔记</div>'
             f'<div class="stream-line" style="position:absolute;{line_pos}top:50px;bottom:12px;width:2px;background:linear-gradient(180deg,rgba(0,212,255,0.55),rgba(108,140,255,0.12));"></div>'
