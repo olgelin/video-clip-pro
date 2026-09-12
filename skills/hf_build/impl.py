@@ -331,24 +331,10 @@ class Hf_build(SkillBase):
 
             cw, ch = self._card_size(layout, orientation)
 
-            # 🔴 信息流模式（横竖屏通用）：代码层直接生成 3 层纯文字，不调 LLM 生成 HTML。
-            #    根因：LLM 按 scene_system 会加光斑/光晕/柱状图等装饰铺满全屏，用户多次反馈不满意。
-            #    信息流要的是干净文字流，装饰/背景由代码层面板统一提供。
-            _VT_BREADCRUMB = {
-                "quote_hero": "OPENING · SESSION",
-                "flow": "FLOW · PHASE",
-                "data_impact": "IMPACT · DATA",
-                "compare": "COMPARE · VIEW",
-                "list_alert": "ALERT · LIST",
-                "timeline_event": "TIMELINE · MOMENT",
-                "hud": "HUD · STATUS",
-            }
-            _breadcrumb = _VT_BREADCRUMB.get(vt, "SESSION") + f" {idx + 1:02d}"
-            _keyline = subtext or takeaway or ""
+            # 🔴 信息流模式（横竖屏通用）：只显示提炼出来的标题（精简，不调 LLM 生成 HTML）。
+            #    用户定版：不要英文小标签、不要关键点、不要装饰栏，只保留提炼标题。
             content = (
-                f'<div style="font-size:10px;color:#00d4ff;letter-spacing:2px;font-weight:700;">{_breadcrumb}</div>'
-                f'<div style="font-size:19px;font-weight:800;color:#fff;margin:3px 0;">{headline}</div>'
-                + (f'<div style="font-size:13px;color:rgba(255,255,255,0.65);line-height:1.5;">{_keyline}</div>' if _keyline else "")
+                f'<div style="font-size:20px;font-weight:800;color:#fff;line-height:1.4;">{headline}</div>'
             )
             return idx, content
 
@@ -412,20 +398,20 @@ class Hf_build(SkillBase):
         else:
             panel_w, panel_h = 960, 720   # 1/2 宽, 2/3 高
 
-        # 左/右面板：渐变方向 + 圆角 + 边框 + 时间轴/节点位置
+        # 左/右面板：渐变方向 + 圆角(朝人物侧) + 边框 + 时间轴/节点位置
         if side == "right":
             pos = "right:0;top:0;"
-            bg = "linear-gradient(270deg,rgba(8,12,30,0.8) 0%,rgba(8,12,30,0.0) 100%)"
-            radius = "border-radius:0;"
-            border = ""
+            bg = "linear-gradient(270deg,rgba(8,12,30,0.75) 0%,rgba(8,12,30,0.3) 45%,rgba(8,12,30,0.0) 100%)"
+            radius = "border-radius:18px 0 0 18px;"
+            border = "border:1px solid rgba(0,212,255,0.35);"
             line_pos = "right:22px;"
             node_pos = "right:18px;"
             item_pad = "padding:14px 48px 14px 18px;"
         else:
             pos = "left:0;top:0;"
-            bg = "linear-gradient(90deg,rgba(8,12,30,0.8) 0%,rgba(8,12,30,0.0) 100%)"
-            radius = "border-radius:0;"
-            border = ""
+            bg = "linear-gradient(90deg,rgba(8,12,30,0.75) 0%,rgba(8,12,30,0.3) 45%,rgba(8,12,30,0.0) 100%)"
+            radius = "border-radius:0 18px 18px 0;"
+            border = "border:1px solid rgba(0,212,255,0.35);"
             line_pos = "left:22px;"
             node_pos = "left:18px;"
             item_pad = "padding:14px 18px 14px 48px;"
@@ -455,9 +441,7 @@ class Hf_build(SkillBase):
             f'{border}'
             f'background:{bg};'
             '">'
-            '<div style="position:absolute;top:0;left:0;width:100%;height:2px;background:linear-gradient(90deg,#00d4ff,rgba(108,140,255,0.3),transparent);"></div>'
-            '<div style="padding:14px 18px 10px;font-size:11px;color:#00d4ff;letter-spacing:3px;font-weight:700;border-bottom:1px solid rgba(255,255,255,0.08);">SESSION · 实时笔记</div>'
-            f'<div class="stream-line" style="position:absolute;{line_pos}top:50px;bottom:12px;width:2px;background:linear-gradient(180deg,rgba(0,212,255,0.55),rgba(108,140,255,0.12));"></div>'
+            f'<div class="stream-line" style="position:absolute;{line_pos}top:14px;bottom:14px;width:2px;background:linear-gradient(180deg,rgba(0,212,255,0.55),rgba(108,140,255,0.12));"></div>'
             + "".join(items)
             + '<script>(function(){var tl=gsap.timeline({paused:true});'
             + "".join(stmts)
