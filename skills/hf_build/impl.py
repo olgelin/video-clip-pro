@@ -331,52 +331,26 @@ class Hf_build(SkillBase):
 
             cw, ch = self._card_size(layout, orientation)
 
-            # 🔴 信息流模式（横竖屏通用）：LLM 只生成精简 3 层（面包屑+标题+关键点）
-            portrait_rule = (
-                "## 🔴 信息流模式（本次用信息流面板，不是独立卡片）\n\n"
-                "画面是一条「纵向信息流」：统一面板 + 时间轴节点 + 信息点依次亮起。\n\n"
-                "每个信息点只输出精简 3 层（别塞满，信息流里空间有限会溢出）：\n"
-                "1. 面包屑 meta：英文小字全大写宽字距（如 OPENING · SESSION 01）\n"
-                "2. 主标题：中文粗体，1 行（核心信息）\n"
-                "3. 关键点：1 行灰字（补充说明）\n\n"
-                "禁止：大数字、进度条、柱状图、环形图、清单、多行副标题、图例、光斑装饰——信息流里放不下。\n"
-                "禁止：写 #card 容器（代码层统一包信息点），只输出 3 层内容（3 个 div）。\n"
-                "禁止：写 background/border/border-radius/box-shadow/光晕（统一面板已提供）。\n\n"
-                "3 层内容示例：\n"
-                '<div style="font-size:10px;color:#00d4ff;letter-spacing:2px;font-weight:700;">OPENING · SESSION 01</div>\n'
-                '<div style="font-size:19px;font-weight:800;color:#fff;margin:3px 0;">哈喽</div>\n'
-                '<div style="font-size:13px;color:rgba(255,255,255,0.65);">好开场是注意力的开关</div>\n'
+            # 🔴 信息流模式（横竖屏通用）：代码层直接生成 3 层纯文字，不调 LLM 生成 HTML。
+            #    根因：LLM 按 scene_system 会加光斑/光晕/柱状图等装饰铺满全屏，用户多次反馈不满意。
+            #    信息流要的是干净文字流，装饰/背景由代码层面板统一提供。
+            _VT_BREADCRUMB = {
+                "quote_hero": "OPENING · SESSION",
+                "flow": "FLOW · PHASE",
+                "data_impact": "IMPACT · DATA",
+                "compare": "COMPARE · VIEW",
+                "list_alert": "ALERT · LIST",
+                "timeline_event": "TIMELINE · MOMENT",
+                "hud": "HUD · STATUS",
+            }
+            _breadcrumb = _VT_BREADCRUMB.get(vt, "SESSION") + f" {idx + 1:02d}"
+            _keyline = subtext or takeaway or ""
+            content = (
+                f'<div style="font-size:10px;color:#00d4ff;letter-spacing:2px;font-weight:700;">{_breadcrumb}</div>'
+                f'<div style="font-size:19px;font-weight:800;color:#fff;margin:3px 0;">{headline}</div>'
+                + (f'<div style="font-size:13px;color:rgba(255,255,255,0.65);line-height:1.5;">{_keyline}</div>' if _keyline else "")
             )
-
-            prompt = CARD_DIRECT_PROMPT.format(
-                quote=narration, headline=headline, subtext=subtext,
-                metric=metric, data_points_str=data_str,
-                key_takeaway=takeaway, beat_type="INFO",
-                emotion=emotion, layout_hint=layout,
-                portrait_rule=portrait_rule,
-                scene_prompt=scene_prompt,
-            )
-
-            content = None
-            for _attempt in range(2):
-                try:
-                    raw = provider.call("card_direct", prompt)
-                    if raw and len(raw) > 50 and not raw.startswith("[ERROR"):
-                        h = raw.strip()
-                        if "```html" in h:
-                            h = h.split("```html")[1].split("```")[0].strip()
-                        elif "```" in h:
-                            h = h.split("```")[1].split("```")[0].strip()
-                        if "<div" in h and "</div>" in h and _card_quality_check(h)[0]:
-                            content = h
-                            break
-                except Exception:
-                    pass
-
-            if content:
-                # 横竖屏都存裸内容（信息流面板统一包壳，不做独立卡外壳）
-                return idx, content
-            return idx, None
+            return idx, content
 
         # 并行生成（4 并发），按下标写回 scenes 保持顺序
         from concurrent.futures import ThreadPoolExecutor, as_completed
