@@ -194,6 +194,8 @@ CARD_DIRECT_PROMPT = """你是口播视频卡片设计师。下面是一段口�
 
 严格按照下方 scene_system 的完整规范生成卡片 HTML——配色按情绪选色板、背景选 2-3 种元素、放 1-3 个数据元素、参照 few-shot 示例的风格。
 
+{portrait_rule}
+
 {scene_prompt}
 
 ## 输出
@@ -329,11 +331,31 @@ class Hf_build(SkillBase):
 
             cw, ch = self._card_size(layout, orientation)
 
+            # 🔴 竖屏信息流：LLM 只生成精简 3 层（面包屑+标题+关键点），横屏用完整 scene_system 规范
+            portrait_rule = ""
+            if orientation == "portrait":
+                portrait_rule = (
+                    "## 🔴 竖屏信息流模式（本次是竖屏 portrait）\n\n"
+                    "竖屏不做独立卡片，而是「一条纵向信息流」：统一面板 + 时间轴节点 + 信息点依次亮起。\n\n"
+                    "每个信息点只输出精简 3 层（别塞满，信息流里空间有限会溢出）：\n"
+                    "1. 面包屑 meta：英文小字全大写宽字距（如 OPENING · SESSION 01）\n"
+                    "2. 主标题：中文粗体，1 行（核心信息）\n"
+                    "3. 关键点：1 行灰字（补充说明）\n\n"
+                    "禁止：大数字、进度条、柱状图、环形图、清单、多行副标题、图例——信息流里放不下。\n"
+                    "禁止：写 #card 容器（代码层统一包信息点），只输出 3 层内容（3 个 div）。\n"
+                    "禁止：写 background/border/border-radius/box-shadow（统一面板已提供）。\n\n"
+                    "3 层内容示例：\n"
+                    '<div style="font-size:10px;color:#00d4ff;letter-spacing:2px;font-weight:700;">OPENING · SESSION 01</div>\n'
+                    '<div style="font-size:19px;font-weight:800;color:#fff;margin:3px 0;">哈喽</div>\n'
+                    '<div style="font-size:13px;color:rgba(255,255,255,0.65);">好开场是注意力的开关</div>\n'
+                )
+
             prompt = CARD_DIRECT_PROMPT.format(
                 quote=narration, headline=headline, subtext=subtext,
                 metric=metric, data_points_str=data_str,
                 key_takeaway=takeaway, beat_type="INFO",
                 emotion=emotion, layout_hint=layout,
+                portrait_rule=portrait_rule,
                 scene_prompt=scene_prompt,
             )
 
@@ -354,6 +376,9 @@ class Hf_build(SkillBase):
                     pass
 
             if content:
+                # 竖屏：存裸内容（信息流面板统一包壳，不做独立卡外壳）；横屏：build_card 完整独立卡
+                if orientation == "portrait":
+                    return idx, content
                 return idx, build_card(idx, dur, emotion, cw, ch, content)
             return idx, None
 
@@ -402,19 +427,59 @@ class Hf_build(SkillBase):
             print(f"      分镜渲染错误: {e}")
         return {}
 
+    def _build_stream_html(self, scenes: list, vt_layout: dict) -> str:
+        """竖屏信息流面板：统一光幕（从左到右渐变透明）+ 时间轴节点 + 信息点依次滑入。
+
+        用户定版（2026-09-12）：竖屏不做 4 张独立卡，改成「一条纵向信息流」——
+        一个统一面板，内部信息点（每语义单元一个）根据口播卡点依次亮起，之前的不退场。
+        """
+        items = []
+        stmts = []
+        for idx, scene in enumerate(scenes):
+            if not scene.get("_llm_html"):
+                continue
+            html = scene["_llm_html"]
+            html = html.replace(' data-composition-id="card"', '')
+            html = re.sub(r' data-width="\d+"', '', html)
+            html = re.sub(r' data-height="\d+"', '', html)
+            html = re.sub(r'<script>.*?</script>', '', html, flags=re.DOTALL)
+            start = round(float(scene.get("final_start", 0)), 2)
+            items.append(
+                f'<div class="info-item" data-seg="{idx}" style="position:relative;padding:11px 14px 11px 42px;opacity:0;border-bottom:1px solid rgba(255,255,255,0.05);">'
+                f'<div class="node" style="position:absolute;left:12px;top:22px;width:9px;height:9px;border-radius:50%;background:#00d4ff;box-shadow:0 0 12px #00d4ff;"></div>'
+                f'{html}'
+                f'</div>'
+            )
+            stmts.append(f'tl.fromTo(".info-item[data-seg=\'{idx}\']",{{opacity:0,y:26}},{{opacity:1,y:0,duration:0.5,ease:"power3.out"}},{start});')
+            stmts.append(f'tl.to(".info-item[data-seg=\'{idx}\'] .node",{{scale:1.6,opacity:0.45,duration:0.8,repeat:2,yoyo:true,ease:"sine.inOut"}},{round(start + 0.3, 2)});')
+        panel = (
+            '<div class="card-stream" data-composition-id="beat-0" style="position:absolute;left:20px;top:130px;width:430px;bottom:180px;overflow:hidden;border-radius:16px;'
+            'border:1px solid rgba(0,212,255,0.22);'
+            'background:linear-gradient(90deg,rgba(8,12,30,0.88) 0%,rgba(8,12,30,0.52) 55%,rgba(8,12,30,0.0) 100%);'
+            'backdrop-filter:blur(8px) saturate(130%);box-shadow:0 24px 60px rgba(0,0,0,0.5),inset 0 0 0 1px rgba(0,212,255,0.06);">'
+            '<div style="position:absolute;top:0;left:0;width:100%;height:2px;background:linear-gradient(90deg,#00d4ff,rgba(108,140,255,0.3),transparent);"></div>'
+            '<div style="padding:15px 18px 11px;font-size:11px;color:#00d4ff;letter-spacing:3px;font-weight:700;border-bottom:1px solid rgba(255,255,255,0.08);">SESSION · 实时笔记</div>'
+            '<div class="stream-line" style="position:absolute;left:16px;top:52px;bottom:12px;width:2px;background:linear-gradient(180deg,rgba(0,212,255,0.55),rgba(108,140,255,0.12));"></div>'
+            + "".join(items)
+            + '<script>(function(){var tl=gsap.timeline({paused:true});'
+            + "".join(stmts)
+            + 'window.__timelines["beat-0"]=tl;})();</script>'
+            + '</div>'
+        )
+        return panel
+
     def _build_cards_html(self, scenes: list, orientation: str, vt_layout: dict) -> str:
         """合并 N 张信息卡成一个总 HTML（绝对定位 + GSAP 出场/退场时间线）。
 
         配音驱动：每张卡在 final_start（讲到对应语义单元）入场，下一张前 0.4s 淡出（切换动画）。
         全部卡在一个 HTML 里，window.__timelines["beat-0"] 由 HyperFrames seek 驱动。
         """
-        # 🔴 位置铁律（用户定版 2026-09-12 改）：竖屏单列纵向（左文右人，参考图），横屏左右两列。
-        #    竖屏：卡片靠左、从上到下依次排（idx 顺序=从上到下），内容左到右读、信息点逐条往下出。
-        #    横屏：左右两列堆叠（保持，用户认可）。
+        # 🔴 竖屏走信息流面板（统一光幕+时间轴+信息点依次亮起），横屏走左右两列独立卡
         if orientation == "portrait":
-            _cw, _row_gap, _top0 = 400, 240, 120
-        else:
-            _cw, _row_gap, _top0 = 600, 260, 60
+            return self._build_stream_html(scenes, vt_layout)
+
+        # 横屏左右两列堆叠（idx 偶数左列、奇数右列，从上到下）。竖屏已在上面走 _build_stream_html。
+        _cw, _row_gap, _top0 = 600, 260, 60
 
         card_divs = []
         stmts = []
@@ -433,19 +498,12 @@ class Hf_build(SkillBase):
             dur = round(float(scene.get("duration", 5)), 2)
             layout = vt_layout.get(scene.get("visual_type", "quote_hero"), "quote-card")
             _, ch = self._card_size(layout, orientation)
-            if orientation == "portrait":
-                ch = 220  # 竖屏单列统一 220 高，4 张卡从上到下不溢出（1920 高内）
 
-            # 🔴 竖屏单列纵向：全部左对齐，从上到下依次排（idx 顺序 = 从上到下）
-            #    横屏左右两列堆叠：idx 偶数左列、奇数右列，行 = idx//2
-            if orientation == "portrait":
-                side = "left:30px"
-                pos = f"{side};top:{_top0 + idx * _row_gap}px"
-            else:
-                col = idx % 2
-                row = idx // 2
-                side = "left:30px" if col == 0 else "right:30px"
-                pos = f"{side};top:{_top0 + row * _row_gap}px"
+            # 横屏左右两列堆叠：idx 偶数左列、奇数右列，行 = idx//2
+            col = idx % 2
+            row = idx // 2
+            side = "left:30px" if col == 0 else "right:30px"
+            pos = f"{side};top:{_top0 + row * _row_gap}px"
             card_divs.append(
                 f'<div class="seg-card" data-seg="{idx}" style="position:absolute;{pos};width:{_cw}px;height:{ch}px;opacity:0;">{html}</div>'
             )
