@@ -100,7 +100,7 @@ ENRICH_PROMPT = """你是知识科普类短视频的**PPT视觉设计师**。你
 
 ## 字段说明
 - headline: 核心观点（6-18字），PPT标题风格。🔴不含具体数字（数字/比例/百分比一律放到 metric 字段，如"人物占屏的最佳比例"而非"人物占屏1/4"）
-- subtext: 支撑说明（8-30字），可为""
+- subtext: 支撑说明（8-30字），可为""。🔴不含具体数字（数字一律放 metric，说明只讲含义/结果，如"屏幕占比不对，表情训练全白费"）
 - metric: 数字指标（"3倍""85%""1000万"），必须从原文提取，没有则填null
 - emotion: "urgent"/"tense"/"neutral"/"hopeful"/"triumphant"
 - scene_type: "spotlight"/"alert"/"struggle"/"breakthrough"/"process"/"context"
