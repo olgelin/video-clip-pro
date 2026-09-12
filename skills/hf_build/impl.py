@@ -429,25 +429,47 @@ class Hf_build(SkillBase):
                 _parts.append(f'<div class="c-head" style="font-size:var(--fs-head);font-weight:800;color:#fff;line-height:1.25;margin:2px 0 4px;text-shadow:0 1px 10px rgba(0,0,0,0.7);">{headline}</div>')
                 if _note:
                     _parts.append(f'<div class="c-sub" style="font-size:var(--fs-sub);color:rgba(255,255,255,0.88);line-height:1.5;margin-top:5px;text-shadow:0 1px 8px rgba(0,0,0,0.7);">{_note}</div>')
-                # 数据条（仅在无 metric 时显示，避免和大字数据重复）
+                # 数据可视化（仅在无 metric 时显示）：纯数值→柱状图，否则→横向比例条
                 if (not metric) and data_points and len(data_points) >= 2:
                     _nums = [_parse_num(_d.get("value", "")) for _d in data_points[:3]]
-                    _max = max([_n for _n in _nums if _n is not None] or [1.0])
-                    _bars = []
-                    for _i, _d in enumerate(data_points[:3]):
-                        _n = _nums[_i]
-                        _w = max(12, int(_n / _max * 100)) if _n is not None else 100
-                        _bars.append(
-                            f'<div class="c-bar" style="margin-top:9px;">'
-                            f'<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:var(--fs-bar);text-shadow:0 1px 4px rgba(0,0,0,0.5);">'
-                            f'<span style="color:rgba(255,255,255,0.85);">{_d.get("label", "")}</span>'
-                            f'<span style="color:var(--accent, #4fd1ff);font-weight:700;">{_d.get("value", "")}</span></div>'
-                            f'<div style="position:relative;height:6px;background:rgba(0,212,255,0.15);border-radius:3px;margin-top:3px;overflow:hidden;">'
-                            f'<div class="bar-fill" style="width:{_w}%;height:100%;background:linear-gradient(90deg,var(--accent-dim, #00d4ff),var(--accent, #4fd1ff));border-radius:3px;"></div>'
-                            f'<div class="bar-dot" style="position:absolute;left:{_w}%;top:50%;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:50%;background:#fff;box-shadow:0 0 8px rgba(255,255,255,0.9);"></div>'
-                            f'</div></div>'
+                    _all_numeric = all(_n is not None for _n in _nums)
+                    if _all_numeric:
+                        # 柱状图（竖柱，高度按数值比例，柱顶标数值）
+                        _max = max(_nums)
+                        _cols = []
+                        for _i, _d in enumerate(data_points[:3]):
+                            _n = _nums[_i]
+                            _h = max(10, int(_n / _max * 100)) if _max and _max > 0 else 50
+                            _cols.append(
+                                f'<div class="c-col" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;">'
+                                f'<div style="font-size:var(--fs-bar);color:var(--accent, #4fd1ff);font-weight:800;margin-bottom:3px;text-shadow:0 1px 4px rgba(0,0,0,0.5);">{_d.get("value", "")}</div>'
+                                f'<div class="col-bar" style="width:100%;max-width:54px;height:{_h}%;background:linear-gradient(180deg,var(--accent-dim, #00d4ff),var(--accent, #4fd1ff));border-radius:5px 5px 0 0;box-shadow:0 0 14px rgba(0,212,255,0.3);"></div>'
+                                f'<div style="font-size:var(--fs-bar);color:rgba(255,255,255,0.85);margin-top:5px;white-space:nowrap;text-shadow:0 1px 4px rgba(0,0,0,0.5);">{_d.get("label", "")}</div>'
+                                f'</div>'
+                            )
+                        _parts.append(
+                            f'<div class="c-barchart" style="display:flex;align-items:flex-end;gap:18px;height:140px;margin-top:14px;padding:0 6px;">'
+                            + "".join(_cols)
+                            + '</div>'
                         )
-                    _parts.append(''.join(_bars))
+                    else:
+                        # 横向比例条（非纯数值）
+                        _max = max([_n for _n in _nums if _n is not None] or [1.0])
+                        _bars = []
+                        for _i, _d in enumerate(data_points[:3]):
+                            _n = _nums[_i]
+                            _w = max(12, int(_n / _max * 100)) if _n is not None else 100
+                            _bars.append(
+                                f'<div class="c-bar" style="margin-top:9px;">'
+                                f'<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:var(--fs-bar);text-shadow:0 1px 4px rgba(0,0,0,0.5);">'
+                                f'<span style="color:rgba(255,255,255,0.85);">{_d.get("label", "")}</span>'
+                                f'<span style="color:var(--accent, #4fd1ff);font-weight:700;">{_d.get("value", "")}</span></div>'
+                                f'<div style="position:relative;height:6px;background:rgba(0,212,255,0.15);border-radius:3px;margin-top:3px;overflow:hidden;">'
+                                f'<div class="bar-fill" style="width:{_w}%;height:100%;background:linear-gradient(90deg,var(--accent-dim, #00d4ff),var(--accent, #4fd1ff));border-radius:3px;"></div>'
+                                f'<div class="bar-dot" style="position:absolute;left:{_w}%;top:50%;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:50%;background:#fff;box-shadow:0 0 8px rgba(255,255,255,0.9);"></div>'
+                                f'</div></div>'
+                            )
+                        _parts.append(''.join(_bars))
 
             content = "".join(_parts)
             return idx, content
@@ -528,7 +550,7 @@ class Hf_build(SkillBase):
         # 字号按 panel_w 缩放（基准 720px 宽 = 竖屏 1080 的 2/3），横屏 panel 更宽字号更大
         _s = panel_w / 720.0
         _fs_css = ";".join(f"--fs-{k}:{int(v * _s)}px" for k, v in {
-            "metric": 72, "head": 28, "sub": 16, "step": 13, "bar": 13,
+            "metric": 80, "head": 32, "sub": 18, "step": 15, "bar": 15,
         }.items())
 
         # 左/右面板：渐变方向 + 圆角(朝人物侧) + 边框 + 时间轴/节点位置
@@ -573,6 +595,7 @@ class Hf_build(SkillBase):
             stmts.append(f'tl.fromTo(".info-item[data-seg=\'{idx}\'] .c-cmp-l",{{opacity:0,x:-26}},{{opacity:1,x:0,duration:0.5,ease:"power3.out"}},{round(start+0.32,2)});')
             stmts.append(f'tl.fromTo(".info-item[data-seg=\'{idx}\'] .c-cmp-r",{{opacity:0,x:26}},{{opacity:1,x:0,duration:0.5,ease:"power3.out"}},{round(start+0.32,2)});')
             stmts.append(f'tl.fromTo(".info-item[data-seg=\'{idx}\'] .c-bullet",{{opacity:0,y:20}},{{opacity:1,y:0,duration:0.4,stagger:0.12,ease:"power3.out"}},{round(start+0.2,2)});')
+            stmts.append(f'tl.fromTo(".info-item[data-seg=\'{idx}\'] .c-col",{{opacity:0,y:26}},{{opacity:1,y:0,duration:0.5,stagger:0.12,ease:"power3.out"}},{round(start+0.3,2)});')
 
         panel = (
             f'<div class="card-stream" data-composition-id="beat-0" style="position:absolute;{pos}width:{panel_w}px;height:{panel_h}px;overflow:hidden;{radius}'
