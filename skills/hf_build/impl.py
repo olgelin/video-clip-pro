@@ -472,7 +472,7 @@ class Hf_build(SkillBase):
         # 左/右面板：渐变方向 + 圆角(朝人物侧) + 边框 + 时间轴/节点位置
         if side == "right":
             pos = "right:0;top:0;"
-            bg = "linear-gradient(270deg,rgba(8,12,30,0.75) 0%,rgba(8,12,30,0.3) 45%,rgba(8,12,30,0.0) 100%)"
+            bg = "linear-gradient(270deg,rgba(8,12,30,0.82) 0%,rgba(8,12,30,0.55) 45%,rgba(8,12,30,0.2) 72%,rgba(8,12,30,0.0) 100%)"
             radius = "border-radius:18px 0 0 18px;"
             border = "border:1px solid rgba(0,212,255,0.35);"
             line_pos = "right:22px;"
@@ -480,7 +480,7 @@ class Hf_build(SkillBase):
             item_pad = "padding:14px 48px 14px 18px;"
         else:
             pos = "left:0;top:0;"
-            bg = "linear-gradient(90deg,rgba(8,12,30,0.75) 0%,rgba(8,12,30,0.3) 45%,rgba(8,12,30,0.0) 100%)"
+            bg = "linear-gradient(90deg,rgba(8,12,30,0.82) 0%,rgba(8,12,30,0.55) 45%,rgba(8,12,30,0.2) 72%,rgba(8,12,30,0.0) 100%)"
             radius = "border-radius:0 18px 18px 0;"
             border = "border:1px solid rgba(0,212,255,0.35);"
             line_pos = "left:22px;"
