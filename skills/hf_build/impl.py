@@ -365,52 +365,26 @@ class Hf_build(SkillBase):
             # 标题（headline，白色粗体）
             _parts.append(f'<div style="font-size:26px;font-weight:800;color:#fff;line-height:1.3;margin:5px 0 3px;text-shadow:0 1px 8px rgba(0,0,0,0.6);">{headline}</div>')
 
-            # 大字数据（metric，超大青蓝，视觉锚点）
-            if metric:
+            # 大字数据（metric，若 headline 已含该数据则不重复展示）
+            if metric and metric not in headline:
                 _parts.append(f'<div style="font-size:64px;font-weight:900;color:#4fd1ff;line-height:1.0;margin:2px 0;text-shadow:0 2px 16px rgba(0,0,0,0.6);">{metric}</div>')
 
-            # 副说明（subtext）
-            if subtext:
-                _parts.append(f'<div style="font-size:15px;color:rgba(255,255,255,0.78);line-height:1.5;margin-top:4px;text-shadow:0 1px 6px rgba(0,0,0,0.6);">{subtext}</div>')
+            # 一句说明（subtext 优先，fallback takeaway）
+            _note = subtext or takeaway
+            if _note:
+                _parts.append(f'<div style="font-size:15px;color:rgba(255,255,255,0.78);line-height:1.5;margin-top:4px;text-shadow:0 1px 6px rgba(0,0,0,0.6);">{_note}</div>')
 
-            # 结论列表（bullets，最多 2 条，编号方块，精简不堆叠）
-            _bullets = list(bullets[:2]) if bullets else []
-            if not _bullets and takeaway:
-                _bullets = [takeaway]
-            for _i, _b in enumerate(_bullets, 1):
-                _parts.append(
-                    f'<div style="font-size:16px;color:rgba(255,255,255,0.9);line-height:1.6;margin-top:7px;text-shadow:0 1px 6px rgba(0,0,0,0.5);">'
-                    f'<span style="display:inline-block;min-width:22px;height:22px;line-height:22px;text-align:center;background:#4fd1ff;color:#04121f;border-radius:5px;font-size:13px;font-weight:700;margin-right:8px;vertical-align:middle;">{_i}</span>{_b}'
-                    f'</div>'
-                )
-
-            # 横向对比条（data_points，仅在无 bullets 时显示，避免与列表内容重复）
-            if not _bullets and data_points and len(data_points) >= 2:
-                _nums = [_parse_num(_d.get("value", "")) for _d in data_points[:4]]
-                _bars = []
-                if all(_n is not None for _n in _nums):
-                    _max = max(_nums) or 1.0
-                    for _d, _n in zip(data_points[:4], _nums):
-                        _w = max(10, int(_n / _max * 100))
-                        _bars.append(
-                            f'<div style="margin-top:8px;">'
-                            f'<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:13px;text-shadow:0 1px 4px rgba(0,0,0,0.5);">'
-                            f'<span style="color:rgba(255,255,255,0.85);">{_d.get("label", "")}</span>'
-                            f'<span style="color:#4fd1ff;font-weight:700;">{_d.get("value", "")}</span></div>'
-                            f'<div style="height:6px;background:rgba(79,209,255,0.15);border-radius:3px;margin-top:3px;overflow:hidden;">'
-                            f'<div style="width:{_w}%;height:100%;background:#4fd1ff;border-radius:3px;"></div></div></div>'
-                        )
-                else:
-                    for _d in data_points[:4]:
-                        _bars.append(
-                            f'<div style="margin-top:8px;">'
-                            f'<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:13px;text-shadow:0 1px 4px rgba(0,0,0,0.5);">'
-                            f'<span style="color:rgba(255,255,255,0.85);">{_d.get("label", "")}</span>'
-                            f'<span style="color:#4fd1ff;font-weight:700;">{_d.get("value", "")}</span></div>'
-                            f'<div style="height:6px;background:rgba(79,209,255,0.15);border-radius:3px;margin-top:3px;overflow:hidden;">'
-                            f'<div style="width:100%;height:100%;background:#4fd1ff;border-radius:3px;"></div></div></div>'
-                        )
-                _parts.append(''.join(_bars))
+            # 列表（bullets，仅在无说明时兜底，最多 2 条，编号方块）
+            if not _note:
+                _bullets = list(bullets[:2]) if bullets else []
+                if not _bullets and data_points and len(data_points) >= 2:
+                    _bullets = [f'{d.get("label", "")} {d.get("value", "")}'.strip() for d in data_points[:2]]
+                for _i, _b in enumerate(_bullets, 1):
+                    _parts.append(
+                        f'<div style="font-size:16px;color:rgba(255,255,255,0.9);line-height:1.6;margin-top:7px;text-shadow:0 1px 6px rgba(0,0,0,0.5);">'
+                        f'<span style="display:inline-block;min-width:22px;height:22px;line-height:22px;text-align:center;background:#4fd1ff;color:#04121f;border-radius:5px;font-size:13px;font-weight:700;margin-right:8px;vertical-align:middle;">{_i}</span>{_b}'
+                        f'</div>'
+                    )
 
             content = "".join(_parts)
             return idx, content
