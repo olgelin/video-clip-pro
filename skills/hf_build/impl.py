@@ -332,26 +332,53 @@ class Hf_build(SkillBase):
 
             cw, ch = self._card_size(layout, orientation)
 
-            # 🔴 信息流模式：参考图2「数据结论型」排版——装饰线+标题+大字数据+辅助说明+结论列表
-            #    用户定版：要有排版层次、大小对比、内容展示（不是裸标题），内容来自 ENRICH 提炼。
+            # 🔴 信息流模式：具象化信息卡（参考图3/4）——kicker+标题+大字数据+柱状图+结论列表
+            #    用户定版：要"具象化"（大字数据/柱状图/图标/徽章），不是"报字幕"（文字罗列）。
+            #    代码层受控生成，限制在卡片区域内，不铺满全屏。
             _parts = []
-            _parts.append('<div style="width:28px;height:3px;background:#00d4ff;margin-bottom:10px;border-radius:2px;"></div>')
-            _parts.append(f'<div style="font-size:20px;font-weight:700;color:#fff;line-height:1.4;">{headline}</div>')
+
+            # kicker（英文小标签，visual_keyword 大写，氛围）
+            _vk = (card.get("visual_keyword") or "").upper().replace(",", " · ")
+            if _vk:
+                _parts.append(f'<div style="font-size:11px;color:#4fd1ff;letter-spacing:3px;font-weight:700;">{_vk}</div>')
+
+            # 标题（headline，白色粗体）
+            _parts.append(f'<div style="font-size:22px;font-weight:800;color:#fff;line-height:1.3;margin:4px 0 2px;">{headline}</div>')
+
+            # 大字数据（metric，超大青蓝，视觉锚点）
             if metric:
-                _parts.append(f'<div style="font-size:44px;font-weight:900;color:#00d4ff;line-height:1.1;margin:6px 0 2px;">{metric}</div>')
+                _parts.append(f'<div style="font-size:54px;font-weight:900;color:#4fd1ff;line-height:1.0;margin:2px 0;">{metric}</div>')
+
+            # 副说明（subtext）
             if subtext:
-                _parts.append(f'<div style="font-size:13px;color:rgba(255,255,255,0.6);line-height:1.5;margin-bottom:8px;">{subtext}</div>')
+                _parts.append(f'<div style="font-size:13px;color:rgba(255,255,255,0.65);line-height:1.5;margin-top:4px;">{subtext}</div>')
+
+            # 柱状图（data_points 有 2+ 项时，代码层 CSS 柱状图，具象化数据）
+            if data_points and len(data_points) >= 2:
+                _bars = []
+                for _d in data_points[:4]:
+                    _label = _d.get("label", "")
+                    _value = _d.get("value", "")
+                    _bars.append(
+                        f'<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;">'
+                        f'<div style="font-size:10px;color:#4fd1ff;font-weight:700;">{_value}</div>'
+                        f'<div style="width:100%;height:8px;background:rgba(79,209,255,0.15);border-radius:3px;overflow:hidden;">'
+                        f'<div style="width:100%;height:100%;background:#4fd1ff;"></div></div>'
+                        f'<div style="font-size:10px;color:rgba(255,255,255,0.6);">{_label}</div></div>'
+                    )
+                _parts.append(f'<div style="display:flex;gap:10px;margin-top:12px;">{"".join(_bars)}</div>')
+
+            # 结论列表（bullets，编号方块）
             _bullets = list(bullets[:3]) if bullets else []
-            if not _bullets and data_points:
-                _bullets = [f'{d.get("label","")} {d.get("value","")}'.strip() for d in data_points[:3]]
             if not _bullets and takeaway:
                 _bullets = [takeaway]
             for _i, _b in enumerate(_bullets, 1):
                 _parts.append(
                     f'<div style="font-size:14px;color:rgba(255,255,255,0.88);line-height:1.6;margin-top:6px;">'
-                    f'<span style="display:inline-block;min-width:18px;height:18px;line-height:18px;text-align:center;background:#00d4ff;color:#04121f;border-radius:4px;font-size:11px;font-weight:700;margin-right:8px;vertical-align:middle;">{_i}</span>{_b}'
+                    f'<span style="display:inline-block;min-width:18px;height:18px;line-height:18px;text-align:center;background:#4fd1ff;color:#04121f;border-radius:4px;font-size:11px;font-weight:700;margin-right:8px;vertical-align:middle;">{_i}</span>{_b}'
                     f'</div>'
                 )
+
             content = "".join(_parts)
             return idx, content
 
