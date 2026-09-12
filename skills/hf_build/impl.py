@@ -414,21 +414,21 @@ class Hf_build(SkillBase):
 
         # 左/右面板：渐变方向 + 圆角 + 边框 + 时间轴/节点位置
         if side == "right":
-            pos = "right:24px;top:24px;"
-            bg = "linear-gradient(270deg,rgba(8,12,30,0.82) 0%,rgba(8,12,30,0.45) 100%)"
-            radius = "border-radius:16px;"
-            border = "border:3px solid rgba(0,212,255,0.85);"
-            line_pos = "right:20px;"
-            node_pos = "right:16px;"
-            item_pad = "padding:12px 46px 12px 16px;"
+            pos = "right:0;top:0;"
+            bg = "linear-gradient(270deg,rgba(8,12,30,0.88) 0%,rgba(8,12,30,0.88) 72%,rgba(8,12,30,0.0) 100%)"
+            radius = "border-radius:0;"
+            border = ""
+            line_pos = "right:22px;"
+            node_pos = "right:18px;"
+            item_pad = "padding:14px 48px 14px 18px;"
         else:
-            pos = "left:24px;top:24px;"
-            bg = "linear-gradient(90deg,rgba(8,12,30,0.82) 0%,rgba(8,12,30,0.45) 100%)"
-            radius = "border-radius:16px;"
-            border = "border:3px solid rgba(0,212,255,0.85);"
-            line_pos = "left:20px;"
-            node_pos = "left:16px;"
-            item_pad = "padding:12px 16px 12px 46px;"
+            pos = "left:0;top:0;"
+            bg = "linear-gradient(90deg,rgba(8,12,30,0.88) 0%,rgba(8,12,30,0.88) 72%,rgba(8,12,30,0.0) 100%)"
+            radius = "border-radius:0;"
+            border = ""
+            line_pos = "left:22px;"
+            node_pos = "left:18px;"
+            item_pad = "padding:14px 18px 14px 48px;"
 
         items = []
         stmts = []
@@ -451,7 +451,7 @@ class Hf_build(SkillBase):
             stmts.append(f'tl.to(".info-item[data-seg=\'{idx}\'] .node",{{scale:1.6,opacity:0.45,duration:0.8,repeat:2,yoyo:true,ease:"sine.inOut"}},{round(start + 0.3, 2)});')
 
         panel = (
-            f'<div class="card-stream" data-composition-id="beat-0" style="position:absolute;{pos}width:{panel_w}px;overflow:hidden;{radius}'
+            f'<div class="card-stream" data-composition-id="beat-0" style="position:absolute;{pos}width:{panel_w}px;height:{panel_h}px;overflow:hidden;{radius}'
             f'{border}'
             f'background:{bg};'
             '">'
