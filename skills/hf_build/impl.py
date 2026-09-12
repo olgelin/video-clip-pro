@@ -288,6 +288,21 @@ class Hf_build(SkillBase):
             "紧张": "tense", "对立": "tense", "冲突": "urgent", "焦虑": "tense",
             "开阔": "hopeful", "希望": "hopeful",
         }
+        # 情绪 → 强调色（蓝青系变体，保持单主色蓝青铁律，仅明度/色温微调让画面有变化）
+        _EMOTION_ACCENT = {
+            "urgent": "#00d4ff",      # 亮青（紧张，最刺眼）
+            "tense": "#0097cc",       # 深青蓝（压抑）
+            "hopeful": "#6ee7ff",     # 淡青（希望，柔和）
+            "triumphant": "#8be9ff",  # 更淡青（胜利，明亮）
+            "neutral": "#4fd1ff",     # 默认蓝青
+        }
+        _EMOTION_ACCENT_DIM = {
+            "urgent": "#00a8cc",
+            "tense": "#0078a3",
+            "hopeful": "#4fc3ff",
+            "triumphant": "#5cd9ff",
+            "neutral": "#00d4ff",     # 章节标签竖线当前用 #00d4ff
+        }
 
         def _gen_scene(idx: int, scene: dict):
             narration = scene.get("narration", "")
@@ -331,6 +346,11 @@ class Hf_build(SkillBase):
                     if mk in mood:
                         emotion = me
                         break
+            # 情绪 → 强调色（蓝青系变体，每个场景一个 accent，画面有情绪变化但不越单主色蓝青铁律）
+            _accent = _EMOTION_ACCENT.get(emotion, "#4fd1ff")
+            _accent_dim = _EMOTION_ACCENT_DIM.get(emotion, "#00d4ff")
+            scene["_accent"] = _accent
+            scene["_accent_dim"] = _accent_dim
 
             cw, ch = self._card_size(layout, orientation)
 
@@ -359,8 +379,8 @@ class Hf_build(SkillBase):
             # 章节标签（所有 layout 共享，模块化）
             _parts.append(
                 f'<div class="c-step" style="display:flex;align-items:center;gap:9px;margin-bottom:6px;">'
-                f'<div style="width:3px;height:15px;background:#00d4ff;border-radius:2px;box-shadow:0 0 8px rgba(0,212,255,0.8);"></div>'
-                f'<span style="font-size:var(--fs-step);color:#4fd1ff;letter-spacing:3px;font-weight:700;text-shadow:0 1px 6px rgba(0,0,0,0.6);">STEP {idx + 1:02d}</span>'
+                f'<div style="width:3px;height:15px;background:var(--accent-dim, #00d4ff);border-radius:2px;box-shadow:0 0 8px rgba(0,212,255,0.8);"></div>'
+                f'<span style="font-size:var(--fs-step);color:var(--accent, #4fd1ff);letter-spacing:3px;font-weight:700;text-shadow:0 1px 6px rgba(0,0,0,0.6);">STEP {idx + 1:02d}</span>'
                 f'</div>'
             )
 
@@ -381,11 +401,11 @@ class Hf_build(SkillBase):
                         f'<div class="c-compare" style="display:flex;align-items:center;gap:12px;margin-top:8px;">'
                         f'<div class="c-cmp-l" style="flex:1;text-align:center;padding:12px 6px;border:1px solid rgba(0,212,255,0.4);border-radius:10px;background:rgba(0,212,255,0.08);">'
                         f'<div style="font-size:var(--fs-sub);color:rgba(255,255,255,0.85);">{_l.get("label","")}</div>'
-                        f'<div style="font-size:var(--fs-head);color:#4fd1ff;font-weight:800;margin-top:3px;">{_l.get("value","")}</div></div>'
-                        f'<div style="font-size:var(--fs-sub);color:#4fd1ff;font-weight:700;letter-spacing:2px;">VS</div>'
+                        f'<div style="font-size:var(--fs-head);color:var(--accent, #4fd1ff);font-weight:800;margin-top:3px;">{_l.get("value","")}</div></div>'
+                        f'<div style="font-size:var(--fs-sub);color:var(--accent, #4fd1ff);font-weight:700;letter-spacing:2px;">VS</div>'
                         f'<div class="c-cmp-r" style="flex:1;text-align:center;padding:12px 6px;border:1px solid rgba(0,212,255,0.4);border-radius:10px;background:rgba(0,212,255,0.08);">'
                         f'<div style="font-size:var(--fs-sub);color:rgba(255,255,255,0.85);">{_r.get("label","")}</div>'
-                        f'<div style="font-size:var(--fs-head);color:#4fd1ff;font-weight:800;margin-top:3px;">{_r.get("value","")}</div></div>'
+                        f'<div style="font-size:var(--fs-head);color:var(--accent, #4fd1ff);font-weight:800;margin-top:3px;">{_r.get("value","")}</div></div>'
                         f'</div>'
                     )
                 elif _note:
@@ -398,14 +418,14 @@ class Hf_build(SkillBase):
                 for _i, _b in enumerate(_bl, 1):
                     _parts.append(
                         f'<div class="c-bullet" style="font-size:var(--fs-sub);color:rgba(255,255,255,0.9);line-height:1.6;margin-top:7px;text-shadow:0 1px 6px rgba(0,0,0,0.5);">'
-                        f'<span style="display:inline-block;min-width:22px;height:22px;line-height:22px;text-align:center;background:#4fd1ff;color:#04121f;border-radius:50%;font-size:13px;font-weight:700;margin-right:8px;vertical-align:middle;">{_i}</span>{_b}'
+                        f'<span style="display:inline-block;min-width:22px;height:22px;line-height:22px;text-align:center;background:var(--accent, #4fd1ff);color:#04121f;border-radius:50%;font-size:13px;font-weight:700;margin-right:8px;vertical-align:middle;">{_i}</span>{_b}'
                         f'</div>'
                     )
 
             else:
                 # 默认 big-number：大字数据最突出 + 标题 + 说明 + 数据条
                 if metric:
-                    _parts.append(f'<div class="c-metric" style="font-size:var(--fs-metric);font-weight:900;color:#4fd1ff;line-height:1.0;margin:2px 0 4px;text-shadow:0 2px 14px rgba(0,0,0,0.75);">{metric}</div>')
+                    _parts.append(f'<div class="c-metric" style="font-size:var(--fs-metric);font-weight:900;color:var(--accent, #4fd1ff);line-height:1.0;margin:2px 0 4px;text-shadow:0 2px 14px rgba(0,0,0,0.75);">{metric}</div>')
                 _parts.append(f'<div class="c-head" style="font-size:var(--fs-head);font-weight:800;color:#fff;line-height:1.25;margin:2px 0 4px;text-shadow:0 1px 10px rgba(0,0,0,0.7);">{headline}</div>')
                 if _note:
                     _parts.append(f'<div class="c-sub" style="font-size:var(--fs-sub);color:rgba(255,255,255,0.88);line-height:1.5;margin-top:5px;text-shadow:0 1px 8px rgba(0,0,0,0.7);">{_note}</div>')
@@ -421,9 +441,9 @@ class Hf_build(SkillBase):
                             f'<div class="c-bar" style="margin-top:9px;">'
                             f'<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:var(--fs-bar);text-shadow:0 1px 4px rgba(0,0,0,0.5);">'
                             f'<span style="color:rgba(255,255,255,0.85);">{_d.get("label", "")}</span>'
-                            f'<span style="color:#4fd1ff;font-weight:700;">{_d.get("value", "")}</span></div>'
+                            f'<span style="color:var(--accent, #4fd1ff);font-weight:700;">{_d.get("value", "")}</span></div>'
                             f'<div style="position:relative;height:6px;background:rgba(0,212,255,0.15);border-radius:3px;margin-top:3px;overflow:hidden;">'
-                            f'<div class="bar-fill" style="width:{_w}%;height:100%;background:linear-gradient(90deg,#00d4ff,#4fd1ff);border-radius:3px;"></div>'
+                            f'<div class="bar-fill" style="width:{_w}%;height:100%;background:linear-gradient(90deg,var(--accent-dim, #00d4ff),var(--accent, #4fd1ff));border-radius:3px;"></div>'
                             f'<div class="bar-dot" style="position:absolute;left:{_w}%;top:50%;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:50%;background:#fff;box-shadow:0 0 8px rgba(255,255,255,0.9);"></div>'
                             f'</div></div>'
                         )
@@ -537,7 +557,7 @@ class Hf_build(SkillBase):
             html = re.sub(r'<script>.*?</script>', '', html, flags=re.DOTALL)
             start = round(float(scene.get("final_start", 0)), 2)
             items.append(
-                f'<div class="info-item" data-seg="{idx}" style="position:relative;{item_pad}opacity:0;border-bottom:1px solid rgba(255,255,255,0.05);">'
+                f'<div class="info-item" data-seg="{idx}" style="position:relative;{item_pad}opacity:0;border-bottom:1px solid rgba(255,255,255,0.05);--accent:{scene.get("_accent", "#4fd1ff")};--accent-dim:{scene.get("_accent_dim", "#00d4ff")};">'
                 f'{html}'
                 f'</div>'
             )
