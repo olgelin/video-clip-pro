@@ -360,10 +360,10 @@ class Hf_build(SkillBase):
             # kicker（英文小标签，visual_keyword 大写，氛围）
             _vk = (card.get("visual_keyword") or "").upper().replace(",", " · ")
             if _vk:
-                _parts.append(f'<div style="font-size:12px;color:#4fd1ff;letter-spacing:3px;font-weight:700;">{_vk}</div>')
+                _parts.append(f'<div style="font-size:13px;color:#4fd1ff;letter-spacing:3px;font-weight:700;text-shadow:0 1px 6px rgba(0,0,0,0.6);">{_vk}</div>')
 
             # 标题（headline，白色粗体）
-            _parts.append(f'<div style="font-size:24px;font-weight:800;color:#fff;line-height:1.3;margin:5px 0 3px;text-shadow:0 1px 8px rgba(0,0,0,0.6);">{headline}</div>')
+            _parts.append(f'<div style="font-size:26px;font-weight:800;color:#fff;line-height:1.3;margin:5px 0 3px;text-shadow:0 1px 8px rgba(0,0,0,0.6);">{headline}</div>')
 
             # 大字数据（metric，超大青蓝，视觉锚点）
             if metric:
@@ -371,7 +371,7 @@ class Hf_build(SkillBase):
 
             # 副说明（subtext）
             if subtext:
-                _parts.append(f'<div style="font-size:14px;color:rgba(255,255,255,0.75);line-height:1.5;margin-top:4px;text-shadow:0 1px 6px rgba(0,0,0,0.6);">{subtext}</div>')
+                _parts.append(f'<div style="font-size:15px;color:rgba(255,255,255,0.78);line-height:1.5;margin-top:4px;text-shadow:0 1px 6px rgba(0,0,0,0.6);">{subtext}</div>')
 
             # 横向对比条（data_points 有 2+ 项，宽度按数值比例；非数值则等宽横条）
             if data_points and len(data_points) >= 2:
@@ -383,7 +383,7 @@ class Hf_build(SkillBase):
                         _w = max(10, int(_n / _max * 100))
                         _bars.append(
                             f'<div style="margin-top:8px;">'
-                            f'<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12px;">'
+                            f'<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:13px;text-shadow:0 1px 4px rgba(0,0,0,0.5);">'
                             f'<span style="color:rgba(255,255,255,0.85);">{_d.get("label", "")}</span>'
                             f'<span style="color:#4fd1ff;font-weight:700;">{_d.get("value", "")}</span></div>'
                             f'<div style="height:6px;background:rgba(79,209,255,0.15);border-radius:3px;margin-top:3px;overflow:hidden;">'
@@ -393,7 +393,7 @@ class Hf_build(SkillBase):
                     for _d in data_points[:4]:
                         _bars.append(
                             f'<div style="margin-top:8px;">'
-                            f'<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12px;">'
+                            f'<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:13px;text-shadow:0 1px 4px rgba(0,0,0,0.5);">'
                             f'<span style="color:rgba(255,255,255,0.85);">{_d.get("label", "")}</span>'
                             f'<span style="color:#4fd1ff;font-weight:700;">{_d.get("value", "")}</span></div>'
                             f'<div style="height:6px;background:rgba(79,209,255,0.15);border-radius:3px;margin-top:3px;overflow:hidden;">'
@@ -407,8 +407,8 @@ class Hf_build(SkillBase):
                 _bullets = [takeaway]
             for _i, _b in enumerate(_bullets, 1):
                 _parts.append(
-                    f'<div style="font-size:15px;color:rgba(255,255,255,0.9);line-height:1.6;margin-top:7px;text-shadow:0 1px 6px rgba(0,0,0,0.5);">'
-                    f'<span style="display:inline-block;min-width:20px;height:20px;line-height:20px;text-align:center;background:#4fd1ff;color:#04121f;border-radius:5px;font-size:12px;font-weight:700;margin-right:8px;vertical-align:middle;">{_i}</span>{_b}'
+                    f'<div style="font-size:16px;color:rgba(255,255,255,0.9);line-height:1.6;margin-top:7px;text-shadow:0 1px 6px rgba(0,0,0,0.5);">'
+                    f'<span style="display:inline-block;min-width:22px;height:22px;line-height:22px;text-align:center;background:#4fd1ff;color:#04121f;border-radius:5px;font-size:13px;font-weight:700;margin-right:8px;vertical-align:middle;">{_i}</span>{_b}'
                     f'</div>'
                 )
 
