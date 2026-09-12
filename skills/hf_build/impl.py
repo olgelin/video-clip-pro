@@ -451,10 +451,10 @@ class Hf_build(SkillBase):
             stmts.append(f'tl.to(".info-item[data-seg=\'{idx}\'] .node",{{scale:1.6,opacity:0.45,duration:0.8,repeat:2,yoyo:true,ease:"sine.inOut"}},{round(start + 0.3, 2)});')
 
         panel = (
-            f'<div class="card-stream" data-composition-id="beat-0" style="position:absolute;{pos}width:{panel_w}px;height:{panel_h}px;overflow:hidden;{radius}'
+            f'<div class="card-stream" data-composition-id="beat-0" style="position:absolute;{pos}width:{panel_w}px;overflow:hidden;{radius}'
             f'{border}'
             f'background:{bg};'
-            'backdrop-filter:blur(10px) saturate(130%);">'
+            '">'
             '<div style="position:absolute;top:0;left:0;width:100%;height:2px;background:linear-gradient(90deg,#00d4ff,rgba(108,140,255,0.3),transparent);"></div>'
             '<div style="padding:14px 18px 10px;font-size:11px;color:#00d4ff;letter-spacing:3px;font-weight:700;border-bottom:1px solid rgba(255,255,255,0.08);">SESSION · 实时笔记</div>'
             f'<div class="stream-line" style="position:absolute;{line_pos}top:50px;bottom:12px;width:2px;background:linear-gradient(180deg,rgba(0,212,255,0.55),rgba(108,140,255,0.12));"></div>'
