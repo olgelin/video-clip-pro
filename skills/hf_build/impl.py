@@ -494,16 +494,12 @@ class Hf_build(SkillBase):
             bg = "linear-gradient(270deg,rgba(8,12,30,0.88) 0%,rgba(8,12,30,0.65) 40%,rgba(8,12,30,0.35) 65%,rgba(8,12,30,0.0) 100%)"
             radius = "border-radius:14px 0 0 14px;"
             border = "border:2px solid rgba(0,212,255,0.7);box-shadow:inset 0 0 18px rgba(0,212,255,0.15);"
-            line_pos = "right:22px;"
-            node_pos = "right:18px;"
             item_pad = "padding:14px 48px 14px 18px;"
         else:
             pos = "left:0;top:0;"
             bg = "linear-gradient(90deg,rgba(8,12,30,0.88) 0%,rgba(8,12,30,0.65) 40%,rgba(8,12,30,0.35) 65%,rgba(8,12,30,0.0) 100%)"
             radius = "border-radius:0 14px 14px 0;"
             border = "border:2px solid rgba(0,212,255,0.7);box-shadow:inset 0 0 18px rgba(0,212,255,0.15);"
-            line_pos = "left:22px;"
-            node_pos = "left:18px;"
             item_pad = "padding:14px 18px 14px 48px;"
 
         items = []
@@ -551,51 +547,6 @@ class Hf_build(SkillBase):
         """
         # 🔴 横竖屏都走信息流面板（用户定版 2026-09-12：竖屏/横屏统一用一条渐变信息流）
         return self._build_stream_html(scenes, orientation, vt_layout, video_path=video_path)
-
-        # ── 以下为旧「横屏左右两列独立卡」逻辑，已废弃（横屏也改信息流面板） ──
-        # 横屏左右两列堆叠（idx 偶数左列、奇数右列，从上到下）。竖屏已在上面走 _build_stream_html。
-        _cw, _row_gap, _top0 = 600, 260, 60
-
-        card_divs = []
-        stmts = []
-        for idx, scene in enumerate(scenes):
-            if not scene.get("_llm_html"):
-                continue
-            html = scene["_llm_html"]
-            # 去掉 build_card 的 data-composition-id/data-width/data-height（总 HTML 内部元素不是独立 composition）
-            html = html.replace(' data-composition-id="card"', '')
-            html = re.sub(r' data-width="\d+"', '', html)
-            html = re.sub(r' data-height="\d+"', '', html)
-            # 🔴 去掉 LLM 的 <script>（tl.from opacity:0 在单一 composition 下被 HyperFrames seek 冻结→文字不显示；
-            #    且 5 卡共用 #card/#headline 等 id 会串）。元素级出场 + 微动改由代码层统一 timeline 注入。
-            html = re.sub(r'<script>.*?</script>', '', html, flags=re.DOTALL)
-            start = round(float(scene.get("final_start", 0)), 2)
-            dur = round(float(scene.get("duration", 5)), 2)
-            layout = vt_layout.get(scene.get("visual_type", "quote_hero"), "quote-card")
-            _, ch = self._card_size(layout, orientation)
-
-            # 横屏左右两列堆叠：idx 偶数左列、奇数右列，行 = idx//2
-            col = idx % 2
-            row = idx // 2
-            side = "left:30px" if col == 0 else "right:30px"
-            pos = f"{side};top:{_top0 + row * _row_gap}px"
-            card_divs.append(
-                f'<div class="seg-card" data-seg="{idx}" style="position:absolute;{pos};width:{_cw}px;height:{ch}px;opacity:0;">{html}</div>'
-            )
-            # 入场（配音讲到 → 卡淡入，不隐藏、不退场 = 堆叠保留）
-            stmts.append(f'tl.fromTo(".seg-card[data-seg=\'{idx}\']",{{opacity:0,y:30}},{{opacity:1,y:0,duration:0.4,ease:"power2.out"}},{start});')
-            # 🔴 信息点逐个弹出（跟着口播语音）：卡片内非装饰子元素 stagger 依次入场
-            _decor = ":not(.glow):not(.glow-second):not(.particle):not(.pulse-dot):not(.icon-float):not(.light-scan):not(#light-scan)"
-            stmts.append(f'tl.fromTo(".seg-card[data-seg=\'{idx}\'] #card > *{_decor}",{{opacity:0,y:20}},{{opacity:1,y:0,duration:0.3,stagger:0.12,ease:"power3.out"}},{round(start + 0.15, 2)});')
-
-        return (
-            '<div class="seg-panel" data-composition-id="beat-0" style="position:absolute;inset:0;width:100%;height:100%;">'
-            + "".join(card_divs)
-            + '<script>(function(){var tl=gsap.timeline({paused:true});'
-            + "".join(stmts)
-            + 'window.__timelines["beat-0"]=tl;})();</script>'
-            + '</div>'
-        )
 
     def _segment_groups(self, edl: dict, provider) -> dict:
         """语义分段：把 ranges 按语义聚成 N 个画面组，存到 edl['_segments']。
