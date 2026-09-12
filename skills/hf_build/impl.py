@@ -357,10 +357,8 @@ class Hf_build(SkillBase):
                     return float(_m.group(1))
                 return None
 
-            # kicker（英文小标签，visual_keyword 大写，氛围）
-            _vk = (card.get("visual_keyword") or "").upper().replace(",", " · ")
-            if _vk:
-                _parts.append(f'<div style="font-size:13px;color:#4fd1ff;letter-spacing:3px;font-weight:700;text-shadow:0 1px 6px rgba(0,0,0,0.6);">{_vk}</div>')
+            # kicker（英文序号标签，简洁有意义，像参考图"LAST EPISODE"）
+            _parts.append(f'<div style="font-size:13px;color:#4fd1ff;letter-spacing:3px;font-weight:700;text-shadow:0 1px 6px rgba(0,0,0,0.6);">STEP {idx + 1:02d}</div>')
 
             # 标题（headline，白色粗体）
             _parts.append(f'<div style="font-size:26px;font-weight:800;color:#fff;line-height:1.3;margin:5px 0 3px;text-shadow:0 1px 8px rgba(0,0,0,0.6);">{headline}</div>')
