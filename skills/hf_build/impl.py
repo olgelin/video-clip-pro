@@ -99,7 +99,7 @@ ENRICH_PROMPT = """你是知识科普类短视频的**PPT视觉设计师**。你
 🔴 核心使命：每张卡片必须有至少一个"视觉锚点"——数字、对比、图标阵列、进度条、徽章链——让观众"看到信息"而不只是"听到文字"。
 
 ## 字段说明
-- headline: 核心观点（6-18字），PPT标题风格
+- headline: 核心观点（6-18字），PPT标题风格。🔴不含具体数字（数字/比例/百分比一律放到 metric 字段，如"人物占屏的最佳比例"而非"人物占屏1/4"）
 - subtext: 支撑说明（8-30字），可为""
 - metric: 数字指标（"3倍""85%""1000万"），必须从原文提取，没有则填null
 - emotion: "urgent"/"tense"/"neutral"/"hopeful"/"triumphant"
@@ -365,8 +365,8 @@ class Hf_build(SkillBase):
             # 标题（headline，白色粗体）
             _parts.append(f'<div style="font-size:26px;font-weight:800;color:#fff;line-height:1.3;margin:5px 0 3px;text-shadow:0 1px 8px rgba(0,0,0,0.6);">{headline}</div>')
 
-            # 大字数据（metric，若 headline 已含该数据则不重复展示）
-            if metric and metric not in headline:
+            # 大字数据（metric，超大青蓝，视觉锚点；headline 已约束不含数字）
+            if metric:
                 _parts.append(f'<div style="font-size:64px;font-weight:900;color:#4fd1ff;line-height:1.0;margin:2px 0;text-shadow:0 2px 16px rgba(0,0,0,0.6);">{metric}</div>')
 
             # 一句说明（subtext 优先，fallback takeaway）
