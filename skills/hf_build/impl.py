@@ -310,7 +310,9 @@ class Hf_build(SkillBase):
                     "{segments_json}", json.dumps([{"beat": "INFO", "quote": narration}], ensure_ascii=False))
                 enrich_raw = provider.call("card_enrich", enrich_prompt)
                 enrich = provider.extract_json(enrich_raw)
-                if isinstance(enrich, list) and enrich:
+                if isinstance(enrich, dict):
+                    card = enrich
+                elif isinstance(enrich, list) and enrich:
                     card = enrich[0] or {}
             except Exception:
                 card = {}
