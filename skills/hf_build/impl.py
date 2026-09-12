@@ -331,24 +331,22 @@ class Hf_build(SkillBase):
 
             cw, ch = self._card_size(layout, orientation)
 
-            # 🔴 竖屏信息流：LLM 只生成精简 3 层（面包屑+标题+关键点），横屏用完整 scene_system 规范
-            portrait_rule = ""
-            if orientation == "portrait":
-                portrait_rule = (
-                    "## 🔴 竖屏信息流模式（本次是竖屏 portrait）\n\n"
-                    "竖屏不做独立卡片，而是「一条纵向信息流」：统一面板 + 时间轴节点 + 信息点依次亮起。\n\n"
-                    "每个信息点只输出精简 3 层（别塞满，信息流里空间有限会溢出）：\n"
-                    "1. 面包屑 meta：英文小字全大写宽字距（如 OPENING · SESSION 01）\n"
-                    "2. 主标题：中文粗体，1 行（核心信息）\n"
-                    "3. 关键点：1 行灰字（补充说明）\n\n"
-                    "禁止：大数字、进度条、柱状图、环形图、清单、多行副标题、图例——信息流里放不下。\n"
-                    "禁止：写 #card 容器（代码层统一包信息点），只输出 3 层内容（3 个 div）。\n"
-                    "禁止：写 background/border/border-radius/box-shadow（统一面板已提供）。\n\n"
-                    "3 层内容示例：\n"
-                    '<div style="font-size:10px;color:#00d4ff;letter-spacing:2px;font-weight:700;">OPENING · SESSION 01</div>\n'
-                    '<div style="font-size:19px;font-weight:800;color:#fff;margin:3px 0;">哈喽</div>\n'
-                    '<div style="font-size:13px;color:rgba(255,255,255,0.65);">好开场是注意力的开关</div>\n'
-                )
+            # 🔴 信息流模式（横竖屏通用）：LLM 只生成精简 3 层（面包屑+标题+关键点）
+            portrait_rule = (
+                "## 🔴 信息流模式（本次用信息流面板，不是独立卡片）\n\n"
+                "画面是一条「纵向信息流」：统一面板 + 时间轴节点 + 信息点依次亮起。\n\n"
+                "每个信息点只输出精简 3 层（别塞满，信息流里空间有限会溢出）：\n"
+                "1. 面包屑 meta：英文小字全大写宽字距（如 OPENING · SESSION 01）\n"
+                "2. 主标题：中文粗体，1 行（核心信息）\n"
+                "3. 关键点：1 行灰字（补充说明）\n\n"
+                "禁止：大数字、进度条、柱状图、环形图、清单、多行副标题、图例、光斑装饰——信息流里放不下。\n"
+                "禁止：写 #card 容器（代码层统一包信息点），只输出 3 层内容（3 个 div）。\n"
+                "禁止：写 background/border/border-radius/box-shadow/光晕（统一面板已提供）。\n\n"
+                "3 层内容示例：\n"
+                '<div style="font-size:10px;color:#00d4ff;letter-spacing:2px;font-weight:700;">OPENING · SESSION 01</div>\n'
+                '<div style="font-size:19px;font-weight:800;color:#fff;margin:3px 0;">哈喽</div>\n'
+                '<div style="font-size:13px;color:rgba(255,255,255,0.65);">好开场是注意力的开关</div>\n'
+            )
 
             prompt = CARD_DIRECT_PROMPT.format(
                 quote=narration, headline=headline, subtext=subtext,
@@ -376,10 +374,8 @@ class Hf_build(SkillBase):
                     pass
 
             if content:
-                # 竖屏：存裸内容（信息流面板统一包壳，不做独立卡外壳）；横屏：build_card 完整独立卡
-                if orientation == "portrait":
-                    return idx, content
-                return idx, build_card(idx, dur, emotion, cw, ch, content)
+                # 横竖屏都存裸内容（信息流面板统一包壳，不做独立卡外壳）
+                return idx, content
             return idx, None
 
         # 并行生成（4 并发），按下标写回 scenes 保持顺序
@@ -446,6 +442,7 @@ class Hf_build(SkillBase):
         if side == "right":
             pos = "right:0;top:0;"
             grad = "linear-gradient(270deg,rgba(8,12,30,0.88) 0%,rgba(8,12,30,0.52) 55%,rgba(8,12,30,0.0) 100%)"
+            top_line = "linear-gradient(270deg,#00d4ff,rgba(108,140,255,0.3),transparent)"
             radius = "border-radius:16px 0 0 16px;"
             border_off = "border-right:none;border-top:none;"
             line_pos = "right:18px;"
@@ -454,6 +451,7 @@ class Hf_build(SkillBase):
         else:
             pos = "left:0;top:0;"
             grad = "linear-gradient(90deg,rgba(8,12,30,0.88) 0%,rgba(8,12,30,0.52) 55%,rgba(8,12,30,0.0) 100%)"
+            top_line = "linear-gradient(90deg,#00d4ff,rgba(108,140,255,0.3),transparent)"
             radius = "border-radius:0 16px 16px 0;"
             border_off = "border-left:none;border-top:none;"
             line_pos = "left:18px;"
@@ -485,7 +483,7 @@ class Hf_build(SkillBase):
             f'border:1px solid rgba(0,212,255,0.22);{border_off}'
             f'background:{grad};'
             'backdrop-filter:blur(8px) saturate(130%);box-shadow:0 24px 60px rgba(0,0,0,0.4),inset 0 0 0 1px rgba(0,212,255,0.05);">'
-            f'<div style="position:absolute;top:0;left:0;width:100%;height:2px;background:{grad}"></div>'
+            f'<div style="position:absolute;top:0;left:0;width:100%;height:2px;background:{top_line}"></div>'
             '<div style="padding:14px 18px 10px;font-size:11px;color:#00d4ff;letter-spacing:3px;font-weight:700;border-bottom:1px solid rgba(255,255,255,0.08);">SESSION · 实时笔记</div>'
             f'<div class="stream-line" style="position:absolute;{line_pos}top:50px;bottom:12px;width:2px;background:linear-gradient(180deg,rgba(0,212,255,0.55),rgba(108,140,255,0.12));"></div>'
             + "".join(items)
