@@ -35,3 +35,6 @@ test_output/
 .DS_Store
 Thumbs.db
 .backup_v40/
+
+# 运行时成本日志
+cost_log.json
