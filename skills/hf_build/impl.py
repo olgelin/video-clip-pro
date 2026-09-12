@@ -415,17 +415,17 @@ class Hf_build(SkillBase):
         # 左/右面板：渐变方向 + 圆角 + 边框 + 时间轴/节点位置
         if side == "right":
             pos = "right:24px;top:24px;"
-            bg = "rgba(15,15,20,0.52)"
-            radius = "border-radius:14px;"
-            border = "border:1px solid rgba(255,255,255,0.08);"
+            bg = "linear-gradient(270deg,rgba(10,15,35,0.78) 0%,rgba(10,15,35,0.42) 52%,rgba(10,15,35,0.0) 100%)"
+            radius = "border-radius:16px;"
+            border = "border:1px solid rgba(255,255,255,0.1);"
             line_pos = "right:18px;"
             node_pos = "right:14px;"
             item_pad = "padding:12px 44px 12px 16px;"
         else:
             pos = "left:24px;top:24px;"
-            bg = "rgba(15,15,20,0.52)"
-            radius = "border-radius:14px;"
-            border = "border:1px solid rgba(255,255,255,0.08);"
+            bg = "linear-gradient(90deg,rgba(10,15,35,0.78) 0%,rgba(10,15,35,0.42) 52%,rgba(10,15,35,0.0) 100%)"
+            radius = "border-radius:16px;"
+            border = "border:1px solid rgba(255,255,255,0.1);"
             line_pos = "left:18px;"
             node_pos = "left:14px;"
             item_pad = "padding:12px 16px 12px 44px;"
