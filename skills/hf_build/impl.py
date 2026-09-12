@@ -427,12 +427,39 @@ class Hf_build(SkillBase):
             print(f"      分镜渲染错误: {e}")
         return {}
 
-    def _build_stream_html(self, scenes: list, vt_layout: dict) -> str:
-        """竖屏信息流面板：统一光幕（从左到右渐变透明）+ 时间轴节点 + 信息点依次滑入。
+    def _build_stream_html(self, scenes: list, orientation: str, vt_layout: dict, side: str = "left") -> str:
+        """信息流面板（竖屏/横屏通用）：统一光幕（渐变透明）+ 时间轴节点 + 信息点依次滑入。
 
-        用户定版（2026-09-12）：竖屏不做 4 张独立卡，改成「一条纵向信息流」——
-        一个统一面板，内部信息点（每语义单元一个）根据口播卡点依次亮起，之前的不退场。
+        用户定版（2026-09-12 精细化区域）：
+        - 竖屏 1080x1920：上半 2/5 高（768px）、宽 2/3（720px）
+        - 横屏 1920x1080：上半 2/3 高（720px）、宽 1/2（960px）
+        - side=left ：面板靠左、渐变左→右（左深右透明，融入右侧人物）
+        - side=right：面板靠右、渐变右→左（右深左透明，对称）
         """
+        # 区域尺寸（用户定版，按画面比例）
+        if orientation == "portrait":
+            panel_w, panel_h = 720, 768   # 2/3 宽, 2/5 高
+        else:
+            panel_w, panel_h = 960, 720   # 1/2 宽, 2/3 高
+
+        # 左/右面板：渐变方向 + 圆角 + 边框 + 时间轴/节点位置
+        if side == "right":
+            pos = "right:0;top:0;"
+            grad = "linear-gradient(270deg,rgba(8,12,30,0.88) 0%,rgba(8,12,30,0.52) 55%,rgba(8,12,30,0.0) 100%)"
+            radius = "border-radius:16px 0 0 16px;"
+            border_off = "border-right:none;border-top:none;"
+            line_pos = "right:18px;"
+            node_pos = "right:14px;"
+            item_pad = "padding:12px 44px 12px 16px;"
+        else:
+            pos = "left:0;top:0;"
+            grad = "linear-gradient(90deg,rgba(8,12,30,0.88) 0%,rgba(8,12,30,0.52) 55%,rgba(8,12,30,0.0) 100%)"
+            radius = "border-radius:0 16px 16px 0;"
+            border_off = "border-left:none;border-top:none;"
+            line_pos = "left:18px;"
+            node_pos = "left:14px;"
+            item_pad = "padding:12px 16px 12px 44px;"
+
         items = []
         stmts = []
         for idx, scene in enumerate(scenes):
@@ -445,21 +472,22 @@ class Hf_build(SkillBase):
             html = re.sub(r'<script>.*?</script>', '', html, flags=re.DOTALL)
             start = round(float(scene.get("final_start", 0)), 2)
             items.append(
-                f'<div class="info-item" data-seg="{idx}" style="position:relative;padding:11px 14px 11px 42px;opacity:0;border-bottom:1px solid rgba(255,255,255,0.05);">'
-                f'<div class="node" style="position:absolute;left:12px;top:22px;width:9px;height:9px;border-radius:50%;background:#00d4ff;box-shadow:0 0 12px #00d4ff;"></div>'
+                f'<div class="info-item" data-seg="{idx}" style="position:relative;{item_pad}opacity:0;border-bottom:1px solid rgba(255,255,255,0.05);">'
+                f'<div class="node" style="position:absolute;{node_pos}top:24px;width:10px;height:10px;border-radius:50%;background:#00d4ff;box-shadow:0 0 12px #00d4ff;"></div>'
                 f'{html}'
                 f'</div>'
             )
             stmts.append(f'tl.fromTo(".info-item[data-seg=\'{idx}\']",{{opacity:0,y:26}},{{opacity:1,y:0,duration:0.5,ease:"power3.out"}},{start});')
             stmts.append(f'tl.to(".info-item[data-seg=\'{idx}\'] .node",{{scale:1.6,opacity:0.45,duration:0.8,repeat:2,yoyo:true,ease:"sine.inOut"}},{round(start + 0.3, 2)});')
+
         panel = (
-            '<div class="card-stream" data-composition-id="beat-0" style="position:absolute;left:20px;top:130px;width:430px;bottom:180px;overflow:hidden;border-radius:16px;'
-            'border:1px solid rgba(0,212,255,0.22);'
-            'background:linear-gradient(90deg,rgba(8,12,30,0.88) 0%,rgba(8,12,30,0.52) 55%,rgba(8,12,30,0.0) 100%);'
-            'backdrop-filter:blur(8px) saturate(130%);box-shadow:0 24px 60px rgba(0,0,0,0.5),inset 0 0 0 1px rgba(0,212,255,0.06);">'
-            '<div style="position:absolute;top:0;left:0;width:100%;height:2px;background:linear-gradient(90deg,#00d4ff,rgba(108,140,255,0.3),transparent);"></div>'
-            '<div style="padding:15px 18px 11px;font-size:11px;color:#00d4ff;letter-spacing:3px;font-weight:700;border-bottom:1px solid rgba(255,255,255,0.08);">SESSION · 实时笔记</div>'
-            '<div class="stream-line" style="position:absolute;left:16px;top:52px;bottom:12px;width:2px;background:linear-gradient(180deg,rgba(0,212,255,0.55),rgba(108,140,255,0.12));"></div>'
+            f'<div class="card-stream" data-composition-id="beat-0" style="position:absolute;{pos}width:{panel_w}px;height:{panel_h}px;overflow:hidden;{radius}'
+            f'border:1px solid rgba(0,212,255,0.22);{border_off}'
+            f'background:{grad};'
+            'backdrop-filter:blur(8px) saturate(130%);box-shadow:0 24px 60px rgba(0,0,0,0.4),inset 0 0 0 1px rgba(0,212,255,0.05);">'
+            f'<div style="position:absolute;top:0;left:0;width:100%;height:2px;background:{grad}"></div>'
+            '<div style="padding:14px 18px 10px;font-size:11px;color:#00d4ff;letter-spacing:3px;font-weight:700;border-bottom:1px solid rgba(255,255,255,0.08);">SESSION · 实时笔记</div>'
+            f'<div class="stream-line" style="position:absolute;{line_pos}top:50px;bottom:12px;width:2px;background:linear-gradient(180deg,rgba(0,212,255,0.55),rgba(108,140,255,0.12));"></div>'
             + "".join(items)
             + '<script>(function(){var tl=gsap.timeline({paused:true});'
             + "".join(stmts)
@@ -474,10 +502,10 @@ class Hf_build(SkillBase):
         配音驱动：每张卡在 final_start（讲到对应语义单元）入场，下一张前 0.4s 淡出（切换动画）。
         全部卡在一个 HTML 里，window.__timelines["beat-0"] 由 HyperFrames seek 驱动。
         """
-        # 🔴 竖屏走信息流面板（统一光幕+时间轴+信息点依次亮起），横屏走左右两列独立卡
-        if orientation == "portrait":
-            return self._build_stream_html(scenes, vt_layout)
+        # 🔴 横竖屏都走信息流面板（用户定版 2026-09-12：竖屏/横屏统一用一条渐变信息流）
+        return self._build_stream_html(scenes, orientation, vt_layout)
 
+        # ── 以下为旧「横屏左右两列独立卡」逻辑，已废弃（横屏也改信息流面板） ──
         # 横屏左右两列堆叠（idx 偶数左列、奇数右列，从上到下）。竖屏已在上面走 _build_stream_html。
         _cw, _row_gap, _top0 = 600, 260, 60
 
