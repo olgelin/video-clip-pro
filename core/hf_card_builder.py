@@ -570,8 +570,20 @@ def _make_caption(captions, start, dur, text, safe_width, orientation, left_pct=
                 cut = i + 1
                 break
         else:
-            # 没标点，在第 max_chars//2 到 max_chars 字间找空格
+            # 没标点，用 jieba 分词在词语边界拆（不劈开"记录""短视频"等词语）
             cut = min(max_chars, len(remaining))
+            try:
+                import jieba
+                _acc = 0
+                for _seg in jieba.cut(remaining):
+                    if _acc + len(_seg) <= cut:
+                        _acc += len(_seg)
+                    else:
+                        break
+                if _acc >= max_chars // 2:
+                    cut = _acc
+            except Exception:
+                pass
         # 🔴 cut 两侧都是数字/单位 → 向左移 cut，避免劈开数字
         while cut > 1 and _numish(remaining[cut-1]) and _numish(remaining[cut]):
             cut -= 1
