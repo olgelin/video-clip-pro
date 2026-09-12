@@ -334,41 +334,69 @@ class Hf_build(SkillBase):
 
             cw, ch = self._card_size(layout, orientation)
 
-            # 🔴 信息流模式：具象化信息卡（参考图3/4）——kicker+标题+大字数据+柱状图+结论列表
-            #    用户定版：要"具象化"（大字数据/柱状图/图标/徽章），不是"报字幕"（文字罗列）。
-            #    代码层受控生成，限制在卡片区域内，不铺满全屏。
+            # 🔴 信息流模式：具象化信息卡——kicker+标题+大字数据+横向对比条+结论列表
+            #    字号层级：数据(64) > 标题(24) > 列表(15) > 副说明(14) > kicker(12) > 图label(12)
+            #    白字加 text-shadow 保证亮背景清晰；对比条按数值比例。
             _parts = []
+
+            # 提取数值辅助（"1/4"→0.25, "50%"→50, "10x"→10, ">3"→3）
+            def _parse_num(v):
+                if not v:
+                    return None
+                _m = re.search(r'(\d+(?:\.\d+)?)\s*/\s*(\d+(?:\.\d+)?)', v)
+                if _m:
+                    return float(_m.group(1)) / max(float(_m.group(2)), 0.001)
+                _m = re.search(r'(\d+(?:\.\d+)?)\s*%', v)
+                if _m:
+                    return float(_m.group(1))
+                _m = re.search(r'(\d+(?:\.\d+)?)\s*x', v)
+                if _m:
+                    return float(_m.group(1))
+                _m = re.search(r'(\d+(?:\.\d+)?)', v)
+                if _m:
+                    return float(_m.group(1))
+                return None
 
             # kicker（英文小标签，visual_keyword 大写，氛围）
             _vk = (card.get("visual_keyword") or "").upper().replace(",", " · ")
             if _vk:
-                _parts.append(f'<div style="font-size:11px;color:#4fd1ff;letter-spacing:3px;font-weight:700;">{_vk}</div>')
+                _parts.append(f'<div style="font-size:12px;color:#4fd1ff;letter-spacing:3px;font-weight:700;">{_vk}</div>')
 
             # 标题（headline，白色粗体）
-            _parts.append(f'<div style="font-size:22px;font-weight:800;color:#fff;line-height:1.3;margin:4px 0 2px;">{headline}</div>')
+            _parts.append(f'<div style="font-size:24px;font-weight:800;color:#fff;line-height:1.3;margin:5px 0 3px;text-shadow:0 1px 8px rgba(0,0,0,0.6);">{headline}</div>')
 
             # 大字数据（metric，超大青蓝，视觉锚点）
             if metric:
-                _parts.append(f'<div style="font-size:54px;font-weight:900;color:#4fd1ff;line-height:1.0;margin:2px 0;">{metric}</div>')
+                _parts.append(f'<div style="font-size:64px;font-weight:900;color:#4fd1ff;line-height:1.0;margin:2px 0;text-shadow:0 2px 16px rgba(0,0,0,0.6);">{metric}</div>')
 
             # 副说明（subtext）
             if subtext:
-                _parts.append(f'<div style="font-size:13px;color:rgba(255,255,255,0.65);line-height:1.5;margin-top:4px;">{subtext}</div>')
+                _parts.append(f'<div style="font-size:14px;color:rgba(255,255,255,0.75);line-height:1.5;margin-top:4px;text-shadow:0 1px 6px rgba(0,0,0,0.6);">{subtext}</div>')
 
-            # 柱状图（data_points 有 2+ 项时，代码层 CSS 柱状图，具象化数据）
+            # 横向对比条（data_points 有 2+ 项，宽度按数值比例；非数值则等宽横条）
             if data_points and len(data_points) >= 2:
+                _nums = [_parse_num(_d.get("value", "")) for _d in data_points[:4]]
                 _bars = []
-                for _d in data_points[:4]:
-                    _label = _d.get("label", "")
-                    _value = _d.get("value", "")
-                    _bars.append(
-                        f'<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;">'
-                        f'<div style="font-size:10px;color:#4fd1ff;font-weight:700;">{_value}</div>'
-                        f'<div style="width:100%;height:8px;background:rgba(79,209,255,0.15);border-radius:3px;overflow:hidden;">'
-                        f'<div style="width:100%;height:100%;background:#4fd1ff;"></div></div>'
-                        f'<div style="font-size:10px;color:rgba(255,255,255,0.6);">{_label}</div></div>'
-                    )
-                _parts.append(f'<div style="display:flex;gap:10px;margin-top:12px;">{"".join(_bars)}</div>')
+                if all(_n is not None for _n in _nums):
+                    _max = max(_nums) or 1.0
+                    for _d, _n in zip(data_points[:4], _nums):
+                        _w = max(10, int(_n / _max * 100))
+                        _bars.append(
+                            f'<div style="margin-top:8px;">'
+                            f'<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12px;">'
+                            f'<span style="color:rgba(255,255,255,0.85);">{_d.get("label", "")}</span>'
+                            f'<span style="color:#4fd1ff;font-weight:700;">{_d.get("value", "")}</span></div>'
+                            f'<div style="height:6px;background:rgba(79,209,255,0.15);border-radius:3px;margin-top:3px;overflow:hidden;">'
+                            f'<div style="width:{_w}%;height:100%;background:#4fd1ff;border-radius:3px;"></div></div></div>'
+                        )
+                else:
+                    for _d in data_points[:4]:
+                        _bars.append(
+                            f'<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12px;margin-top:8px;">'
+                            f'<span style="color:rgba(255,255,255,0.85);">{_d.get("label", "")}</span>'
+                            f'<span style="color:#4fd1ff;font-weight:700;">{_d.get("value", "")}</span></div>'
+                        )
+                _parts.append(''.join(_bars))
 
             # 结论列表（bullets，编号方块）
             _bullets = list(bullets[:3]) if bullets else []
@@ -376,8 +404,8 @@ class Hf_build(SkillBase):
                 _bullets = [takeaway]
             for _i, _b in enumerate(_bullets, 1):
                 _parts.append(
-                    f'<div style="font-size:14px;color:rgba(255,255,255,0.88);line-height:1.6;margin-top:6px;">'
-                    f'<span style="display:inline-block;min-width:18px;height:18px;line-height:18px;text-align:center;background:#4fd1ff;color:#04121f;border-radius:4px;font-size:11px;font-weight:700;margin-right:8px;vertical-align:middle;">{_i}</span>{_b}'
+                    f'<div style="font-size:15px;color:rgba(255,255,255,0.9);line-height:1.6;margin-top:7px;text-shadow:0 1px 6px rgba(0,0,0,0.5);">'
+                    f'<span style="display:inline-block;min-width:20px;height:20px;line-height:20px;text-align:center;background:#4fd1ff;color:#04121f;border-radius:5px;font-size:12px;font-weight:700;margin-right:8px;vertical-align:middle;">{_i}</span>{_b}'
                     f'</div>'
                 )
 
