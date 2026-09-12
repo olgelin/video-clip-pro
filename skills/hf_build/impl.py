@@ -357,30 +357,52 @@ class Hf_build(SkillBase):
                     return float(_m.group(1))
                 return None
 
-            # kicker（英文序号标签，简洁有意义，像参考图"LAST EPISODE"）
-            _parts.append(f'<div style="font-size:13px;color:#4fd1ff;letter-spacing:3px;font-weight:700;text-shadow:0 1px 6px rgba(0,0,0,0.6);">STEP {idx + 1:02d}</div>')
+            # kicker：章节标签（蓝色短竖线 + STEP 序号，参考图"LINK 01 · IDEA"）
+            _parts.append(
+                f'<div style="display:flex;align-items:center;gap:9px;margin-bottom:6px;">'
+                f'<div style="width:3px;height:15px;background:#00d4ff;border-radius:2px;box-shadow:0 0 8px rgba(0,212,255,0.8);"></div>'
+                f'<span style="font-size:13px;color:#4fd1ff;letter-spacing:3px;font-weight:700;text-shadow:0 1px 6px rgba(0,0,0,0.6);">STEP {idx + 1:02d}</span>'
+                f'</div>'
+            )
 
             # 标题（headline，白色粗体）
-            _parts.append(f'<div style="font-size:26px;font-weight:800;color:#fff;line-height:1.3;margin:5px 0 3px;text-shadow:0 1px 8px rgba(0,0,0,0.6);">{headline}</div>')
+            _parts.append(f'<div style="font-size:26px;font-weight:800;color:#fff;line-height:1.3;margin:2px 0 3px;text-shadow:0 1px 8px rgba(0,0,0,0.6);">{headline}</div>')
 
-            # 大字数据（metric，超大青蓝，视觉锚点；headline 已约束不含数字）
+            # 大字数据（metric，超大青蓝，视觉锚点）
             if metric:
                 _parts.append(f'<div style="font-size:64px;font-weight:900;color:#4fd1ff;line-height:1.0;margin:2px 0;text-shadow:0 2px 16px rgba(0,0,0,0.6);">{metric}</div>')
 
-            # 一句说明（subtext 优先，fallback takeaway）
+            # 说明（subtext 优先，fallback takeaway）
             _note = subtext or takeaway
             if _note:
                 _parts.append(f'<div style="font-size:15px;color:rgba(255,255,255,0.78);line-height:1.5;margin-top:4px;text-shadow:0 1px 6px rgba(0,0,0,0.6);">{_note}</div>')
 
-            # 列表（bullets，仅在无说明时兜底，最多 2 条，编号方块）
-            if not _note:
+            # 底部组件：进度条/比例条（data_points 数据可视化 + 白色端点圆点）
+            if data_points and len(data_points) >= 2:
+                _nums = [_parse_num(_d.get("value", "")) for _d in data_points[:3]]
+                _max = max([_n for _n in _nums if _n is not None] or [1.0])
+                _bars = []
+                for _i, _d in enumerate(data_points[:3]):
+                    _n = _nums[_i]
+                    _w = max(12, int(_n / _max * 100)) if _n is not None else 100
+                    _bars.append(
+                        f'<div style="margin-top:8px;">'
+                        f'<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:13px;text-shadow:0 1px 4px rgba(0,0,0,0.5);">'
+                        f'<span style="color:rgba(255,255,255,0.85);">{_d.get("label", "")}</span>'
+                        f'<span style="color:#4fd1ff;font-weight:700;">{_d.get("value", "")}</span></div>'
+                        f'<div style="position:relative;height:6px;background:rgba(0,212,255,0.15);border-radius:3px;margin-top:3px;">'
+                        f'<div style="width:{_w}%;height:100%;background:linear-gradient(90deg,#00d4ff,#4fd1ff);border-radius:3px;"></div>'
+                        f'<div style="position:absolute;left:{_w}%;top:50%;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:50%;background:#fff;box-shadow:0 0 8px rgba(255,255,255,0.9);"></div>'
+                        f'</div></div>'
+                    )
+                _parts.append(''.join(_bars))
+            # 列表兜底（无 data_points 且无说明时，最多 2 条圆形编号）
+            elif not _note:
                 _bullets = list(bullets[:2]) if bullets else []
-                if not _bullets and data_points and len(data_points) >= 2:
-                    _bullets = [f'{d.get("label", "")} {d.get("value", "")}'.strip() for d in data_points[:2]]
                 for _i, _b in enumerate(_bullets, 1):
                     _parts.append(
                         f'<div style="font-size:16px;color:rgba(255,255,255,0.9);line-height:1.6;margin-top:7px;text-shadow:0 1px 6px rgba(0,0,0,0.5);">'
-                        f'<span style="display:inline-block;min-width:22px;height:22px;line-height:22px;text-align:center;background:#4fd1ff;color:#04121f;border-radius:5px;font-size:13px;font-weight:700;margin-right:8px;vertical-align:middle;">{_i}</span>{_b}'
+                        f'<span style="display:inline-block;min-width:22px;height:22px;line-height:22px;text-align:center;background:#4fd1ff;color:#04121f;border-radius:50%;font-size:13px;font-weight:700;margin-right:8px;vertical-align:middle;">{_i}</span>{_b}'
                         f'</div>'
                     )
 
@@ -478,19 +500,16 @@ class Hf_build(SkillBase):
             start = round(float(scene.get("final_start", 0)), 2)
             items.append(
                 f'<div class="info-item" data-seg="{idx}" style="position:relative;{item_pad}opacity:0;border-bottom:1px solid rgba(255,255,255,0.05);">'
-                f'<div class="node" style="position:absolute;{node_pos}top:24px;width:10px;height:10px;border-radius:50%;background:#00d4ff;box-shadow:0 0 12px #00d4ff;"></div>'
                 f'{html}'
                 f'</div>'
             )
             stmts.append(f'tl.fromTo(".info-item[data-seg=\'{idx}\']",{{opacity:0,y:26}},{{opacity:1,y:0,duration:0.5,ease:"power3.out"}},{start});')
-            stmts.append(f'tl.to(".info-item[data-seg=\'{idx}\'] .node",{{scale:1.6,opacity:0.45,duration:0.8,repeat:2,yoyo:true,ease:"sine.inOut"}},{round(start + 0.3, 2)});')
 
         panel = (
             f'<div class="card-stream" data-composition-id="beat-0" style="position:absolute;{pos}width:{panel_w}px;height:{panel_h}px;overflow:hidden;{radius}'
             f'{border}'
             f'background:{bg};'
             '">'
-            f'<div class="stream-line" style="position:absolute;{line_pos}top:14px;bottom:14px;width:2px;background:linear-gradient(180deg,rgba(0,212,255,0.55),rgba(108,140,255,0.12));"></div>'
             + "".join(items)
             + '<script>(function(){var tl=gsap.timeline({paused:true});'
             + "".join(stmts)
