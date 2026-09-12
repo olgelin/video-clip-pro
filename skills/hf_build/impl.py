@@ -361,21 +361,21 @@ class Hf_build(SkillBase):
             _parts.append(
                 f'<div class="c-step" style="display:flex;align-items:center;gap:9px;margin-bottom:6px;">'
                 f'<div style="width:3px;height:15px;background:#00d4ff;border-radius:2px;box-shadow:0 0 8px rgba(0,212,255,0.8);"></div>'
-                f'<span style="font-size:13px;color:#4fd1ff;letter-spacing:3px;font-weight:700;text-shadow:0 1px 6px rgba(0,0,0,0.6);">STEP {idx + 1:02d}</span>'
+                f'<span style="font-size:var(--fs-step);color:#4fd1ff;letter-spacing:3px;font-weight:700;text-shadow:0 1px 6px rgba(0,0,0,0.6);">STEP {idx + 1:02d}</span>'
                 f'</div>'
             )
 
             # 标题（headline，白色粗体）
-            _parts.append(f'<div class="c-head" style="font-size:28px;font-weight:800;color:#fff;line-height:1.25;margin:2px 0 4px;text-shadow:0 1px 10px rgba(0,0,0,0.7);">{headline}</div>')
+            _parts.append(f'<div class="c-head" style="font-size:var(--fs-head);font-weight:800;color:#fff;line-height:1.25;margin:2px 0 4px;text-shadow:0 1px 10px rgba(0,0,0,0.7);">{headline}</div>')
 
             # 大字数据（metric，超大青蓝，视觉锚点）
             if metric:
-                _parts.append(f'<div class="c-metric" style="font-size:72px;font-weight:900;color:#4fd1ff;line-height:1.0;margin:2px 0 4px;text-shadow:0 2px 14px rgba(0,0,0,0.75);">{metric}</div>')
+                _parts.append(f'<div class="c-metric" style="font-size:var(--fs-metric);font-weight:900;color:#4fd1ff;line-height:1.0;margin:2px 0 4px;text-shadow:0 2px 14px rgba(0,0,0,0.75);">{metric}</div>')
 
             # 说明（subtext 优先，fallback takeaway）
             _note = subtext or takeaway
             if _note:
-                _parts.append(f'<div class="c-sub" style="font-size:16px;color:rgba(255,255,255,0.88);line-height:1.5;margin-top:5px;text-shadow:0 1px 8px rgba(0,0,0,0.7);">{_note}</div>')
+                _parts.append(f'<div class="c-sub" style="font-size:var(--fs-sub);color:rgba(255,255,255,0.88);line-height:1.5;margin-top:5px;text-shadow:0 1px 8px rgba(0,0,0,0.7);">{_note}</div>')
 
             # 底部组件：进度条/比例条（data_points 数据可视化 + 白色端点圆点；仅在无 metric 时显示，避免和大字数据重复）
             if (not metric) and data_points and len(data_points) >= 2:
@@ -387,7 +387,7 @@ class Hf_build(SkillBase):
                     _w = max(12, int(_n / _max * 100)) if _n is not None else 100
                     _bars.append(
                         f'<div class="c-bar" style="margin-top:9px;">'
-                        f'<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:13px;text-shadow:0 1px 4px rgba(0,0,0,0.5);">'
+                        f'<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:var(--fs-bar);text-shadow:0 1px 4px rgba(0,0,0,0.5);">'
                         f'<span style="color:rgba(255,255,255,0.85);">{_d.get("label", "")}</span>'
                         f'<span style="color:#4fd1ff;font-weight:700;">{_d.get("value", "")}</span></div>'
                         f'<div style="position:relative;height:6px;background:rgba(0,212,255,0.15);border-radius:3px;margin-top:3px;overflow:hidden;">'
@@ -436,7 +436,7 @@ class Hf_build(SkillBase):
             })
 
         # 🔴 合并成一个总 HTML（配音驱动 + 切换动画）：一个 beat 覆盖整个视频，GSAP 控制每卡出场/退场
-        cards_html = self._build_cards_html(scenes, orientation, _VT_LAYOUT)
+        cards_html = self._build_cards_html(scenes, orientation, _VT_LAYOUT, video_path=str(video_path))
         total_dur = round(sum(float(s.get("duration", 5)) for s in scenes if s.get("_llm_html")), 2)
 
         render_edl = {
@@ -454,20 +454,39 @@ class Hf_build(SkillBase):
             print(f"      分镜渲染错误: {e}")
         return {}
 
-    def _build_stream_html(self, scenes: list, orientation: str, vt_layout: dict, side: str = "left") -> str:
-        """信息流面板（竖屏/横屏通用）：统一光幕（渐变透明）+ 时间轴节点 + 信息点依次滑入。
+    def _build_stream_html(self, scenes: list, orientation: str, vt_layout: dict, video_path: str = "", side: str = "left") -> str:
+        """信息流面板（竖屏/横屏通用）：统一光幕（渐变透明）+ 信息点依次滑入。
 
         用户定版（2026-09-12 精细化区域）：
-        - 竖屏 1080x1920：上半 2/5 高（768px）、宽 2/3（720px）
-        - 横屏 1920x1080：上半 2/3 高（720px）、宽 1/2（960px）
-        - side=left ：面板靠左、渐变左→右（左深右透明，融入右侧人物）
-        - side=right：面板靠右、渐变右→左（右深左透明，对称）
+        - 竖屏：上半 2/5 高、宽 2/3；横屏：上半 2/3 高、宽 1/2
+        - side=left ：面板靠左、渐变左→右；side=right：面板靠右、渐变右→左
+        🔴 通用适配：panel 尺寸按实际视频分辨率比例动态算（非写死），字号按 panel 宽缩放，
+           适配竖屏/横屏/非标准分辨率/不同话题。
         """
-        # 区域尺寸（用户定版，按画面比例）
+        # 读实际分辨率（通用适配：非标准分辨率也按比例算 panel，不写死 1080×1920）
+        vw, vh = 1080, 1920
+        if video_path:
+            try:
+                _r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0",
+                                     "-show_entries", "stream=width,height", "-of", "csv=p=0",
+                                     str(video_path)], capture_output=True, text=True, timeout=30)
+                _p = _r.stdout.strip().split(",")
+                if len(_p) >= 2:
+                    vw, vh = int(_p[0]), int(_p[1])
+            except Exception:
+                pass
+
+        # 区域尺寸（用户定版，按实际画面比例动态算）
         if orientation == "portrait":
-            panel_w, panel_h = 720, 768   # 2/3 宽, 2/5 高
+            panel_w, panel_h = int(vw * 2 / 3), int(vh * 2 / 5)   # 2/3 宽, 2/5 高
         else:
-            panel_w, panel_h = 960, 720   # 1/2 宽, 2/3 高
+            panel_w, panel_h = int(vw * 1 / 2), int(vh * 2 / 3)   # 1/2 宽, 2/3 高
+
+        # 字号按 panel_w 缩放（基准 720px 宽 = 竖屏 1080 的 2/3），横屏 panel 更宽字号更大
+        _s = panel_w / 720.0
+        _fs_css = ";".join(f"--fs-{k}:{int(v * _s)}px" for k, v in {
+            "metric": 72, "head": 28, "sub": 16, "step": 13, "bar": 13,
+        }.items())
 
         # 左/右面板：渐变方向 + 圆角(朝人物侧) + 边框 + 时间轴/节点位置
         if side == "right":
@@ -514,6 +533,7 @@ class Hf_build(SkillBase):
             f'<div class="card-stream" data-composition-id="beat-0" style="position:absolute;{pos}width:{panel_w}px;height:{panel_h}px;overflow:hidden;{radius}'
             f'{border}'
             f'background:{bg};'
+            f'{_fs_css};'
             '">'
             + "".join(items)
             + '<script>(function(){var tl=gsap.timeline({paused:true});'
@@ -523,14 +543,14 @@ class Hf_build(SkillBase):
         )
         return panel
 
-    def _build_cards_html(self, scenes: list, orientation: str, vt_layout: dict) -> str:
+    def _build_cards_html(self, scenes: list, orientation: str, vt_layout: dict, video_path: str = "") -> str:
         """合并 N 张信息卡成一个总 HTML（绝对定位 + GSAP 出场/退场时间线）。
 
         配音驱动：每张卡在 final_start（讲到对应语义单元）入场，下一张前 0.4s 淡出（切换动画）。
         全部卡在一个 HTML 里，window.__timelines["beat-0"] 由 HyperFrames seek 驱动。
         """
         # 🔴 横竖屏都走信息流面板（用户定版 2026-09-12：竖屏/横屏统一用一条渐变信息流）
-        return self._build_stream_html(scenes, orientation, vt_layout)
+        return self._build_stream_html(scenes, orientation, vt_layout, video_path=video_path)
 
         # ── 以下为旧「横屏左右两列独立卡」逻辑，已废弃（横屏也改信息流面板） ──
         # 横屏左右两列堆叠（idx 偶数左列、奇数右列，从上到下）。竖屏已在上面走 _build_stream_html。
