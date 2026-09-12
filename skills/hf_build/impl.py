@@ -321,6 +321,7 @@ class Hf_build(SkillBase):
             data_points = card.get("data_points", []) or []
             data_str = "、".join([f'{d.get("label", "")}:{d.get("value", "")}' for d in data_points[:3]])
             takeaway = card.get("key_takeaway", "")
+            bullets = card.get("bullets", []) or []
             layout = card.get("layout_hint") or _VT_LAYOUT.get(vt, "quote-card")
             emotion = card.get("emotion") or "neutral"
             if emotion == "neutral":
@@ -331,11 +332,27 @@ class Hf_build(SkillBase):
 
             cw, ch = self._card_size(layout, orientation)
 
-            # 🔴 信息流模式（横竖屏通用）：只显示提炼出来的标题（精简，不调 LLM 生成 HTML）。
-            #    用户定版：不要英文小标签、不要关键点、不要装饰栏，只保留提炼标题。
-            content = (
-                f'<div style="font-size:20px;font-weight:800;color:#fff;line-height:1.4;">{headline}</div>'
-            )
+            # 🔴 信息流模式：参考图2「数据结论型」排版——装饰线+标题+大字数据+辅助说明+结论列表
+            #    用户定版：要有排版层次、大小对比、内容展示（不是裸标题），内容来自 ENRICH 提炼。
+            _parts = []
+            _parts.append('<div style="width:28px;height:3px;background:#00d4ff;margin-bottom:10px;border-radius:2px;"></div>')
+            _parts.append(f'<div style="font-size:20px;font-weight:700;color:#fff;line-height:1.4;">{headline}</div>')
+            if metric:
+                _parts.append(f'<div style="font-size:44px;font-weight:900;color:#00d4ff;line-height:1.1;margin:6px 0 2px;">{metric}</div>')
+            if subtext:
+                _parts.append(f'<div style="font-size:13px;color:rgba(255,255,255,0.6);line-height:1.5;margin-bottom:8px;">{subtext}</div>')
+            _bullets = list(bullets[:3]) if bullets else []
+            if not _bullets and data_points:
+                _bullets = [f'{d.get("label","")} {d.get("value","")}'.strip() for d in data_points[:3]]
+            if not _bullets and takeaway:
+                _bullets = [takeaway]
+            for _i, _b in enumerate(_bullets, 1):
+                _parts.append(
+                    f'<div style="font-size:14px;color:rgba(255,255,255,0.88);line-height:1.6;margin-top:6px;">'
+                    f'<span style="display:inline-block;min-width:18px;height:18px;line-height:18px;text-align:center;background:#00d4ff;color:#04121f;border-radius:4px;font-size:11px;font-weight:700;margin-right:8px;vertical-align:middle;">{_i}</span>{_b}'
+                    f'</div>'
+                )
+            content = "".join(_parts)
             return idx, content
 
         # 并行生成（4 并发），按下标写回 scenes 保持顺序
