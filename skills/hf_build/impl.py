@@ -392,9 +392,12 @@ class Hf_build(SkillBase):
                 else:
                     for _d in data_points[:4]:
                         _bars.append(
-                            f'<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12px;margin-top:8px;">'
+                            f'<div style="margin-top:8px;">'
+                            f'<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12px;">'
                             f'<span style="color:rgba(255,255,255,0.85);">{_d.get("label", "")}</span>'
                             f'<span style="color:#4fd1ff;font-weight:700;">{_d.get("value", "")}</span></div>'
+                            f'<div style="height:6px;background:rgba(79,209,255,0.15);border-radius:3px;margin-top:3px;overflow:hidden;">'
+                            f'<div style="width:100%;height:100%;background:#4fd1ff;border-radius:3px;"></div></div></div>'
                         )
                 _parts.append(''.join(_bars))
 
