@@ -415,20 +415,20 @@ class Hf_build(SkillBase):
         # 左/右面板：渐变方向 + 圆角 + 边框 + 时间轴/节点位置
         if side == "right":
             pos = "right:24px;top:24px;"
-            bg = "linear-gradient(270deg,rgba(8,12,30,0.8) 0%,rgba(8,12,30,0.3) 100%)"
-            radius = "border-radius:14px;"
-            border = "border:2px solid rgba(0,212,255,0.6);"
-            line_pos = "right:18px;"
-            node_pos = "right:14px;"
-            item_pad = "padding:12px 44px 12px 16px;"
+            bg = "linear-gradient(270deg,rgba(8,12,30,0.82) 0%,rgba(8,12,30,0.45) 100%)"
+            radius = "border-radius:16px;"
+            border = "border:3px solid rgba(0,212,255,0.85);"
+            line_pos = "right:20px;"
+            node_pos = "right:16px;"
+            item_pad = "padding:12px 46px 12px 16px;"
         else:
             pos = "left:24px;top:24px;"
-            bg = "linear-gradient(90deg,rgba(8,12,30,0.8) 0%,rgba(8,12,30,0.3) 100%)"
-            radius = "border-radius:14px;"
-            border = "border:2px solid rgba(0,212,255,0.6);"
-            line_pos = "left:18px;"
-            node_pos = "left:14px;"
-            item_pad = "padding:12px 16px 12px 44px;"
+            bg = "linear-gradient(90deg,rgba(8,12,30,0.82) 0%,rgba(8,12,30,0.45) 100%)"
+            radius = "border-radius:16px;"
+            border = "border:3px solid rgba(0,212,255,0.85);"
+            line_pos = "left:20px;"
+            node_pos = "left:16px;"
+            item_pad = "padding:12px 16px 12px 46px;"
 
         items = []
         stmts = []
