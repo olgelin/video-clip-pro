@@ -408,11 +408,11 @@ class Hf_build(SkillBase):
         配音驱动：每张卡在 final_start（讲到对应语义单元）入场，下一张前 0.4s 淡出（切换动画）。
         全部卡在一个 HTML 里，window.__timelines["beat-0"] 由 HyperFrames seek 驱动。
         """
-        # 🔴 位置铁律（用户定版）：信息卡【左右两列堆叠，不消失】。
-        #    每张卡按 idx 依次排进左列/右列（2 列网格），从上到下堆叠。
-        #    讲到哪淡入哪，之前的不退场（堆叠保留），不是切换。
+        # 🔴 位置铁律（用户定版 2026-09-12 改）：竖屏单列纵向（左文右人，参考图），横屏左右两列。
+        #    竖屏：卡片靠左、从上到下依次排（idx 顺序=从上到下），内容左到右读、信息点逐条往下出。
+        #    横屏：左右两列堆叠（保持，用户认可）。
         if orientation == "portrait":
-            _cw, _row_gap, _top0 = 500, 280, 160
+            _cw, _row_gap, _top0 = 400, 240, 120
         else:
             _cw, _row_gap, _top0 = 600, 260, 60
 
@@ -433,12 +433,19 @@ class Hf_build(SkillBase):
             dur = round(float(scene.get("duration", 5)), 2)
             layout = vt_layout.get(scene.get("visual_type", "quote_hero"), "quote-card")
             _, ch = self._card_size(layout, orientation)
+            if orientation == "portrait":
+                ch = 220  # 竖屏单列统一 220 高，4 张卡从上到下不溢出（1920 高内）
 
-            # 🔴 左右两列堆叠：idx 偶数进左列、奇数进右列，行 = idx//2，从上到下
-            col = idx % 2
-            row = idx // 2
-            side = "left:30px" if col == 0 else "right:30px"
-            pos = f"{side};top:{_top0 + row * _row_gap}px"
+            # 🔴 竖屏单列纵向：全部左对齐，从上到下依次排（idx 顺序 = 从上到下）
+            #    横屏左右两列堆叠：idx 偶数左列、奇数右列，行 = idx//2
+            if orientation == "portrait":
+                side = "left:30px"
+                pos = f"{side};top:{_top0 + idx * _row_gap}px"
+            else:
+                col = idx % 2
+                row = idx // 2
+                side = "left:30px" if col == 0 else "right:30px"
+                pos = f"{side};top:{_top0 + row * _row_gap}px"
             card_divs.append(
                 f'<div class="seg-card" data-seg="{idx}" style="position:absolute;{pos};width:{_cw}px;height:{ch}px;opacity:0;">{html}</div>'
             )
