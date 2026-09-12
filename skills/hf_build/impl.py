@@ -279,8 +279,8 @@ class Hf_build(SkillBase):
             "compare": "comparison",
             "flow": "bullets",
             "list_alert": "bullets",
-            "timeline_event": "bullets",
-            "hud": "bullets",
+            "timeline_event": "timeline-card",
+            "hud": "mini-grid",
         }
         # 中文 mood → emotion（scene_system 按 emotion 选色板）
         _MOOD_EMOTION = {
@@ -419,6 +419,35 @@ class Hf_build(SkillBase):
                     _parts.append(
                         f'<div class="c-bullet" style="font-size:var(--fs-sub);color:rgba(255,255,255,0.9);line-height:1.6;margin-top:7px;text-shadow:0 1px 6px rgba(0,0,0,0.5);">'
                         f'<span style="display:inline-block;min-width:22px;height:22px;line-height:22px;text-align:center;background:var(--accent, #4fd1ff);color:#04121f;border-radius:50%;font-size:13px;font-weight:700;margin-right:8px;vertical-align:middle;">{_i}</span>{_b}'
+                        f'</div>'
+                    )
+
+            elif layout == "mini-grid":
+                # 小卡片网格（2 列，label + value 小卡，仪表盘风格）
+                _parts.append(f'<div class="c-head" style="font-size:var(--fs-head);font-weight:800;color:#fff;line-height:1.25;margin:2px 0 4px;text-shadow:0 1px 10px rgba(0,0,0,0.7);">{headline}</div>')
+                _bl = list(data_points[:4]) if data_points else list(bullets[:4])
+                if _bl:
+                    _cards = []
+                    for _d in _bl:
+                        _label = _d.get("label", "") if isinstance(_d, dict) else str(_d)
+                        _val = _d.get("value", "") if isinstance(_d, dict) else ""
+                        _cards.append(
+                            f'<div class="c-mini" style="padding:10px 12px;border:1px solid rgba(0,212,255,0.4);border-radius:9px;background:rgba(0,212,255,0.08);">'
+                            f'<div style="font-size:var(--fs-bar);color:rgba(255,255,255,0.78);text-shadow:0 1px 4px rgba(0,0,0,0.5);">{_label}</div>'
+                            f'<div style="font-size:var(--fs-head);color:var(--accent, #4fd1ff);font-weight:800;margin-top:2px;">{_val}</div>'
+                            f'</div>'
+                        )
+                    _parts.append(f'<div class="c-mini-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">' + "".join(_cards) + '</div>')
+
+            elif layout == "timeline-card":
+                # 时间轴卡（步骤 + 序号圆点，垂直排列）
+                _parts.append(f'<div class="c-head" style="font-size:var(--fs-head);font-weight:800;color:#fff;line-height:1.25;margin:2px 0 4px;text-shadow:0 1px 10px rgba(0,0,0,0.7);">{headline}</div>')
+                _bl = list(bullets[:4]) if bullets else [f'{d.get("label","")} {d.get("value","")}'.strip() for d in data_points[:4]]
+                for _i, _b in enumerate(_bl, 1):
+                    _parts.append(
+                        f'<div class="c-tl-item" style="display:flex;align-items:flex-start;gap:10px;margin-top:9px;">'
+                        f'<div style="flex-shrink:0;width:20px;height:20px;line-height:20px;text-align:center;background:var(--accent, #4fd1ff);color:#04121f;border-radius:50%;font-size:12px;font-weight:800;text-shadow:none;">{_i}</div>'
+                        f'<div style="font-size:var(--fs-sub);color:rgba(255,255,255,0.9);line-height:1.5;text-shadow:0 1px 6px rgba(0,0,0,0.5);">{_b}</div>'
                         f'</div>'
                     )
 
@@ -596,6 +625,8 @@ class Hf_build(SkillBase):
             stmts.append(f'tl.fromTo(".info-item[data-seg=\'{idx}\'] .c-cmp-r",{{opacity:0,x:26}},{{opacity:1,x:0,duration:0.5,ease:"power3.out"}},{round(start+0.32,2)});')
             stmts.append(f'tl.fromTo(".info-item[data-seg=\'{idx}\'] .c-bullet",{{opacity:0,y:20}},{{opacity:1,y:0,duration:0.4,stagger:0.12,ease:"power3.out"}},{round(start+0.2,2)});')
             stmts.append(f'tl.fromTo(".info-item[data-seg=\'{idx}\'] .c-col",{{opacity:0,y:26}},{{opacity:1,y:0,duration:0.5,stagger:0.12,ease:"power3.out"}},{round(start+0.3,2)});')
+            stmts.append(f'tl.fromTo(".info-item[data-seg=\'{idx}\'] .c-mini",{{opacity:0,y:18,scale:0.92}},{{opacity:1,y:0,scale:1,duration:0.45,stagger:0.1,ease:"back.out(1.3)"}},{round(start+0.25,2)});')
+            stmts.append(f'tl.fromTo(".info-item[data-seg=\'{idx}\'] .c-tl-item",{{opacity:0,x:-16}},{{opacity:1,x:0,duration:0.4,stagger:0.12,ease:"power3.out"}},{round(start+0.2,2)});')
 
         panel = (
             f'<div class="card-stream" data-composition-id="beat-0" style="position:absolute;{pos}width:{panel_w}px;height:{panel_h}px;overflow:hidden;{radius}'
