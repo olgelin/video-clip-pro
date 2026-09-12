@@ -334,9 +334,8 @@ class Hf_build(SkillBase):
 
             cw, ch = self._card_size(layout, orientation)
 
-            # 🔴 信息流模式：具象化信息卡——kicker+标题+大字数据+横向对比条+结论列表
-            #    字号层级：数据(64) > 标题(24) > 列表(15) > 副说明(14) > kicker(12) > 图label(12)
-            #    白字加 text-shadow 保证亮背景清晰；对比条按数值比例。
+            # 🔴 具象化信息卡（模块化多布局）：章节标签共享，主体按 layout 分支，治千篇一律。
+            #    big-number=数据突出 / quote-card=金句 / comparison=对照 / bullets=清单 / process=流程
             _parts = []
 
             # 提取数值辅助（"1/4"→0.25, "50%"→50, "10x"→10, ">3"→3）
@@ -357,7 +356,7 @@ class Hf_build(SkillBase):
                     return float(_m.group(1))
                 return None
 
-            # kicker：章节标签（蓝色短竖线 + STEP 序号，参考图"LINK 01 · IDEA"）
+            # 章节标签（所有 layout 共享，模块化）
             _parts.append(
                 f'<div class="c-step" style="display:flex;align-items:center;gap:9px;margin-bottom:6px;">'
                 f'<div style="width:3px;height:15px;background:#00d4ff;border-radius:2px;box-shadow:0 0 8px rgba(0,212,255,0.8);"></div>'
@@ -365,46 +364,70 @@ class Hf_build(SkillBase):
                 f'</div>'
             )
 
-            # 标题（headline，白色粗体）
-            _parts.append(f'<div class="c-head" style="font-size:var(--fs-head);font-weight:800;color:#fff;line-height:1.25;margin:2px 0 4px;text-shadow:0 1px 10px rgba(0,0,0,0.7);">{headline}</div>')
-
-            # 大字数据（metric，超大青蓝，视觉锚点）
-            if metric:
-                _parts.append(f'<div class="c-metric" style="font-size:var(--fs-metric);font-weight:900;color:#4fd1ff;line-height:1.0;margin:2px 0 4px;text-shadow:0 2px 14px rgba(0,0,0,0.75);">{metric}</div>')
-
-            # 说明（subtext 优先，fallback takeaway）
             _note = subtext or takeaway
-            if _note:
-                _parts.append(f'<div class="c-sub" style="font-size:var(--fs-sub);color:rgba(255,255,255,0.88);line-height:1.5;margin-top:5px;text-shadow:0 1px 8px rgba(0,0,0,0.7);">{_note}</div>')
 
-            # 底部组件：进度条/比例条（data_points 数据可视化 + 白色端点圆点；仅在无 metric 时显示，避免和大字数据重复）
-            if (not metric) and data_points and len(data_points) >= 2:
-                _nums = [_parse_num(_d.get("value", "")) for _d in data_points[:3]]
-                _max = max([_n for _n in _nums if _n is not None] or [1.0])
-                _bars = []
-                for _i, _d in enumerate(data_points[:3]):
-                    _n = _nums[_i]
-                    _w = max(12, int(_n / _max * 100)) if _n is not None else 100
-                    _bars.append(
-                        f'<div class="c-bar" style="margin-top:9px;">'
-                        f'<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:var(--fs-bar);text-shadow:0 1px 4px rgba(0,0,0,0.5);">'
-                        f'<span style="color:rgba(255,255,255,0.85);">{_d.get("label", "")}</span>'
-                        f'<span style="color:#4fd1ff;font-weight:700;">{_d.get("value", "")}</span></div>'
-                        f'<div style="position:relative;height:6px;background:rgba(0,212,255,0.15);border-radius:3px;margin-top:3px;overflow:hidden;">'
-                        f'<div class="bar-fill" style="width:{_w}%;height:100%;background:linear-gradient(90deg,#00d4ff,#4fd1ff);border-radius:3px;"></div>'
-                        f'<div class="bar-dot" style="position:absolute;left:{_w}%;top:50%;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:50%;background:#fff;box-shadow:0 0 8px rgba(255,255,255,0.9);"></div>'
-                        f'</div></div>'
-                    )
-                _parts.append(''.join(_bars))
-            # 列表兜底（无 data_points 且无说明时，最多 2 条圆形编号）
-            elif not _note:
-                _bullets = list(bullets[:2]) if bullets else []
-                for _i, _b in enumerate(_bullets, 1):
+            if layout == "quote-card":
+                # 金句卡：大字金句 + 说明（无数据/数据条，靠金句本身抓人）
+                _parts.append(f'<div class="c-quote" style="font-size:calc(var(--fs-metric) * 0.62);font-weight:900;color:#fff;line-height:1.3;margin:2px 0 4px;text-shadow:0 2px 16px rgba(0,0,0,0.8);">「{headline}」</div>')
+                if _note:
+                    _parts.append(f'<div class="c-sub" style="font-size:var(--fs-sub);color:rgba(255,255,255,0.88);line-height:1.5;margin-top:5px;text-shadow:0 1px 8px rgba(0,0,0,0.7);">{_note}</div>')
+
+            elif layout == "comparison":
+                # 对比卡：标题 + 左右两项对照（VS 分隔）
+                _parts.append(f'<div class="c-head" style="font-size:var(--fs-head);font-weight:800;color:#fff;line-height:1.25;margin:2px 0 4px;text-shadow:0 1px 10px rgba(0,0,0,0.7);">{headline}</div>')
+                if data_points and len(data_points) >= 2:
+                    _l, _r = data_points[0], data_points[1]
                     _parts.append(
-                        f'<div style="font-size:16px;color:rgba(255,255,255,0.9);line-height:1.6;margin-top:7px;text-shadow:0 1px 6px rgba(0,0,0,0.5);">'
+                        f'<div class="c-compare" style="display:flex;align-items:center;gap:12px;margin-top:8px;">'
+                        f'<div class="c-cmp-l" style="flex:1;text-align:center;padding:12px 6px;border:1px solid rgba(0,212,255,0.4);border-radius:10px;background:rgba(0,212,255,0.08);">'
+                        f'<div style="font-size:var(--fs-sub);color:rgba(255,255,255,0.85);">{_l.get("label","")}</div>'
+                        f'<div style="font-size:var(--fs-head);color:#4fd1ff;font-weight:800;margin-top:3px;">{_l.get("value","")}</div></div>'
+                        f'<div style="font-size:var(--fs-sub);color:#4fd1ff;font-weight:700;letter-spacing:2px;">VS</div>'
+                        f'<div class="c-cmp-r" style="flex:1;text-align:center;padding:12px 6px;border:1px solid rgba(0,212,255,0.4);border-radius:10px;background:rgba(0,212,255,0.08);">'
+                        f'<div style="font-size:var(--fs-sub);color:rgba(255,255,255,0.85);">{_r.get("label","")}</div>'
+                        f'<div style="font-size:var(--fs-head);color:#4fd1ff;font-weight:800;margin-top:3px;">{_r.get("value","")}</div></div>'
+                        f'</div>'
+                    )
+                elif _note:
+                    _parts.append(f'<div class="c-sub" style="font-size:var(--fs-sub);color:rgba(255,255,255,0.88);line-height:1.5;margin-top:5px;text-shadow:0 1px 8px rgba(0,0,0,0.7);">{_note}</div>')
+
+            elif layout in ("bullets", "process"):
+                # 清单/流程卡：标题 + 编号列表（圆形编号）
+                _parts.append(f'<div class="c-head" style="font-size:var(--fs-head);font-weight:800;color:#fff;line-height:1.25;margin:2px 0 4px;text-shadow:0 1px 10px rgba(0,0,0,0.7);">{headline}</div>')
+                _bl = list(bullets[:3]) if bullets else [f'{d.get("label","")} {d.get("value","")}'.strip() for d in data_points[:3]]
+                for _i, _b in enumerate(_bl, 1):
+                    _parts.append(
+                        f'<div class="c-bullet" style="font-size:var(--fs-sub);color:rgba(255,255,255,0.9);line-height:1.6;margin-top:7px;text-shadow:0 1px 6px rgba(0,0,0,0.5);">'
                         f'<span style="display:inline-block;min-width:22px;height:22px;line-height:22px;text-align:center;background:#4fd1ff;color:#04121f;border-radius:50%;font-size:13px;font-weight:700;margin-right:8px;vertical-align:middle;">{_i}</span>{_b}'
                         f'</div>'
                     )
+
+            else:
+                # 默认 big-number：大字数据最突出 + 标题 + 说明 + 数据条
+                if metric:
+                    _parts.append(f'<div class="c-metric" style="font-size:var(--fs-metric);font-weight:900;color:#4fd1ff;line-height:1.0;margin:2px 0 4px;text-shadow:0 2px 14px rgba(0,0,0,0.75);">{metric}</div>')
+                _parts.append(f'<div class="c-head" style="font-size:var(--fs-head);font-weight:800;color:#fff;line-height:1.25;margin:2px 0 4px;text-shadow:0 1px 10px rgba(0,0,0,0.7);">{headline}</div>')
+                if _note:
+                    _parts.append(f'<div class="c-sub" style="font-size:var(--fs-sub);color:rgba(255,255,255,0.88);line-height:1.5;margin-top:5px;text-shadow:0 1px 8px rgba(0,0,0,0.7);">{_note}</div>')
+                # 数据条（仅在无 metric 时显示，避免和大字数据重复）
+                if (not metric) and data_points and len(data_points) >= 2:
+                    _nums = [_parse_num(_d.get("value", "")) for _d in data_points[:3]]
+                    _max = max([_n for _n in _nums if _n is not None] or [1.0])
+                    _bars = []
+                    for _i, _d in enumerate(data_points[:3]):
+                        _n = _nums[_i]
+                        _w = max(12, int(_n / _max * 100)) if _n is not None else 100
+                        _bars.append(
+                            f'<div class="c-bar" style="margin-top:9px;">'
+                            f'<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:var(--fs-bar);text-shadow:0 1px 4px rgba(0,0,0,0.5);">'
+                            f'<span style="color:rgba(255,255,255,0.85);">{_d.get("label", "")}</span>'
+                            f'<span style="color:#4fd1ff;font-weight:700;">{_d.get("value", "")}</span></div>'
+                            f'<div style="position:relative;height:6px;background:rgba(0,212,255,0.15);border-radius:3px;margin-top:3px;overflow:hidden;">'
+                            f'<div class="bar-fill" style="width:{_w}%;height:100%;background:linear-gradient(90deg,#00d4ff,#4fd1ff);border-radius:3px;"></div>'
+                            f'<div class="bar-dot" style="position:absolute;left:{_w}%;top:50%;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:50%;background:#fff;box-shadow:0 0 8px rgba(255,255,255,0.9);"></div>'
+                            f'</div></div>'
+                        )
+                    _parts.append(''.join(_bars))
 
             content = "".join(_parts)
             return idx, content
@@ -524,6 +547,12 @@ class Hf_build(SkillBase):
             stmts.append(f'tl.fromTo(".info-item[data-seg=\'{idx}\'] .c-metric",{{opacity:0,scale:0.6}},{{opacity:1,scale:1,duration:0.55,ease:"back.out(1.5)"}},{round(start+0.3,2)});')
             stmts.append(f'tl.fromTo(".info-item[data-seg=\'{idx}\'] .c-sub",{{opacity:0,y:20}},{{opacity:1,y:0,duration:0.4,ease:"power3.out"}},{round(start+0.45,2)});')
             stmts.append(f'tl.fromTo(".info-item[data-seg=\'{idx}\'] .c-bar",{{opacity:0,y:20}},{{opacity:1,y:0,duration:0.4,stagger:0.08,ease:"power3.out"}},{round(start+0.55,2)});')
+            # 多布局的差异化入场动画
+            stmts.append(f'tl.fromTo(".info-item[data-seg=\'{idx}\'] .c-quote",{{opacity:0,scale:0.8}},{{opacity:1,scale:1,duration:0.5,ease:"back.out(1.4)"}},{round(start+0.2,2)});')
+            stmts.append(f'tl.fromTo(".info-item[data-seg=\'{idx}\'] .c-compare",{{opacity:0,y:24}},{{opacity:1,y:0,duration:0.45,ease:"power3.out"}},{round(start+0.2,2)});')
+            stmts.append(f'tl.fromTo(".info-item[data-seg=\'{idx}\'] .c-cmp-l",{{opacity:0,x:-26}},{{opacity:1,x:0,duration:0.5,ease:"power3.out"}},{round(start+0.32,2)});')
+            stmts.append(f'tl.fromTo(".info-item[data-seg=\'{idx}\'] .c-cmp-r",{{opacity:0,x:26}},{{opacity:1,x:0,duration:0.5,ease:"power3.out"}},{round(start+0.32,2)});')
+            stmts.append(f'tl.fromTo(".info-item[data-seg=\'{idx}\'] .c-bullet",{{opacity:0,y:20}},{{opacity:1,y:0,duration:0.4,stagger:0.12,ease:"power3.out"}},{round(start+0.2,2)});')
 
         panel = (
             f'<div class="card-stream" data-composition-id="beat-0" style="position:absolute;{pos}width:{panel_w}px;height:{panel_h}px;overflow:hidden;{radius}'
