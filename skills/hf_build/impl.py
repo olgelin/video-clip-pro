@@ -370,7 +370,7 @@ class Hf_build(SkillBase):
 
             # 大字数据（metric，超大青蓝，视觉锚点）
             if metric:
-                _parts.append(f'<div class="c-metric" style="font-size:72px;font-weight:900;color:#4fd1ff;line-height:1.0;margin:2px 0 4px;text-shadow:0 0 16px rgba(0,212,255,0.4),0 2px 12px rgba(0,0,0,0.7);">{metric}</div>')
+                _parts.append(f'<div class="c-metric" style="font-size:72px;font-weight:900;color:#4fd1ff;line-height:1.0;margin:2px 0 4px;text-shadow:0 2px 14px rgba(0,0,0,0.75);">{metric}</div>')
 
             # 说明（subtext 优先，fallback takeaway）
             _note = subtext or takeaway
