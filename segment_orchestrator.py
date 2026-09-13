@@ -217,6 +217,9 @@ def add_bgm_to_full(final_out: Path, raw_words: list, out_dir: Path) -> Path:
     """合并后整片统一加 BGM：生成一个 BGM（抽 3 首挑最健康）→ 循环填充整片 → 低音量
     背景混音。不做逐句 ducking（30min 口播逐句 ducking 意义不大，整体低音量背景即可）。"""
     print("\n[orchestrator] 整片统一加 BGM ...")
+    # 🔴 out_dir 可能是相对路径，而 _run_acestep 的 cwd 切到 acestep 目录，
+    #    相对路径的歌词/输出文件会找不到 → 全部 BGM 失败。转绝对路径治本。
+    out_dir = out_dir.resolve()
     transcript = " ".join(w["text"] for w in raw_words)
     lyrics = transcript[:2000]
     lyrics_file = out_dir / "_full_bgm_lyrics.txt"
