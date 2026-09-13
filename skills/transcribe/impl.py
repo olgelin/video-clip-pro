@@ -2,6 +2,7 @@
 from __future__ import annotations
 import time, json, re
 from pathlib import Path
+import jieba
 from core.base import SkillBase
 from core.gpu import detect_gpu
 
@@ -10,11 +11,30 @@ _CJK_RE = re.compile(r'[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff\u3000-\u303f\uff
 # 🔴 数字/单位连续性：数字及其单位是一个不可分割的整体（"12"+"00"+"万"→"1200万"）
 _NUM_RE = re.compile(r'^[\d.%,万亿千百十点分之]+$')
 
+
+def _split_at_word_boundary(text: str, max_chars: int):
+    """在 max_chars 附近按 jieba 词边界切分，返回 (前段, 后段)。
+
+    治本：原来 max_chars 硬切会劈词（"剥离"→"剥"+"离"、"记录"→"记"+"录"），
+    改用 jieba 分词找词边界，cut 落在完整词语边界，不劈开词。
+    """
+    segs = list(jieba.cut(text))
+    acc = []
+    acc_len = 0
+    for i, seg in enumerate(segs):
+        if acc_len + len(seg) > max_chars and acc:
+            return "".join(acc), "".join(segs[i:])
+        acc.append(seg)
+        acc_len += len(seg)
+    return text, ""
+
+
 def _merge_cjk_words(words, max_gap=0.25, max_chars=12):
     """Merge adjacent CJK characters into natural phrases.
     faster_whisper returns each Chinese character as a separate word.
     This merges them back into readable phrases based on timing gaps.
-    🔴 max_chars 限制短语长度：剪辑后视频紧凑(gap小)，不加字数限制会合并成超长短语(20s+)，导致场景太少+字幕太长。"""
+    🔴 max_chars 限制短语长度：剪辑后视频紧凑(gap小)，不加字数限制会合并成超长短语(20s+)，导致场景太少+字幕太长。
+    🔴 超长切分走 jieba 词边界（不劈词）。"""
     if not words:
         return words
     merged = []
@@ -38,13 +58,30 @@ def _merge_cjk_words(words, max_gap=0.25, max_chars=12):
             buf_count += 1
             continue
 
-        if (is_cjk or is_num) and buf_count > 0 and gap < max_gap and len(buf_text) + len(text) <= max_chars \
+        if (is_cjk or is_num) and buf_count > 0 and gap < max_gap \
                 and buf_text[-1] not in "吗呢吧啊？!！。":
-            # Merge into current phrase
-            buf_text += text
-            buf_end = w["end"]
-            buf_conf += w["confidence"]
-            buf_count += 1
+            new_text = buf_text + text
+            if len(new_text) <= max_chars:
+                # 正常合并
+                buf_text = new_text
+                buf_end = w["end"]
+                buf_conf += w["confidence"]
+                buf_count += 1
+            else:
+                # 🔴 超长：jieba 词边界切，前段 flush、后段成新 buf（不劈词）
+                flush_text, remain = _split_at_word_boundary(new_text, max_chars)
+                merged.append({
+                    "start": round(buf_start, 2),
+                    "end": round(buf_end, 2),
+                    "text": flush_text,
+                    "speaker": "S0",
+                    "confidence": round(buf_conf / buf_count, 3),
+                })
+                buf_text = remain if remain else text
+                buf_start = w["start"]
+                buf_end = w["end"]
+                buf_conf = w["confidence"]
+                buf_count = 1
         else:
             # Flush previous phrase
             if buf_count > 0:
