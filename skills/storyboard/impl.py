@@ -348,7 +348,7 @@ class Storyboard(SkillBase):
             "2. 场景数由内容自然决定，不设上限\n"
             "3. 所有片段必须被覆盖，不重不漏，按顺序\n"
             "4. 每个场景从下面 7 种视觉类型里选 1 个（相邻场景尽量不同类型，别连续用同一种）：\n"
-            "   data_impact=数据冲击(有具体数字/百分比/数据对比时) | quote_hero=金句大字(观点/总结升华时) | compare=对立对比(前后反差/转折对比时) | flow=流程推进(步骤/过程/层层递进时) | list_alert=要点警示(列举要点/风险/危害时) | timeline_event=时间推演(时间发展/趋势/未来时) | hud=科技界面(技术/系统/数据面板时)\n"
+            "   data_impact=数据冲击(有具体数字/百分比/数据对比时) | quote_hero=金句大字(观点/总结升华时) | compare=对立对比(两个明确事物/方案左右PK、前后强烈反差时，普通'但是/却'转折句不算，那算quote_hero金句或flow推进) | flow=流程推进(步骤/过程/层层递进时) | list_alert=要点警示(列举要点/风险/危害时) | timeline_event=时间推演(时间发展/趋势/未来时) | hud=科技界面(技术/系统/数据面板时)\n"
             "5. 🔴 开场问候/寒暄/客套话（如'哈喽''大家好''欢迎回来''各位朋友'等无信息量的开场白）不要单独成一个场景，并入下一个实质内容场景——信息卡只展示实质信息，不展示问候寒暄\n"
             f"6. 只输出 JSON：{{\"scenes\": [[起始索引, 结束索引, \"类型\"], ...]}}，索引范围 0-{n-1}，类型是上面 7 个之一。\n"
         )
@@ -443,15 +443,18 @@ class Storyboard(SkillBase):
                                        "处理速度", "效率", "提升", "增长", "下降", "数据"]):
             return "data_impact"
         # Compare/conflict (not first scene)
-        if any(kw in text for kw in ["vs", "对比", "但是", "却", "而", "不过", "相反",
-                                       "挑战", "风险", "偏见", "冲击"]) and not is_first:
+        # 🔴 收紧：只保留"真正的左右对照/强烈反差"，去掉"但是/却/而/不过"转折连词
+        #    （转折连词太常见，导致 compare 泛滥，画面满屏 VS）
+        if any(kw in text for kw in ["vs", "对比", "反差", "PK", "两难", "权衡", "取舍",
+                                       "相反", "一边", "另一边"]) and not is_first:
             return "compare"
         # Flow/process
         if any(kw in text for kw in ["首先", "然后", "最后", "步骤", "流程", "背后",
                                        "架构", "系统", "混合", "强化"]):
             return "flow"
-        # List
-        if any(kw in text for kw in ["第一", "第二", "包括", "比如", "颠覆"]):
+        # List（含警示/风险类，原 compare 里的"挑战/风险/偏见/冲击"归这里）
+        if any(kw in text for kw in ["第一", "第二", "包括", "比如", "颠覆",
+                                       "挑战", "风险", "偏见", "冲击", "危害", "注意"]):
             return "list_alert"
         # Tech
         if any(kw in text for kw in ["AI", "GPT", "模型", "算法", "代码", "开源"]):
