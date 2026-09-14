@@ -339,7 +339,11 @@ class Hf_build(SkillBase):
             data_str = "、".join([f'{d.get("label", "")}:{d.get("value", "")}' for d in data_points[:3]])
             takeaway = card.get("key_takeaway", "")
             bullets = card.get("bullets", []) or []
-            layout = card.get("layout_hint") or _VT_LAYOUT.get(vt, "quote-card")
+            # 🔴 布局由 storyboard 的 visual_type 语义判断决定（7 种 + diversity 去重机制），
+            #    LLM ENRICH 只负责填内容（headline/data_points/bullets），不再用 layout_hint 重新选布局。
+            #    根因：LLM 对口播内容倾向输出 bullets（列表），导致"只有标题+列表/VS"、缺少
+            #    big-number(大字数据)/quote-card(金句)/timeline-card(时间线)/柱状图 等丰富视觉。
+            layout = _VT_LAYOUT.get(vt, "quote-card")
             emotion = card.get("emotion") or "neutral"
             if emotion == "neutral":
                 for mk, me in _MOOD_EMOTION.items():
