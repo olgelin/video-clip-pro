@@ -10,7 +10,8 @@ Flow:
   4. Mix speech + ducked BGM → replace video audio
 """
 from __future__ import annotations
-import json, subprocess, sys, os, random, re
+import json, subprocess, sys, os, random, re, uuid, time
+import urllib.request
 from pathlib import Path
 from core.base import SkillBase
 
@@ -18,6 +19,79 @@ ACESTEP_PYTHON = Path(
     r"E:\Hermes-Agent\workspace\xiaoshan\video-factory\tools\acestep\.venv\Scripts\python.exe"
 )
 ACESTEP_CLI = Path(r"E:\Hermes-Agent\workspace\xiaoshan\video-factory\tools\acestep\cli.py")
+
+# MiniMax Music3（ComfyUI 原生节点，带歌词一字不差，质量完胜 ACEStep）
+COMFY_URL = "http://127.0.0.1:8188"
+MINIMAX_UNET = "minimax_music3_dit_int8_convrot.safetensors"
+MINIMAX_CLIP = "minimax_music3_text_encoder_pruned_int8_convrot.safetensors"
+MINIMAX_VAE = "minimax_music3_dav.safetensors"
+
+
+def _call_minimax_music3(caption: str, lyrics: str, output_path: str,
+                         duration: float = 300) -> dict:
+    """通过 ComfyUI 调用 MiniMax Music3 生成完整歌曲（带歌词）。
+
+    caption: 三段式音乐风格描述（Global Metadata / Vocal Details / Arrangement）
+    lyrics: 歌词（带结构标签）；纯音乐可为空或 [Instrumental]
+    duration: 目标时长上限（秒），Music3 实际时长由歌词内容密度决定
+    """
+    seed = random.randint(0, 1000000)
+    workflow = {
+        "1": {"class_type": "UNETLoader", "inputs": {"unet_name": MINIMAX_UNET, "weight_dtype": "default"}},
+        "2": {"class_type": "CLIPLoader", "inputs": {"clip_name": MINIMAX_CLIP, "type": "minimax", "device": "default"}},
+        "3": {"class_type": "VAELoader", "inputs": {"vae_name": MINIMAX_VAE}},
+        "4": {"class_type": "MiniMaxMusic3TextEncode", "inputs": {
+            "clip": ["2", 0], "caption": caption, "lyrics": lyrics,
+            "seed": seed, "max_duration": float(duration), "cfg_scale": 1.7, "top_k": 50,
+        }},
+        "5": {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["4", 0]}},
+        "6": {"class_type": "EmptyMiniMaxMusic3LatentAudio", "inputs": {"seconds": ["4", 1], "batch_size": 1}},
+        "7": {"class_type": "KSampler", "inputs": {
+            "model": ["1", 0], "seed": seed, "steps": 30, "cfg": 1.7,
+            "sampler_name": "euler", "scheduler": "simple",
+            "positive": ["4", 0], "negative": ["5", 0], "latent_image": ["6", 0], "denoise": 1.0,
+        }},
+        "8": {"class_type": "VAEDecodeAudio", "inputs": {"samples": ["7", 0], "vae": ["3", 0]}},
+        "9": {"class_type": "SaveAudio", "inputs": {"audio": ["8", 0], "filename_prefix": "bgm_minimax"}},
+    }
+    try:
+        payload = json.dumps({"prompt": workflow, "client_id": str(uuid.uuid4())}).encode("utf-8")
+        req = urllib.request.Request(f"{COMFY_URL}/prompt", data=payload,
+                                     headers={"Content-Type": "application/json"})
+        resp = urllib.request.urlopen(req, timeout=60)
+        r = json.loads(resp.read().decode())
+        prompt_id = r.get("prompt_id")
+        if not prompt_id:
+            return {"error": f"ComfyUI 提交失败: {json.dumps(r.get('node_errors', {}))[:200]}"}
+        start = time.time()
+        timeout = max(600, int(duration * 4))
+        while time.time() - start < timeout:
+            time.sleep(5)
+            try:
+                hreq = urllib.request.Request(f"{COMFY_URL}/history/{prompt_id}")
+                h = json.loads(urllib.request.urlopen(hreq, timeout=15).read().decode())
+            except Exception:
+                continue
+            entry = h.get(prompt_id, {})
+            status = entry.get("status", {}).get("status_str", "")
+            if status == "success":
+                for node_out in entry.get("outputs", {}).values():
+                    for audio in node_out.get("audio", []):
+                        filename = audio.get("filename")
+                        subfolder = audio.get("subfolder", "")
+                        ftype = audio.get("type", "output")
+                        url = f"{COMFY_URL}/view?filename={filename}&subfolder={subfolder}&type={ftype}"
+                        data = urllib.request.urlopen(urllib.request.Request(url), timeout=120).read()
+                        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+                        with open(output_path, "wb") as f:
+                            f.write(data)
+                        return {"success": True, "path": output_path, "duration": duration, "seed": seed}
+                return {"error": "生成成功但无 audio 输出"}
+            elif status in ("error", "failed"):
+                return {"error": f"ComfyUI 生成失败: {json.dumps(entry.get('status', {}))[:300]}"}
+        return {"error": f"ComfyUI 超时 ({timeout}s)"}
+    except Exception as e:
+        return {"error": f"MiniMax Music3 调用异常: {e}"}
 
 
 class Bgm_mix(SkillBase):
@@ -74,11 +148,7 @@ class Bgm_mix(SkillBase):
     # ── BGM generation ──────────────────────────────────
 
     def _gen_bgm(self, context: dict, output_dir: Path, bgm_path: Path) -> bool:
-        """Call ACE-Step via isolated venv to generate instrumental BGM."""
-        if not ACESTEP_PYTHON.exists() or not ACESTEP_CLI.exists():
-            print("      [bgm_mix] ACE-Step not available, skipping BGM")
-            return False
-
+        """首选 MiniMax Music3 生成完整歌曲，失败降级 ACE-Step。"""
         # 🔴 歌词来源：优先 lyrics_writer 写好的歌词（映射哲学，[Chorus]/[Verse] 结构），
         # fallback 到口播稿原文（对齐 video-factory：先写歌词→再唱歌生成 BGM）
         lyrics = context.get("lyrics", "")
@@ -93,21 +163,33 @@ class Bgm_mix(SkillBase):
                 transcript = context.get("text", "") or context.get("topic", "")
             lyrics = transcript
 
-        # Write lyrics to temp file for ACE-Step --lyrics
+        # ── 首选 MiniMax Music3（带歌词完整歌曲，质量完胜 ACEStep）──
+        music_caption = context.get("music_caption", "") or self._build_caption(context)
+        print(f"      [bgm_mix] MiniMax Music3 生成: caption=\"{music_caption[:50]}...\"")
+        result = _call_minimax_music3(music_caption, lyrics, str(bgm_path), duration=300)
+        if not result.get("error"):
+            print(f"      [bgm_mix] ✅ Music3 完成: {bgm_path.stat().st_size // 1024}KB")
+            return True
+
+        # ── 降级 ACE-Step（抽卡 3 首挑优）──
+        print(f"      [bgm_mix] ⚠️ Music3 失败，降级 ACE-Step: {result['error'][:80]}")
+        if not ACESTEP_PYTHON.exists() or not ACESTEP_CLI.exists():
+            print("      [bgm_mix] ACE-Step not available, skipping BGM")
+            return False
+        return self._gen_bgm_acestep(lyrics, output_dir, bgm_path, context)
+
+    def _gen_bgm_acestep(self, lyrics: str, output_dir: Path, bgm_path: Path, context: dict) -> bool:
+        """ACE-Step 兜底：抽卡 3 首 + 客观指标打分挑最健康的。"""
         lyrics_file = output_dir / "_bgm_lyrics.txt"
         lyrics_file.write_text(lyrics[:2000], encoding="utf-8")
 
-        # Build mood caption from EDL beats / topic
         caption = self._build_caption(context)
-
         video_path = context.get("final_polished", "")
-        # 🔴 对齐 VF：BGM 时长按歌词长度+随机抖动（在一个范围内变化，不锁死）
         duration = int(self._calc_bgm_duration(lyrics, self._video_duration(Path(video_path))))
 
         print(f"      [bgm_mix] ACE-Step 抽卡: dur={duration}s, caption=\"{caption[:60]}...\"")
 
         # 🔴 抽卡：生成 N 首（每次随机 seed），筛废品 + 客观指标打分挑最健康的
-        # 267s 长 BGM 每首 ~3 分钟，偶发卡死，抽 3 首足够挑优（4 首边际收益低、卡死概率翻倍）
         N_SAMPLES = 3
         candidates = []
         for i in range(N_SAMPLES):

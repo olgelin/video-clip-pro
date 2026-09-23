@@ -38,7 +38,7 @@ class LyricsWriter(SkillBase):
             print("  [lyrics-writer] ❌ 无口播稿")
             return context
 
-        lyrics = self._write(script, context.get("provider"))
+        lyrics, caption = self._write(script, context.get("provider"))
         if not lyrics:
             print("  [lyrics-writer] ❌ LLM 生成失败")
             return context
@@ -49,11 +49,17 @@ class LyricsWriter(SkillBase):
 
         context["lyrics_path"] = str(lyrics_path)
         context["lyrics"] = lyrics
+        if caption:
+            caption_path = out_dir / "music_caption.txt"
+            caption_path.write_text(caption, encoding="utf-8")
+            context["music_caption"] = caption
+            context["music_caption_path"] = str(caption_path)
+            print("  [lyrics-writer] ✅ 三段式 caption 已生成")
         lines = [l for l in lyrics.split("\n") if l.strip() and not l.strip().startswith("[")]
         print(f"  [lyrics-writer] ✅ 歌词 {len(lyrics)} 字符, {len(lines)} 行")
         return context
 
-    def _write(self, script: dict, provider) -> str | None:
+    def _write(self, script: dict, provider) -> tuple:
         system_prompt = self.load_prompt("lyrics_system")
         sections = script.get("voiceover_sections", [])
         topic = script.get("topic", "")
@@ -67,17 +73,29 @@ class LyricsWriter(SkillBase):
         user_prompt = self.load_prompt("lyrics_user").format(
             topic=topic,
             mood=mood,
+            target_duration=300,
             topic_info="",
             style_guide="",
             section_summaries=chr(10).join(section_summaries),
             full_text=full_text[:2000],
         )
         if not provider:
-            return None
+            return "", ""
         raw = provider.call("lyrics_writer", user_prompt, system=system_prompt, max_tokens=16000)
         if not raw:
-            return None
-        return self._clean(raw)
+            return "", ""
+        lyrics = self._clean(raw)
+        return self._split(lyrics)
+
+    def _split(self, response: str) -> tuple:
+        marker = "===CAPTION==="
+        if marker in response:
+            parts = response.split(marker, 1)
+            lyrics = parts[0].strip()
+            caption = re.sub(r'^```\w*\s*', '', parts[1].strip())
+            caption = re.sub(r'```\s*$', '', caption).strip()
+            return lyrics, caption
+        return response.strip(), ""
 
     def _clean(self, raw: str) -> str:
         lyrics = raw.strip()
