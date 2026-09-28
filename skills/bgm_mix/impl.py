@@ -1,10 +1,10 @@
-"""bgm_mix skill — ACE-Step BGM + ducking + audio mix.
+"""bgm_mix skill — YuE2 BGM + ducking + audio mix.
 
 Pipeline position: after hf_build, before upscale.
 Only runs when context['enable_bgm'] is True (--bgm flag).
 
 Flow:
-  1. ACE-Step generates BGM from transcript + mood caption
+  1. YuE2 generates BGM from transcript + mood caption (cot=full)
   2. Extract speech audio from final video
   3. Compute ducking envelope from EDL segment timestamps
   4. Mix speech + ducked BGM → replace video audio
@@ -15,12 +15,11 @@ import urllib.request
 from pathlib import Path
 from core.base import SkillBase
 
-ACESTEP_PYTHON = Path(
-    r"E:\Hermes-Agent\workspace\xiaoshan\video-factory\tools\acestep\.venv\Scripts\python.exe"
-)
-ACESTEP_CLI = Path(r"E:\Hermes-Agent\workspace\xiaoshan\video-factory\tools\acestep\cli.py")
+# YuE2（audio.cpp，音乐主力：器乐编曲/旋律/情感强于 Music3）
+AUDIOCPP_CLI = "E:/YuE2/audio_cpp/audiocpp_cli.exe"
+YUE2_MODELS = "E:/YuE2/models"
 
-# MiniMax Music3（ComfyUI 原生节点，带歌词一字不差，质量完胜 ACEStep）
+# MiniMax Music3（ComfyUI 原生节点，YuE2 失败时兜底）
 COMFY_URL = "http://127.0.0.1:8188"
 MINIMAX_UNET = "minimax_music3_dit_int8_convrot.safetensors"
 MINIMAX_CLIP = "minimax_music3_text_encoder_pruned_int8_convrot.safetensors"
@@ -94,6 +93,41 @@ def _call_minimax_music3(caption: str, lyrics: str, output_path: str,
         return {"error": f"MiniMax Music3 调用异常: {e}"}
 
 
+def _call_yue2(lyrics: str, caption: str, output_path: str,
+               duration: float = 300, seed: int = None) -> dict:
+    """通过 audio.cpp CLI 调用 YuE2 生成音乐（cot=full 完整规划，先写 ABC 乐谱再渲染）。
+
+    YuE2 是音乐主力（器乐编曲/旋律/情感强于 Music3，中文咬字略差）。
+    caption: style 一段式（YuE2 的 style 参数，不是 Music3 三段式）
+    duration: 保留参数兼容（YuE2 时长由歌词 + cot=full 结构决定）
+    """
+    if seed is None:
+        seed = random.randint(0, 1000000)
+
+    cmd = [
+        AUDIOCPP_CLI,
+        "--task", "gen", "--family", "yue2",
+        "--model", YUE2_MODELS,
+        "--backend", "cuda", "--threads", "8",
+        "--text", lyrics,
+        "--request-option", f"style={caption}",
+        "--request-option", "cot=full",
+        "--request-option", f"seed={seed}",
+        "--request-option", "num_inference_steps=8",
+        "--session-option", "yue2.model_gguf=yue2-3b-bf16.gguf",
+        "--session-option", "yue2.vae_gguf=yue2-vae-f32.gguf",
+        "--out", output_path,
+    ]
+
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=1200)
+        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+            return {"success": True, "path": output_path, "duration": duration, "seed": seed}
+        return {"error": f"YuE2 生成失败: {(r.stderr or r.stdout)[-300:]}"}
+    except Exception as e:
+        return {"error": f"YuE2 调用异常: {e}"}
+
+
 class Bgm_mix(SkillBase):
     name = "bgm_mix"
 
@@ -148,7 +182,7 @@ class Bgm_mix(SkillBase):
     # ── BGM generation ──────────────────────────────────
 
     def _gen_bgm(self, context: dict, output_dir: Path, bgm_path: Path) -> bool:
-        """首选 MiniMax Music3 生成完整歌曲，失败降级 ACE-Step。"""
+        """首选 YuE2 生成完整歌曲（cot=full），失败降级 MiniMax Music3。"""
         # 🔴 歌词来源：优先 lyrics_writer 写好的歌词（映射哲学，[Chorus]/[Verse] 结构），
         # fallback 到口播稿原文（对齐 video-factory：先写歌词→再唱歌生成 BGM）
         lyrics = context.get("lyrics", "")
@@ -163,160 +197,23 @@ class Bgm_mix(SkillBase):
                 transcript = context.get("text", "") or context.get("topic", "")
             lyrics = transcript
 
-        # ── 首选 MiniMax Music3（带歌词完整歌曲，质量完胜 ACEStep）──
-        music_caption = context.get("music_caption", "") or self._build_caption(context)
-        print(f"      [bgm_mix] MiniMax Music3 生成: caption=\"{music_caption[:50]}...\"")
-        result = _call_minimax_music3(music_caption, lyrics, str(bgm_path), duration=300)
+        # ── 首选 YuE2（音乐主力：器乐编曲/旋律/情感强于 Music3）──
+        yue2_caption = context.get("yue2_caption") or self._build_caption(context)
+        print(f"      [bgm_mix] YuE2 生成: caption=\"{yue2_caption[:50]}...\"")
+        result = _call_yue2(lyrics, yue2_caption, str(bgm_path))
         if not result.get("error"):
-            print(f"      [bgm_mix] ✅ Music3 完成: {bgm_path.stat().st_size // 1024}KB")
+            print(f"      [bgm_mix] ✅ YuE2 完成: {bgm_path.stat().st_size // 1024}KB")
             return True
 
-        # ── 降级 ACE-Step（抽卡 3 首挑优）──
-        print(f"      [bgm_mix] ⚠️ Music3 失败，降级 ACE-Step: {result['error'][:80]}")
-        if not ACESTEP_PYTHON.exists() or not ACESTEP_CLI.exists():
-            print("      [bgm_mix] ACE-Step not available, skipping BGM")
-            return False
-        return self._gen_bgm_acestep(lyrics, output_dir, bgm_path, context)
-
-    def _gen_bgm_acestep(self, lyrics: str, output_dir: Path, bgm_path: Path, context: dict) -> bool:
-        """ACE-Step 兜底：抽卡 3 首 + 客观指标打分挑最健康的。"""
-        lyrics_file = output_dir / "_bgm_lyrics.txt"
-        lyrics_file.write_text(lyrics[:2000], encoding="utf-8")
-
-        caption = self._build_caption(context)
-        video_path = context.get("final_polished", "")
-        duration = int(self._calc_bgm_duration(lyrics, self._video_duration(Path(video_path))))
-
-        print(f"      [bgm_mix] ACE-Step 抽卡: dur={duration}s, caption=\"{caption[:60]}...\"")
-
-        # 🔴 抽卡：生成 N 首（每次随机 seed），筛废品 + 客观指标打分挑最健康的
-        N_SAMPLES = 3
-        candidates = []
-        for i in range(N_SAMPLES):
-            cand = output_dir / f"_bgm_cand_{i}.wav"
-            if self._run_acestep_once(lyrics_file, cand, duration, caption):
-                candidates.append(cand)
-        lyrics_file.unlink(missing_ok=True)
-
-        if not candidates:
-            print("      [bgm_mix] ACE-Step 全部生成失败")
-            return False
-
-        best = self._pick_best(candidates, duration)
-        for c in candidates:
-            if c != best:
-                c.unlink(missing_ok=True)
-        best.rename(bgm_path)
-        print(f"      [bgm_mix] ✅ 从 {len(candidates)} 首里挑出最好: {bgm_path.stat().st_size // 1024}KB")
-        return True
-
-    def _run_acestep_once(self, lyrics_file: Path, output_path: Path, duration: int, caption: str) -> bool:
-        """调用 ACE-Step 生成一首 BGM 到 output_path（每次随机 seed）。
-
-        坑（2026-09-08 实测 30min 视频）：ACE-Step 生成 267s 音乐会偶发卡死，且
-        subprocess.run(capture_output=True) 用管道捕获输出时，孙进程继承管道写端 →
-        超时 kill 主进程后 communicate() 卡在回收管道，TimeoutExpired 永远抛不出来，
-        整个 pipeline 被拖死 2 小时。
-        解法：stdout/stderr 重定向到文件（不用管道，彻底避开管道阻塞），超时用
-        taskkill /T 杀整个进程树（含孙进程），单首卡死跳过不阻塞后续抽卡。
-        """
-        cmd = [
-            str(ACESTEP_PYTHON), str(ACESTEP_CLI),
-            "--lyrics", str(lyrics_file),
-            "--output", str(output_path),
-            "--duration", str(duration),
-            "--captions", caption,
-        ]
-        log_file = output_path.with_suffix(".log")
-        logf = open(log_file, "w", encoding="utf-8")
-        try:
-            proc = subprocess.Popen(
-                cmd, stdout=logf, stderr=subprocess.STDOUT,
-                cwd=str(ACESTEP_CLI.parent),
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-            )
-            try:
-                proc.wait(timeout=600)
-            except subprocess.TimeoutExpired:
-                subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)],
-                               capture_output=True, text=True)
-                print("      [bgm_mix] 一首卡死超时，已杀进程树")
-                output_path.unlink(missing_ok=True)
-                return False
-            ok = proc.returncode == 0 and output_path.exists()
-            if not ok:
-                print(f"      [bgm_mix] 一首生成失败 (exit {proc.returncode})")
-                output_path.unlink(missing_ok=True)
-            return ok
-        except Exception as e:
-            print(f"      [bgm_mix] 一首出错: {e}")
-            output_path.unlink(missing_ok=True)
-            return False
-        finally:
-            logf.close()
-            log_file.unlink(missing_ok=True)
-
-    def _pick_best(self, candidates: list, target_dur: float) -> Path:
-        """客观指标打分，选最健康的（不是废品 + 有起伏）"""
-        scored = []
-        for c in candidates:
-            s = self._score_bgm(c, target_dur)
-            scored.append((s, c))
-            print(f"      [bgm_mix] 候选 {c.name}: 分={s}")
-        scored.sort(key=lambda x: -x[0])
-        return scored[0][1]
-
-    def _score_bgm(self, path: Path, target_dur: float) -> int:
-        """用 ffmpeg volumedetect + silencedetect 提取客观指标打分。
-        高分 = 不是死静音 + 不削波 + 静音少 + 有正常起伏。"""
-        score = 0
-        try:
-            # 1. 音量检测
-            r = subprocess.run(
-                ["ffmpeg", "-i", str(path), "-af", "volumedetect", "-f", "null", "-"],
-                capture_output=True, text=True, timeout=30,
-            )
-            mean_vol = max_vol = None
-            for line in r.stderr.split("\n"):
-                if "mean_volume" in line:
-                    try:
-                        mean_vol = float(line.split(":")[-1].strip().split(" ")[0])
-                    except (ValueError, IndexError):
-                        pass
-                elif "max_volume" in line:
-                    try:
-                        max_vol = float(line.split(":")[-1].strip().split(" ")[0])
-                    except (ValueError, IndexError):
-                        pass
-
-            # 2. 静音检测（连续 3 秒 < -35dB 视为静音）
-            r2 = subprocess.run(
-                ["ffmpeg", "-i", str(path), "-af", "silencedetect=n=-35dB:d=3", "-f", "null", "-"],
-                capture_output=True, text=True, timeout=30,
-            )
-            silence_dur = 0.0
-            for line in r2.stderr.split("\n"):
-                if "silence_duration" in line:
-                    try:
-                        silence_dur += float(line.split(":")[-1].strip())
-                    except (ValueError, IndexError):
-                        pass
-
-            # 3. 打分
-            if mean_vol is not None and mean_vol > -40:
-                score += 2  # 不是死静音
-            if max_vol is not None and max_vol <= 0:
-                score += 1  # 不削波
-            if silence_dur < 0.2 * target_dur:
-                score += 1  # 静音占比 < 20%
-            if mean_vol is not None and max_vol is not None:
-                dynamic = max_vol - mean_vol
-                if 5 < dynamic < 35:
-                    score += 1  # 有正常起伏（不单调）
-            return score
-        except Exception as e:
-            print(f"      [bgm_mix] 打分出错 {path.name}: {e}")
-            return 0
+        # ── 降级 MiniMax Music3（备用）──
+        print(f"      [bgm_mix] ⚠️ YuE2 失败，降级 Music3: {result['error'][:80]}")
+        music_caption = context.get("music_caption", "") or self._build_caption(context)
+        result2 = _call_minimax_music3(music_caption, lyrics, str(bgm_path), duration=300)
+        if not result2.get("error"):
+            print(f"      [bgm_mix] ✅ Music3 完成: {bgm_path.stat().st_size // 1024}KB")
+            return True
+        print(f"      [bgm_mix] ❌ Music3 也失败: {result2['error'][:80]}")
+        return False
 
     def _build_caption(self, context: dict) -> str:
         """对齐 VF：按场景 mood（中文情绪）映射 music mood。scenes 无 beat 字段（storyboard 只存 mood），
@@ -477,14 +374,15 @@ class Bgm_mix(SkillBase):
                 print(f"        ducking failed: {r.stderr[-200:]}")
                 return False
 
-            # Mix speech + ducked BGM
+            # Mix speech + ducked BGM（两输入都强制立体声，BGM 双声道别被 amix 降成单声道）
             r = subprocess.run([
                 "ffmpeg", "-y",
                 "-i", str(speech_audio),
                 "-i", str(ducked_bgm),
                 "-filter_complex",
-                "[0:a]volume=1.5[speech];"
-                "[speech][1:a]amix=inputs=2:duration=first:dropout_transition=3[out]",
+                "[0:a]volume=1.5,aformat=channel_layouts=stereo[speech];"
+                "[1:a]aformat=channel_layouts=stereo[bgm];"
+                "[speech][bgm]amix=inputs=2:duration=first:dropout_transition=3[out]",
                 "-map", "[out]",
                 str(mixed_audio),
             ], capture_output=True, text=True, timeout=30)
@@ -497,7 +395,7 @@ class Bgm_mix(SkillBase):
                 "-i", str(video_path),
                 "-i", str(mixed_audio),
                 "-c:v", "copy",
-                "-c:a", "aac", "-b:a", "192k",
+                "-c:a", "aac", "-b:a", "320k",
                 "-map", "0:v:0", "-map", "1:a:0",
                 "-shortest",
                 str(output),
