@@ -38,7 +38,7 @@ class LyricsWriter(SkillBase):
             print("  [lyrics-writer] ❌ 无口播稿")
             return context
 
-        lyrics, caption = self._write(script, context.get("provider"))
+        lyrics, caption, style = self._write(script, context.get("provider"))
         if not lyrics:
             print("  [lyrics-writer] ❌ LLM 生成失败")
             return context
@@ -55,6 +55,12 @@ class LyricsWriter(SkillBase):
             context["music_caption"] = caption
             context["music_caption_path"] = str(caption_path)
             print("  [lyrics-writer] ✅ 三段式 caption 已生成")
+        if style:
+            style_path = out_dir / "yue2_style.txt"
+            style_path.write_text(style, encoding="utf-8")
+            context["yue2_caption"] = style
+            context["yue2_style_path"] = str(style_path)
+            print("  [lyrics-writer] ✅ YuE2 style 已生成")
         lines = [l for l in lyrics.split("\n") if l.strip() and not l.strip().startswith("[")]
         print(f"  [lyrics-writer] ✅ 歌词 {len(lyrics)} 字符, {len(lines)} 行")
         return context
@@ -80,22 +86,32 @@ class LyricsWriter(SkillBase):
             full_text=full_text[:2000],
         )
         if not provider:
-            return "", ""
+            return "", "", ""
         raw = provider.call("lyrics_writer", user_prompt, system=system_prompt, max_tokens=16000)
         if not raw:
-            return "", ""
+            return "", "", ""
         lyrics = self._clean(raw)
         return self._split(lyrics)
 
     def _split(self, response: str) -> tuple:
-        marker = "===CAPTION==="
-        if marker in response:
-            parts = response.split(marker, 1)
+        marker_caption = "===CAPTION==="
+        marker_style = "===STYLE==="
+        if marker_caption in response:
+            parts = response.split(marker_caption, 1)
             lyrics = parts[0].strip()
-            caption = re.sub(r'^```\w*\s*', '', parts[1].strip())
+            rest = parts[1]
+            caption = rest
+            style = ""
+            if marker_style in rest:
+                cap_part, style_part = rest.split(marker_style, 1)
+                caption = cap_part.strip()
+                style = style_part.strip()
+            caption = re.sub(r'^```\w*\s*', '', caption)
             caption = re.sub(r'```\s*$', '', caption).strip()
-            return lyrics, caption
-        return response.strip(), ""
+            style = re.sub(r'^```\w*\s*', '', style)
+            style = re.sub(r'```\s*$', '', style).strip()
+            return lyrics, caption, style
+        return response.strip(), "", ""
 
     def _clean(self, raw: str) -> str:
         lyrics = raw.strip()

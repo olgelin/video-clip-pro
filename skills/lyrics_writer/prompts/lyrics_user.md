@@ -21,4 +21,4 @@
 9. 副歌唱核心意象 + 主题，**重复 3-4 次**，每次含义更深一层（这是撑起时长的核心手段，也是强化记忆点）
 10. 用完整歌曲结构自然撑出 210-320 秒：[Intro]→[Verse 1]→[Pre-Chorus]→[Chorus]→[Verse 2]→[Chorus]→[Instrumental]→[Bridge]→[Chorus]→[Final Chorus]→[Outro]。主歌叙事、副歌重复、桥段升华、前奏间奏尾奏器乐，每段写实写满，歌词自然写到 400-600 字（是自然结果，不是硬凑字数——硬凑会堆砌空洞，宁短勿滥）
 
-先输出歌词正文（方括号标注结构），再输出 `===CAPTION===` 分隔符，然后输出三段式音乐风格 caption（Global Metadata / Vocal Details / Arrangement，采用官方 Structured Caption 细粒度结构），caption 风格和情感映射一致。**注意：上面的「挖本质→情感映射→定主题→定意象」是创作时的思考逻辑，不要输出这些思考过程或「创作思路」标题，直接输出歌词 + caption。**
+先输出歌词正文（方括号标注结构），再输出 `===CAPTION===` 分隔符，然后输出三段式音乐风格 caption（Global Metadata / Vocal Details / Arrangement，采用官方 Structured Caption 细粒度结构，给 MiniMax Music3 备用），caption 风格和情感映射一致；最后输出 `===STYLE===` 分隔符，然后输出一段式 style（给 YuE2 主力，一行逗号分隔的英文风格描述，公式：语言 + [形容词]声乐角色 + 流派 + BPM + 带质感形容词的乐器清单 + 和声风格，如 `Chinese, warm male vocal, mandopop ballad, 76 BPM, piano, rounded electric bass, restrained drums, spacious strings, melancholic minor harmony, clear diction`）。**注意：上面的「挖本质→情感映射→定主题→定意象」是创作时的思考逻辑，不要输出这些思考过程或「创作思路」标题，直接输出歌词 + caption + style。**

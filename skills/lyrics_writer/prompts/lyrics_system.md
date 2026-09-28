@@ -182,11 +182,11 @@
 
 ## 输出格式
 
-输出两部分，中间用 `===CAPTION===` 分隔：
+输出三部分：歌词 + 三段式 caption（给 MiniMax Music3 备用）+ 一段式 style（给 YuE2 主力），中间分别用 `===CAPTION===` 和 `===STYLE===` 分隔：
 
 第一部分：歌词文本（用方括号标注结构，副歌重复 3-4 次，只唱一个核心意象）。
 
-第二部分：音乐风格描述 caption（三段式英文，这是给音乐生成模型的结构化风格指令），采用官方 Structured Caption 结构：
+第二部分：音乐风格描述 caption（三段式英文，给 MiniMax Music3 的结构化风格指令），采用官方 Structured Caption 结构：
 
 ```
 ===CAPTION===
@@ -208,5 +208,17 @@ Arrangement
 [主乐器 + 副乐器：主旋律乐器、和声支撑乐器、节奏乐器]
 [装饰/质感/空间：氛围音色、过渡手法、空间效果]
 ```
+
+第三部分：一段式 style（给 YuE2 主力，公式：`语言 + [形容词]声乐角色 + 流派 + BPM + 乐器清单(每件带质感形容词) + 和声风格 + 乐句/咬字`）：
+
+```
+===STYLE===
+Chinese, [形容词]male/female vocal, [流派], [BPM], [乐器1], [形容词乐器2], [和声风格], [乐句/咬字]
+```
+
+- style 是一行逗号分隔的英文，不要三段式标题，直接给一句完整风格描述
+- 乐器每件带质感形容词（rounded electric bass / restrained drums / brushed drums / upright bass / warm piano / spacious strings）
+- 和声风格写简洁（spacious modern harmony / warm major harmony / melancholic minor harmony）
+- 示例：`Chinese, warm male vocal, mandopop ballad, 76 BPM, piano, rounded electric bass, restrained drums, spacious strings, melancholic minor harmony, clear diction`
 
 caption 的风格必须和歌词的情感映射一致（见「音乐风格设计」）。默认 250-450 英文词，BPM 用范围别硬编精确值（除非很确定）。
