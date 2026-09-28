@@ -29,8 +29,8 @@ MIN_GAP = 1.5           # 切点停顿阈值：相邻字之间 >= 1.5s 才算「
 SEARCH_WINDOW = 90.0    # 在理想边界 ±90s 内找最佳停顿点
 
 # ── BGM（整片统一加，避免分段每段各自 BGM 合并后断裂）────
-ACESTEP_PYTHON = Path(r"E:\Hermes-Agent\workspace\xiaoshan\video-factory\tools\acestep\.venv\Scripts\python.exe")
-ACESTEP_CLI = Path(r"E:\Hermes-Agent\workspace\xiaoshan\video-factory\tools\acestep\cli.py")
+AUDIOCPP_CLI = "E:/YuE2/audio_cpp/audiocpp_cli.exe"
+YUE2_MODELS = "E:/YuE2/models"
 
 
 def ffprobe_duration(path: Path) -> float:
@@ -138,37 +138,29 @@ def concat_segments(finals: list, final_out: Path):
     return final_out
 
 
-def _run_acestep(lyrics_file: Path, output_path: Path, duration: int, caption: str) -> bool:
-    """调 ACE-Step 生成一首 BGM。输出重定向文件（不用管道）+ taskkill /T 杀进程树
-    防卡死（同 bgm_mix 的坑：孙进程继承管道会拖死 communicate）。"""
-    cmd = [str(ACESTEP_PYTHON), str(ACESTEP_CLI),
-           "--lyrics", str(lyrics_file), "--output", str(output_path),
-           "--duration", str(duration), "--captions", caption]
-    log_file = output_path.with_suffix(".log")
-    logf = open(log_file, "w", encoding="utf-8")
+def _run_yue2(lyrics: str, output_path: Path, caption: str) -> bool:
+    """调 YuE2（audio.cpp）生成一首纯器乐 BGM。cot=full 完整规划。"""
+    cmd = [AUDIOCPP_CLI,
+           "--task", "gen", "--family", "yue2",
+           "--model", YUE2_MODELS,
+           "--backend", "cuda", "--threads", "8",
+           "--text", lyrics,
+           "--request-option", f"style={caption}",
+           "--request-option", "cot=full",
+           "--request-option", f"seed={random.randint(0, 1000000)}",
+           "--request-option", "num_inference_steps=8",
+           "--session-option", "yue2.model_gguf=yue2-3b-bf16.gguf",
+           "--session-option", "yue2.vae_gguf=yue2-vae-f32.gguf",
+           "--out", str(output_path)]
     try:
-        proc = subprocess.Popen(cmd, stdout=logf, stderr=subprocess.STDOUT,
-                                cwd=str(ACESTEP_CLI.parent),
+        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        try:
-            proc.wait(timeout=600)
-        except subprocess.TimeoutExpired:
-            subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)],
-                           capture_output=True, text=True)
-            print("  [orchestrator] 一首 BGM 卡死超时，已杀进程树")
-            output_path.unlink(missing_ok=True)
-            return False
-        ok = proc.returncode == 0 and output_path.exists()
-        if not ok:
-            output_path.unlink(missing_ok=True)
-        return ok
+        proc.wait(timeout=1200)
+        return proc.returncode == 0 and output_path.exists()
     except Exception as e:
         print(f"  [orchestrator] 一首 BGM 出错: {e}")
         output_path.unlink(missing_ok=True)
         return False
-    finally:
-        logf.close()
-        log_file.unlink(missing_ok=True)
 
 
 def _score_bgm(path: Path, target_dur: float) -> int:
@@ -217,24 +209,19 @@ def add_bgm_to_full(final_out: Path, raw_words: list, out_dir: Path) -> Path:
     """合并后整片统一加 BGM：生成一个 BGM（抽 3 首挑最健康）→ 循环填充整片 → 低音量
     背景混音。不做逐句 ducking（30min 口播逐句 ducking 意义不大，整体低音量背景即可）。"""
     print("\n[orchestrator] 整片统一加 BGM ...")
-    # 🔴 out_dir 可能是相对路径，而 _run_acestep 的 cwd 切到 acestep 目录，
-    #    相对路径的歌词/输出文件会找不到 → 全部 BGM 失败。转绝对路径治本。
     out_dir = out_dir.resolve()
     transcript = " ".join(w["text"] for w in raw_words)
     lyrics = transcript[:2000]
-    lyrics_file = out_dir / "_full_bgm_lyrics.txt"
-    lyrics_file.write_text(lyrics, encoding="utf-8")
 
     bgm_path = out_dir / "bgm.wav"
-    caption = "cinematic, engaging, instrumental, 100-120 BPM, background music for narration"
+    caption = "instrumental, cinematic, engaging, 100-120 BPM, background music for narration"
     duration = 240
     candidates = []
     for i in range(3):
         cand = out_dir / f"_full_bgm_cand_{i}.wav"
-        if _run_acestep(lyrics_file, cand, duration, caption):
+        if _run_yue2(lyrics, cand, caption):
             candidates.append(cand)
             print(f"  [orchestrator] BGM 候选 {i} 生成成功")
-    lyrics_file.unlink(missing_ok=True)
     if not candidates:
         print("  [orchestrator] BGM 全部生成失败，保持无 BGM")
         return final_out
@@ -253,10 +240,11 @@ def add_bgm_to_full(final_out: Path, raw_words: list, out_dir: Path) -> Path:
         "ffmpeg", "-y", "-i", str(final_out),
         "-stream_loop", "-1", "-i", str(bgm_path),
         "-filter_complex",
-        f"[1:a]volume=0.12,afade=t=in:st=0:d=3,afade=t=out:st={max(0, dur - 5)}:d=5[bgm];"
-        f"[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=3[out]",
+        f"[0:a]aformat=channel_layouts=stereo[speech];"
+        f"[1:a]aformat=channel_layouts=stereo,volume=0.12,afade=t=in:st=0:d=3,afade=t=out:st={max(0, dur - 5)}:d=5[bgm];"
+        f"[speech][bgm]amix=inputs=2:duration=first:dropout_transition=3[out]",
         "-map", "0:v:0", "-map", "[out]",
-        "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest",
+        "-c:v", "copy", "-c:a", "aac", "-b:a", "320k", "-shortest",
         str(mixed),
     ], capture_output=True, text=True, timeout=600)
     if r.returncode == 0 and mixed.exists():

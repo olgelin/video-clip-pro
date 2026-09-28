@@ -80,7 +80,7 @@ stages:
     critical: false
     retry: 0
     timeout: 900
-    description: BGM混音（ACE-Step生成+ducking，--bgm 开启）
+    description: BGM混音（YuE2生成+ducking，--bgm 开启）
 
   - name: upscale
     skill: upscale

@@ -154,7 +154,7 @@ class Bgm_mix(SkillBase):
 
         print(f"\n      [bgm_mix] Generating BGM + ducking mix ...")
 
-        # 1. Generate BGM via ACE-Step
+        # 1. Generate BGM via YuE2
         if not self._gen_bgm(context, output_dir, bgm_path):
             print("      [bgm_mix] BGM generation failed, keeping original")
             return context

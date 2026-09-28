@@ -11,7 +11,7 @@
 | 数字人布局坐标 | `skills/hf_build_avatar/person_zone.py` | avatar 专属 | person_zone/content_zone/person_layout_for_visual_type 单一来源 |
 | 数字人换位动画 | `core/hf_card_builder.py` avatar 分支 | core 内 is_avatar 隔离 | GSAP tl.to 位置动画 |
 | 画面景别（full/inset） | `skills/storyboard/impl.py` `_shot_scale` | 共享 | 开场 full，严格交替 |
-| BGM | `skills/bgm_mix/impl.py` | avatar_short + card | ACE-Step + ducking，avatar 默认开 |
+| BGM | `skills/bgm_mix/impl.py` | avatar_short + card | YuE2 + ducking，avatar 默认开 |
 | Three.js 技法菜单 | `skills/hf_build_avatar/impl.py` `_threejs_menu` | avatar 专属 | 6 技法（粒子/星空/银河/代码雨/网格/Bloom） |
 | 数字人编排（左右/出镜） | `skills/storyboard/impl.py` `_direct_person_layouts` | storyboard 内 | LLM 判 L/R/H，景别决定大小 |
 

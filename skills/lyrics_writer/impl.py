@@ -2,7 +2,7 @@
 
 照抄 video-factory lyrics_writer，适配 SkillBase 结构。
 输入：context["script_data"]（口播稿）
-输出：context["lyrics"] + lyrics.txt（ACE-Step 格式歌词）
+输出：context["lyrics"] + lyrics.txt（带结构标签歌词，供 YuE2/Music3 用）
 """
 from __future__ import annotations
 import re
